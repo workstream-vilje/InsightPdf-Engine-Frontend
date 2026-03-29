@@ -1,0 +1,122 @@
+.previewPanel {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  background-color: rgb(var(--surface-1));
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  border-bottom: 1px solid rgb(var(--border));
+  padding: var(--spacing-2-5) var(--spacing-3);
+  background-color: rgb(var(--surface-1));
+}
+
+.headerIcon {
+  color: rgb(var(--primary));
+}
+
+.headerTitle {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgb(var(--foreground));
+}
+
+.headerBadge {
+  margin-left: auto;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  border-color: rgba(var(--primary), 0.3);
+  color: rgb(var(--primary));
+}
+
+.scrollArea {
+  flex: 1;
+}
+
+.chunkList {
+  padding: var(--spacing-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.chunkCard {
+  border-radius: var(--radius-md);
+  border: 1px solid rgb(var(--border));
+  background-color: rgba(var(--muted), 0.5);
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.chunkCard:hover {
+  border-color: rgba(var(--primary), 0.3);
+}
+
+.chunkHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-1-5) var(--spacing-3);
+  background-color: rgb(var(--muted));
+  border-bottom: 1px solid rgb(var(--border));
+}
+
+.chunkMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.chunkId {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: var(--weight-semibold);
+  color: rgb(var(--primary));
+}
+
+.metaItem {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  color: rgb(var(--muted-foreground));
+  font-size: 10px;
+  font-family: var(--font-mono);
+}
+
+.overlapInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.warningIcon {
+  color: rgb(var(--warning));
+}
+
+.warningText {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: rgb(var(--warning));
+}
+
+.chunkContent {
+  padding: var(--spacing-2) var(--spacing-3);
+}
+
+.overlapMarker {
+  font-size: 11px;
+  line-height: var(--leading-relaxed);
+  color: rgba(var(--warning), 0.6);
+  font-family: var(--font-mono);
+}
+
+.chunkText {
+  font-size: 11px;
+  line-height: var(--leading-relaxed);
+  color: rgba(var(--foreground), 0.8);
+}

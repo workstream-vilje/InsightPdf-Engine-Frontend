@@ -1,0 +1,54 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-full);
+  padding: 0 var(--spacing-2);
+  height: var(--spacing-5);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-semibold);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.variant-default {
+  background-color: rgb(var(--primary));
+  color: rgb(var(--primary-foreground));
+}
+
+.variant-outline {
+  border-color: rgb(var(--border));
+  color: rgb(var(--muted-foreground));
+}
+
+.variant-outline:hover {
+  border-color: rgba(var(--primary), 0.3);
+  color: rgb(var(--primary));
+  background-color: rgba(var(--primary), 0.05);
+}
+
+.variant-secondary {
+  background-color: rgb(var(--muted));
+  color: rgb(var(--foreground));
+}
+
+.variant-success {
+  background-color: rgba(var(--success), 0.15);
+  color: rgb(var(--success));
+  border-color: rgba(var(--success), 0.3);
+}
+
+.variant-warning {
+  background-color: rgba(var(--warning), 0.15);
+  color: rgb(var(--warning));
+  border-color: rgba(var(--warning), 0.3);
+}
+
+.variant-destructive {
+  background-color: rgba(var(--destructive), 0.15);
+  color: rgb(var(--destructive));
+  border-color: rgba(var(--destructive), 0.3);
+}

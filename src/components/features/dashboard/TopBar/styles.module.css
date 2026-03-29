@@ -1,0 +1,256 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--topbar-height);
+  padding: 0 var(--spacing-6) 0 0;
+  /* 0 on left to match sidebar 64px centering */
+  background-color: rgba(var(--surface-1), 0.98);
+  border-bottom: 1px solid rgb(var(--border));
+  backdrop-filter: blur(14px);
+  z-index: 100;
+  width: 100%;
+  position: relative;
+}
+
+/* ─── Group Regions ─────────────────────────────────────────────────────── */
+.leftGroup,
+.rightGroup {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.leftGroup {
+  gap: var(--spacing-6);
+}
+
+.rightGroup {
+  flex: 0 0 auto;
+}
+
+.centerGroup {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  height: 100%;
+  z-index: 1;
+}
+
+/* ─── Logo (Locked to 64px Sidebar Column) ────────────────────── */
+.logoContainer {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  /* Exact match to Sidebar width */
+  height: 100%;
+  flex-shrink: 0;
+}
+
+/* New wrapper to allow branding text to expand right while logo stays centered in 64px */
+.logoArea {
+  display: flex;
+  align-items: center;
+}
+
+.brandGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+  /* The logoWrapper will be inside the 64px logoContainer */
+}
+
+.logoWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: rgba(var(--surface-2), 1);
+  border: 1px solid rgba(var(--border), 0.6);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.logoContainer:hover .logoWrapper {
+  border-color: #00d1ff;
+  box-shadow: 0 0 15px rgba(0, 209, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.brandLogo {
+  object-fit: contain;
+  transition: transform 0.3s ease;
+}
+
+.logoContainer:hover .brandLogo {
+  transform: scale(1.05);
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1.1;
+}
+
+.brandName {
+  font-family: var(--font-sans);
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: rgb(var(--foreground));
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-style: normal; /* Removed inclination for a clean, straight look */
+}
+
+.brandSub {
+  font-family: var(--font-mono);
+  font-size: 0.54rem;
+  font-weight: 800;
+  color: rgb(var(--primary));
+  letter-spacing: 0.18em;
+  opacity: 0.9;
+  margin-top: 1px;
+}
+
+/* ─── Navigation Group (Boxy Labels) ────────────────────────────────────── */
+.navGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  height: 36px;
+  padding: 0 var(--spacing-4);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: rgb(var(--muted-foreground));
+  font-size: 0.72rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.02em;
+  text-transform: capitalize;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.navIcon {
+  color: #00d1ff;
+  opacity: 0.6;
+}
+
+.navItem:hover {
+  background-color: rgba(var(--surface-2), 1);
+  color: rgb(var(--foreground));
+}
+
+.navItemActive {
+  background-color: rgba(var(--surface-2), 0.8);
+  border: 1px solid rgba(var(--border), 0.5);
+  color: rgb(var(--foreground));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.navItemActive .navIcon {
+  opacity: 1;
+}
+
+/* ─── SHARED ACTIONS CONTAINER (The unified shell) ─────────────────────── */
+.actionsContainer {
+  display: flex;
+  align-items: center;
+  background-color: rgba(var(--surface-2), 0.5);
+  border: 1px solid rgba(var(--border), 0.6);
+  border-radius: 12px;
+  padding: 3px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  color: rgba(var(--muted-foreground), 0.75);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.actionBtn:hover {
+  background-color: rgba(var(--surface-3), 1);
+  color: rgb(var(--foreground));
+}
+
+.actionBtnActive {
+  color: #00d1ff !important;
+  background-color: rgba(0, 209, 255, 0.1) !important;
+}
+
+.innerDivider {
+  width: 1px;
+  height: 20px;
+  background-color: rgba(var(--border), 0.4);
+  margin: 0 1px;
+}
+
+/* Primary Execution Button (The Run Pipeline integrated shell) */
+.runShellBtn {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background-color: white !important;
+  color: black !important;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 10px rgba(255, 255, 255, 0.25);
+  margin-left: 2px;
+}
+
+.runShellBtn:hover {
+  transform: scale(1.02);
+  filter: brightness(1.05);
+  box-shadow: 0 6px 18px rgba(255, 255, 255, 0.35);
+}
+
+.runShellBtn:active {
+  transform: scale(0.98);
+}
+
+.runIcon {
+  fill: black;
+  margin-left: 2px;
+}
+
+.spinIcon {
+  animation: spin 1s linear infinite;
+  color: black;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.runningBtn {
+  background-color: #00d1ff !important;
+  box-shadow: 0 0 20px rgba(0, 209, 255, 0.4);
+}

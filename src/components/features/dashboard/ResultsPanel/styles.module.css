@@ -1,0 +1,433 @@
+/* ─── Panel Shell ──────────────────────────────────────────────────────────── */
+.resultsPanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background-color: rgb(var(--surface-1));
+  border-left: 1px solid rgb(var(--border));
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.collapsed {
+  width: 60px !important;
+}
+
+/* ─── Panel Header ─────────────────────────────────────────────────────────── */
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--spacing-6);
+  height: var(--topbar-height);
+  border-bottom: 1px solid rgb(var(--border));
+  flex-shrink: 0;
+  background: linear-gradient(to bottom, rgba(var(--surface-2), 0.8), rgba(var(--surface-1), 0.8));
+  backdrop-filter: blur(8px);
+  transition: padding 0.3s ease;
+}
+
+.collapsed .panelHeader {
+  padding: 0;
+  justify-content: center;
+}
+
+.collapseToggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: rgb(var(--muted-foreground));
+  background: transparent;
+  border: 1.5px solid rgba(var(--border), 0.8);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.collapseToggle:hover {
+  background-color: rgba(var(--primary), 0.1);
+  color: rgb(var(--primary));
+  border-color: rgb(var(--primary));
+  box-shadow: 0 0 10px rgba(var(--primary), 0.2);
+  transform: scale(1.05);
+}
+
+.collapsed .collapseToggle {
+  width: 28px;
+  height: 28px;
+  border-color: rgb(var(--primary));
+  color: rgb(var(--primary));
+  box-shadow: 0 0 12px rgba(var(--primary), 0.15);
+  margin: 0 auto;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.headerIcon {
+  color: rgb(var(--primary));
+  opacity: 0.9;
+}
+
+.headerTitle {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: rgb(var(--foreground));
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.liveChip {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: var(--weight-bold);
+  color: rgb(var(--success));
+  letter-spacing: 0.1em;
+  opacity: 0.8;
+}
+
+/* ─── Scroll Area ──────────────────────────────────────────────────────────── */
+.scrollArea {
+  flex: 1;
+  min-height: 0;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SIMPLE ACCORDION SECTION
+   ═══════════════════════════════════════════════════════════════════════════ */
+.section {
+  border-bottom: 1px solid rgba(var(--border), 0.5);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--spacing-4) var(--spacing-6);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  height: 52px;
+  transition: all 0.2s ease;
+}
+
+.headerCollapsed {
+  justify-content: center;
+  padding: 0;
+}
+
+.sectionHeader:hover {
+  background-color: rgba(var(--surface-3), 0.5);
+}
+
+.headerOpen {
+  background-color: rgba(var(--surface-2), 0.4);
+}
+
+.sectionTitleWrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+}
+
+.sectionIcon {
+  color: rgba(var(--muted-foreground), 0.8);
+  transition: color 0.2s ease;
+}
+
+.sectionHeader:hover .sectionIcon,
+.headerOpen .sectionIcon {
+  color: rgb(var(--primary));
+}
+
+.sectionTitle {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: var(--weight-bold);
+  color: rgb(var(--muted-foreground));
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  transition: color 0.2s ease;
+}
+
+.sectionHeader:hover .sectionTitle,
+.headerOpen .sectionTitle {
+  color: rgb(var(--foreground));
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+}
+
+.sectionBadge {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: var(--weight-bold);
+  color: rgb(var(--primary));
+  opacity: 0.8;
+}
+
+.chevron {
+  color: rgb(var(--muted-foreground));
+  opacity: 0.5;
+}
+
+.headerOpen .chevron {
+  color: rgb(var(--foreground));
+  opacity: 1;
+}
+
+/* ─── Section Content ────────────────────────────────────────────────────── */
+.sectionContent {
+  padding: var(--spacing-4) var(--spacing-6) var(--spacing-6) var(--spacing-6);
+  background: rgba(var(--surface-2), 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-6);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSE CARD
+   ═══════════════════════════════════════════════════════════════════════════ */
+.responseCard {
+  padding: var(--spacing-5);
+  background-color: rgba(var(--surface-2), 0.4);
+  border: 1px solid rgba(var(--border), 0.8);
+  border-radius: var(--radius-md);
+  color: rgb(var(--foreground));
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.responseCard p {
+  margin: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RETRIEVED CHUNKS
+   ═══════════════════════════════════════════════════════════════════════════ */
+.chunkList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.chunkCard {
+  padding: var(--spacing-4) var(--spacing-5);
+  background: rgba(var(--surface-2), 0.4);
+  border: 1px solid rgba(var(--border), 0.6);
+  border-radius: var(--radius-lg);
+  transition: all 0.2s ease;
+}
+
+.chunkHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-3);
+  padding-bottom: var(--spacing-2);
+  border-bottom: 1px solid rgba(var(--border), 0.4);
+}
+
+.chunkMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.chunkIconBox {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--primary), 0.1);
+  color: rgb(var(--primary));
+  border-radius: 4px;
+  border: 1px solid rgba(var(--primary), 0.2);
+}
+
+.chunkInfo {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.metaLabel {
+  font-size: 0.52rem;
+  font-weight: var(--weight-bold);
+  color: rgba(var(--muted-foreground), 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: none;
+  /* simpler meta view */
+}
+
+.metaValue {
+  font-size: 0.62rem;
+  font-family: var(--font-mono);
+  color: rgb(var(--foreground));
+  font-weight: var(--weight-semibold);
+  opacity: 0.9;
+}
+
+.chunkScoreRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.scoreLabel {
+  font-size: 0.52rem;
+  color: rgba(var(--muted-foreground), 0.6);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.scoreValue {
+  font-size: 0.9rem;
+  font-weight: var(--weight-bold);
+  color: rgb(var(--primary));
+  font-family: var(--font-mono);
+  line-height: 1;
+}
+
+.chunkText {
+  font-size: 0.75rem;
+  color: rgba(var(--foreground), 0.78);
+  line-height: 1.6;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EXECUTION PERFORMANCE — Integrated Grid Pattern
+   Borders are merged to look like a single interconnected unit.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.integratedGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  background-color: rgba(var(--border), 0.4);
+  border: 1px solid rgba(var(--border), 0.8);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  gap: 1.5px;
+  /* Creates the recessed line divider effect */
+}
+
+.perfCard {
+  padding: var(--spacing-4);
+  background-color: rgb(var(--surface-1));
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.perfCardTop {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  margin-bottom: 2px;
+}
+
+.perfCardIcon {
+  color: rgb(var(--primary));
+  opacity: 0.6;
+}
+
+.perfCardLabel {
+  font-size: 0.65rem;
+  color: rgb(var(--muted-foreground));
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.perfCardValue {
+  font-size: 1.15rem;
+  font-weight: var(--weight-bold);
+  color: rgb(var(--foreground));
+  font-family: var(--font-mono);
+  line-height: 1;
+}
+
+.perfCardSub {
+  font-size: 0.65rem;
+  color: rgba(var(--muted-foreground), 0.6);
+  line-height: 1.2;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   QUALITY METRICS (RAGAS) — Minimal Progress
+   ═══════════════════════════════════════════════════════════════════════════ */
+.accuracyList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-6);
+}
+
+.accuracyItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.accuracyHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.accuracyLabel {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: var(--weight-bold);
+  color: rgb(var(--muted-foreground));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.accuracyValue {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: var(--weight-bold);
+  color: rgb(var(--primary));
+}
+
+.progressBarBg {
+  height: 5px;
+  background: rgba(var(--surface-3), 0.8);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.progressBarFill {
+  height: 100%;
+  background-color: rgb(var(--primary));
+  box-shadow: 0 0 10px rgba(var(--primary), 0.2);
+}

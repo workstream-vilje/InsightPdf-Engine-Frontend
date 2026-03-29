@@ -1,0 +1,215 @@
+.strategySelector {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  border-right: 1px solid rgb(var(--border));
+  background-color: rgb(var(--surface-1));
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  border-bottom: 1px solid rgb(var(--border));
+  padding: var(--spacing-2-5) var(--spacing-3);
+  background-color: rgb(var(--surface-1));
+}
+
+.headerIcon {
+  color: rgb(var(--primary));
+}
+
+.headerTitle {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgb(var(--foreground));
+}
+
+.headerBadge {
+  margin-left: auto;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  border-color: rgba(var(--primary), 0.3);
+  color: rgb(var(--primary));
+}
+
+.scrollArea {
+  flex: 1;
+}
+
+/* Strategy List */
+.strategyList {
+  border-bottom: 1px solid rgb(var(--border));
+  padding: var(--spacing-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1-5);
+}
+
+.strategyItem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-2-5);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-2) var(--spacing-2-5);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.strategyItem:hover {
+  background-color: rgb(var(--muted));
+}
+
+.selected {
+  background-color: rgba(var(--primary), 0.05);
+  border-color: rgba(var(--primary), 0.2);
+}
+
+.strategyCheckbox {
+  margin-top: var(--spacing-0-5);
+}
+
+.strategyInfo {
+  display: flex;
+  flex-direction: column;
+}
+
+.strategyLabel {
+  font-size: 11px;
+  font-weight: var(--weight-semibold);
+  color: rgb(var(--foreground));
+  display: block;
+}
+
+.strategyDesc {
+  font-size: 10px;
+  color: rgb(var(--muted-foreground));
+}
+
+/* Config Blocks */
+.configArea {
+  padding: var(--spacing-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.emptyText {
+  font-size: 11px;
+  color: rgb(var(--muted-foreground));
+  text-align: center;
+  padding: var(--spacing-4) 0;
+}
+
+.configBlock {
+  border-radius: var(--radius-md);
+  border: 1px solid rgb(var(--border));
+  background-color: rgba(var(--muted), 0.5);
+  overflow: hidden;
+}
+
+.configHeader {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-2) var(--spacing-3);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.configHeader:hover {
+  background-color: rgb(var(--muted));
+}
+
+.configTitleWrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.configIcon {
+  color: rgb(var(--muted-foreground));
+}
+
+.configTitle {
+  font-size: 11px;
+  font-weight: var(--weight-semibold);
+  color: rgb(var(--foreground));
+}
+
+.configBadge {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  border-color: rgba(var(--primary), 0.3);
+  color: rgb(var(--primary));
+}
+
+.configContent {
+  padding: var(--spacing-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  border-top: 1px solid rgb(var(--border));
+  background-color: rgb(var(--background));
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1-5);
+}
+
+.fieldLabel {
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  color: rgb(var(--muted-foreground));
+}
+
+.inputGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.flex1 {
+  flex: 1;
+}
+
+.smallInput {
+  height: var(--spacing-7);
+  width: var(--spacing-16);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-cols: repeat(2, 1fr);
+  gap: var(--spacing-2);
+}
+
+.fieldSelect {
+  height: var(--spacing-7);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.fieldInput {
+  height: var(--spacing-7);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.mediumInput {
+  height: var(--spacing-7);
+  width: var(--spacing-24);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}

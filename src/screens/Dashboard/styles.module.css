@@ -1,0 +1,35 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background-color: transparent;
+  position: relative;
+}
+
+.topRegion {
+  display: flex;
+  flex: 1; /* This will take available space minus the bottom region */
+  overflow: hidden;
+}
+
+.bottomRegion {
+  flex-shrink: 0;
+  height: 240px; /* Precise height for monitoring panel */
+  overflow: hidden;
+  background-color: rgb(var(--surface-1));
+  border-top: 1px solid rgb(var(--border));
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 20;
+}
+
+.bottomRegion_maximized {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100% !important;
+  z-index: 30;
+}
