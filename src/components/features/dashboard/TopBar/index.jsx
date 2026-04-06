@@ -88,8 +88,8 @@ const TopBar = ({ onStatsClick, isStatsActive, isRunning, onRun }) => {
 
           <div className={styles.innerDivider} />
 
-          <Button 
-            className={classNames(styles.runShellBtn, { [styles.runningBtn]: isRunning })} 
+          <Button
+            className={classNames(styles.runShellBtn, { [styles.runningBtn]: isRunning })}
             title={isRunning ? "Running Pipeline..." : "Run Pipeline"}
             onClick={onRun}
           >
