@@ -1,21 +1,17 @@
 "use client";
 import React, { useState } from 'react';
 import classNames from 'classnames';
-import { Upload, FileText, X, FolderPlus, MessageSquare } from "lucide-react";
+import { 
+  Upload, FileText, X, FolderPlus, MessageSquare, 
+  Search, Send, Download, Trash2, PlusCircle, 
+  LayoutGrid, List, ArrowUp, Cpu, Folder 
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Select as SelectOriginal, 
-  SelectContent as SelectContentOriginal, 
-  SelectItem as SelectItemOriginal, 
-  SelectTrigger as SelectTriggerOriginal, 
-  SelectValue as SelectValueOriginal 
-} from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from "framer-motion";
 import Select from 'react-select';
-import { Search, Send, Download, Trash2, PlusCircle, LayoutGrid, List, ArrowUp, Cpu } from "lucide-react";
 import { DASHBOARD_FILES, DASHBOARD_MESSAGES } from "@/lib/dashboard/data";
 import styles from './styles.module.css';
 
@@ -27,7 +23,25 @@ const initialModelOptions = [
   { value: 'gemini', label: 'Gemini Pro' },
 ];
 
-// Header Select Styles
+
+// Options for each filter
+const projectOptions = [
+  { value: 'legal', label: 'Legal Docs (Main)' },
+  { value: 'research', label: 'Research Workspace' },
+];
+
+const categoryOptions = [
+  { value: 'all', label: 'All Documents' },
+  { value: 'financial', label: 'Financial Reports' },
+  { value: 'technical', label: 'Technical Specs' },
+];
+
+const documentOptions = [
+  { value: 'annual', label: 'annual_report_2024.pdf' },
+  { value: 'technical', label: 'technical_spec_v2.pdf' },
+];
+
+// Header Select Styles for Perfect Alignment
 const headerSelectStyles = {
   control: (base, state) => ({
     ...base,
@@ -41,19 +55,24 @@ const headerSelectStyles = {
     fontWeight: '700',
     color: '#ffffff',
     boxShadow: 'none',
-    transition: 'all 0.2s ease',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     cursor: 'pointer',
     '&:hover': {
       borderColor: 'rgba(var(--primary), 0.4)',
-      background: 'rgba(255, 255, 255, 0.05)',
+      background: 'rgba(255, 255, 255, 0.06)',
     },
+    display: 'flex',
+    alignItems: 'center',
+    overflow: 'hidden',
   }),
   valueContainer: (base) => ({
     ...base,
     padding: '0 8px',
-    height: '28px',
+    height: '26px',
     display: 'flex',
     alignItems: 'center',
+    whiteSpace: 'nowrap',
+    flexWrap: 'nowrap',
   }),
   indicatorsContainer: (base) => ({
     ...base,
@@ -69,7 +88,8 @@ const headerSelectStyles = {
     zIndex: 1000,
     marginTop: '6px',
     overflow: 'hidden',
-    width: '180px',
+    width: 'max-content',
+    minWidth: '100%',
   }),
   menuList: (base) => ({
     ...base,
@@ -84,6 +104,7 @@ const headerSelectStyles = {
     fontWeight: state.isSelected ? '700' : '500',
     cursor: 'pointer',
     borderRadius: '6px',
+    whiteSpace: 'nowrap',
     '&:active': {
       background: 'rgba(var(--primary), 0.25)',
     },
@@ -92,6 +113,8 @@ const headerSelectStyles = {
     ...base,
     color: '#ffffff',
     margin: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   }),
   input: (base) => ({
     ...base,
@@ -119,11 +142,18 @@ const CenterPanel = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [newProject, setNewProject] = useState("");
   const [newCategory, setNewCategory] = useState("");
-  
+
+  // Selection states
+  const [selectedProject, setSelectedProject] = useState(projectOptions[0]);
+  const [selectedCategory, setSelectedCategory] = useState(categoryOptions[0]);
+  const [selectedDocument, setSelectedDocument] = useState(documentOptions[0]);
+
+  // Header Modes: 'filters' | 'models' | 'actions'
+  const [headerMode, setHeaderMode] = useState('filters');
+
   // Model states
   const [modelOptions, setModelOptions] = useState(initialModelOptions);
   const [selectedModel, setSelectedModel] = useState(initialModelOptions[0]);
-  const [isAddingModel, setIsAddingModel] = useState(false);
   const [newModelName, setNewModelName] = useState("");
 
   const files = DASHBOARD_FILES;
@@ -138,7 +168,7 @@ const CenterPanel = () => {
     setModelOptions([...modelOptions, newOption]);
     setSelectedModel(newOption);
     setNewModelName("");
-    setIsAddingModel(false);
+    setHeaderMode('models');
   };
 
   const handleUpload = () => {
@@ -184,165 +214,154 @@ const CenterPanel = () => {
         <span className={styles.headerTitle}>Knowledge Canvas</span>
       </div>
 
-      {/* 100% Integrated Filter Header with Context-Aware Ingestion Controls */}
+      {/* Tabbed Integrated Filter Header */}
       <div className={styles.filterHeader}>
-        <AnimatePresence mode="wait">
-          {!isCreating && !isAddingModel ? (
-            <motion.div
-              key="filters"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-4)', flex: 1, minWidth: 0 }}
-            >
-              {/* Project Selection */}
-              <div className={styles.filterGroup}>
-                <span className={styles.filterLabel}>PROJECT</span>
-                <SelectOriginal defaultValue="legal">
-                  <SelectTriggerOriginal className={styles.filterTrigger}>
-                    <SelectValueOriginal placeholder="Project" />
-                  </SelectTriggerOriginal>
-                  <SelectContentOriginal>
-                    <SelectItemOriginal value="legal">Legal Docs (Main)</SelectItemOriginal>
-                    <SelectItemOriginal value="research">Research Workspace</SelectItemOriginal>
-                  </SelectContentOriginal>
-                </SelectOriginal>
-              </div>
+        {/* Tab Switcher Icons */}
+        <div className={styles.headerTabSwitcher}>
+          <button
+            className={classNames(styles.tabIconButton, { [styles.activeTab]: headerMode === 'filters' })}
+            onClick={() => setHeaderMode('filters')}
+            title="Browse Filters"
+          >
+            <Folder size={14} />
+          </button>
+          <button
+            className={classNames(styles.tabIconButton, { [styles.activeTab]: headerMode === 'models' })}
+            onClick={() => setHeaderMode('models')}
+            title="Model Selection"
+          >
+            <Cpu size={14} />
+          </button>
+          <button
+            className={classNames(styles.tabIconButton, { [styles.activeTab]: headerMode === 'actions' })}
+            onClick={() => setHeaderMode('actions')}
+            title="Quick Actions"
+          >
+            <PlusCircle size={14} />
+          </button>
+        </div>
 
-              <div className={styles.filterDivider} />
+        <div className={styles.headerModeContent}>
+          <AnimatePresence mode="wait">
+            {headerMode === 'filters' && (
+              <motion.div
+                key="filters"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-4)', flex: 1, minWidth: 0 }}
+              >
+                {/* Project Selection */}
+                <div className={styles.filterGroup}>
+                  <span className={styles.filterLabel}>PROJECT</span>
+                  <div style={{ flex: 1, minWidth: '130px' }}>
+                    <Select
+                      options={projectOptions}
+                      value={selectedProject}
+                      onChange={setSelectedProject}
+                      styles={headerSelectStyles}
+                      isSearchable={false}
+                    />
+                  </div>
+                </div>
 
-              {/* Model Selection (The New Addition) */}
-              <div className={styles.filterGroup}>
-                <span className={styles.filterLabel}>MODEL</span>
-                <div style={{ flex: 1, minWidth: '140px' }}>
-                  <Select 
-                    options={modelOptions}
-                    value={selectedModel}
-                    onChange={setSelectedModel}
-                    styles={headerSelectStyles}
-                    placeholder="Search model..."
-                    isSearchable={true}
+                <div className={styles.filterDivider} />
+
+                {/* Category Selection */}
+                <div className={styles.filterGroup}>
+                  <span className={styles.filterLabel}>CATEGORY</span>
+                  <div style={{ flex: 1, minWidth: '130px' }}>
+                    <Select
+                      options={categoryOptions}
+                      value={selectedCategory}
+                      onChange={setSelectedCategory}
+                      styles={headerSelectStyles}
+                      isSearchable={false}
+                    />
+                  </div>
+                </div>
+
+                <div className={styles.filterDivider} />
+
+                {/* Document Selection */}
+                <div className={styles.filterGroup}>
+                  <span className={styles.filterLabel}>DOCUMENT</span>
+                  <div style={{ flex: 1, minWidth: '160px' }}>
+                    <Select
+                      options={documentOptions}
+                      value={selectedDocument}
+                      onChange={setSelectedDocument}
+                      styles={headerSelectStyles}
+                      isSearchable={false}
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {headerMode === 'models' && (
+              <motion.div
+                key="models"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-4)', flex: 1, minWidth: 0 }}
+              >
+                <div className={styles.filterGroup}>
+                  <span className={styles.filterLabel}>ACTIVE MODEL</span>
+                  <div style={{ flex: 1, minWidth: '220px' }}>
+                    <Select
+                      options={modelOptions}
+                      value={selectedModel}
+                      onChange={setSelectedModel}
+                      styles={headerSelectStyles}
+                      placeholder="Search model..."
+                      isSearchable={true}
+                    />
+                  </div>
+                </div>
+                <div className={styles.filterDivider} />
+                <span className={styles.statusTag}>STABLE</span>
+              </motion.div>
+            )}
+
+            {headerMode === 'actions' && (
+              <motion.div
+                key="actions"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                className={styles.inlineFormHeader}
+                style={{ flex: 1 }}
+              >
+                <div className={styles.filterGroup}>
+                  <span className={styles.filterLabel}>MODEL INTAKE</span>
+                  <Input
+                    placeholder="DeepSeek-V3..."
+                    value={newModelName}
+                    onChange={(e) => setNewModelName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddNewModel()}
+                    className={styles.headerInput}
                   />
                 </div>
-              </div>
-
-              <div className={styles.filterDivider} />
-
-              <div className={styles.filterGroup}>
-                <span className={styles.filterLabel}>CATEGORY</span>
-                <SelectOriginal defaultValue="all">
-                  <SelectTriggerOriginal className={styles.filterTrigger}>
-                    <SelectValueOriginal placeholder="Category" />
-                  </SelectTriggerOriginal>
-                  <SelectContentOriginal>
-                    <SelectItemOriginal value="all">All Documents</SelectItemOriginal>
-                    <SelectItemOriginal value="financial">Financial Reports</SelectItemOriginal>
-                    <SelectItemOriginal value="technical">Technical Specs</SelectItemOriginal>
-                  </SelectContentOriginal>
-                </SelectOriginal>
-              </div>
-
-              <div className={styles.filterDivider} />
-
-              <div className={styles.filterGroup}>
-                <span className={styles.filterLabel}>DOCUMENT</span>
-                <SelectOriginal defaultValue="annual">
-                  <SelectTriggerOriginal className={styles.filterTrigger}>
-                    <SelectValueOriginal placeholder="Document" />
-                  </SelectTriggerOriginal>
-                  <SelectContentOriginal>
-                    <SelectItemOriginal value="annual">annual_report_2024.pdf</SelectItemOriginal>
-                    <SelectItemOriginal value="technical">technical_spec_v2.pdf</SelectItemOriginal>
-                  </SelectContentOriginal>
-                </SelectOriginal>
-              </div>
-            </motion.div>
-          ) : isAddingModel ? (
-            <motion.div
-              key="addingModel"
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              className={styles.inlineFormHeader}
-            >
-              <div className={styles.filterGroup}>
-                <span className={styles.filterLabel}>MODEL NAME</span>
-                <Input
-                  placeholder="Enter Model Name (e.g. GPT-5)"
-                  value={newModelName}
-                  onChange={(e) => setNewModelName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddNewModel()}
-                  className={styles.headerInput}
-                />
-              </div>
-              <Button
-                size="sm"
-                className={styles.createButtonHeader}
-                onClick={handleAddNewModel}
-              >
-                ADD TO PROJECT
-              </Button>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="creation"
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              className={styles.inlineFormHeader}
-            >
-              <div className={styles.filterGroup}>
-                <span className={styles.filterLabel}>NEW PROJECT</span>
-                <Input
-                  placeholder="Enter Project Name"
-                  value={newProject}
-                  onChange={(e) => setNewProject(e.target.value)}
-                  className={styles.headerInput}
-                />
-              </div>
-
-              <div className={styles.filterDivider} />
-
-              <div className={styles.filterGroup}>
-                <span className={styles.filterLabel}>NEW CATEGORY</span>
-                <Input
-                  placeholder="Enter Category"
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                  className={styles.headerInput}
-                />
-              </div>
-
-              <Button
-                size="sm"
-                className={styles.createButtonHeader}
-                onClick={() => setIsCreating(false)}
-              >
-                CREATE PROJECT
-              </Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)', marginLeft: 'auto' }}>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={classNames(styles.iconButtonHeader, { [styles.activeButton]: isAddingModel })}
-            onClick={() => { setIsAddingModel(!isAddingModel); setIsCreating(false); }}
-            title="Add Custom Model"
-          >
-            <Cpu size={16} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={classNames(styles.iconButtonHeader, { [styles.activeButton]: isCreating })}
-            onClick={() => { setIsCreating(!isCreating); setIsAddingModel(false); }}
-            title="New Project"
-          >
-            {isCreating ? <X size={16} /> : <FolderPlus size={16} />}
-          </Button>
+                <Button variant="ghost" size="sm" className={styles.createButtonHeader} onClick={handleAddNewModel}>
+                  ADD MODEL
+                </Button>
+                <div className={styles.filterDivider} />
+                <div className={styles.filterGroup}>
+                  <Input
+                    placeholder="New Project Name..."
+                    value={newProject}
+                    onChange={(e) => setNewProject(e.target.value)}
+                    className={styles.headerInput}
+                  />
+                  <Button variant="ghost" size="sm" className={styles.createButtonHeader} onClick={() => setHeaderMode('filters')}>
+                    CREATE
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 

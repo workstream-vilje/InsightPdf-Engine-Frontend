@@ -225,8 +225,8 @@ const ConfigPanel = ({ isCollapsed, setIsCollapsed }) => {
   const [overlap, setOverlap] = useState([200]);
 
   // Selection states
-  const [extraction, setExtraction] = useState(extractionOptions[0]);
-  const [embeddings, setEmbeddings] = useState(embeddingOptions[0]);
+  const [extraction, setExtraction] = useState([extractionOptions[0]]);
+  const [embeddings, setEmbeddings] = useState([embeddingOptions[0]]);
   const [selectedLLMs, setSelectedLLMs] = useState([llmOptions[0], llmOptions[1]]);
   const [vectorStores, setVectorStores] = useState([vectorStoreOptions[1]]);
 
@@ -299,26 +299,32 @@ const ConfigPanel = ({ isCollapsed, setIsCollapsed }) => {
         </Section>
 
         <Section title="Data Extraction" icon={Database} defaultOpen={false} index={2} isCollapsed={isCollapsed}>
-          <Field label="Engine">
+          <Field label="Engines (Multi-select)">
             <Select
+              isMulti
               options={extractionOptions}
               value={extraction}
               onChange={setExtraction}
               styles={customSelectStyles}
-              isSearchable={false}
+              components={{ MultiValueRemove: CustomMultiValueRemove }}
+              closeMenuOnSelect={false}
+              placeholder="Select Engines..."
               menuPlacement="auto"
             />
           </Field>
         </Section>
 
         <Section title="Embedding Model" icon={Cpu} index={3} isCollapsed={isCollapsed}>
-          <Field label="Provider">
+          <Field label="Providers (Multi-select)">
             <Select
+              isMulti
               options={embeddingOptions}
               value={embeddings}
               onChange={setEmbeddings}
               styles={customSelectStyles}
-              isSearchable={false}
+              components={{ MultiValueRemove: CustomMultiValueRemove }}
+              closeMenuOnSelect={false}
+              placeholder="Select Providers..."
               menuPlacement="auto"
             />
           </Field>
