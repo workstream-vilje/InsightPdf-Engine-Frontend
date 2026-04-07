@@ -1,10 +1,10 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import classNames from 'classnames';
 import { 
-  Upload, FileText, X, FolderPlus, MessageSquare, 
-  Search, Send, Download, Trash2, PlusCircle, 
-  LayoutGrid, List, ArrowUp, Cpu, Folder 
+  Upload, FileText, X, MessageSquare, 
+  Send, PlusCircle, 
+  ArrowUp, Cpu, Folder 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,34 +12,19 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from "framer-motion";
 import Select from 'react-select';
-import { DASHBOARD_FILES, DASHBOARD_MESSAGES } from "@/lib/dashboard/data";
+import projectApi from "@/networking/apis/project";
+import fileApi from "@/networking/apis/file";
 import styles from './styles.module.css';
 
-// Predefined model options
-const initialModelOptions = [
-  { value: 'gpt4', label: 'GPT-4 Turbo' },
-  { value: 'claude', label: 'Claude 3.5' },
-  { value: 'ollama', label: 'Ollama' },
-  { value: 'gemini', label: 'Gemini Pro' },
-];
+const initialModelOptions = [];
 
 
 // Options for each filter
-const projectOptions = [
-  { value: 'legal', label: 'Legal Docs (Main)' },
-  { value: 'research', label: 'Research Workspace' },
-];
+const initialProjectOptions = [];
 
-const categoryOptions = [
-  { value: 'all', label: 'All Documents' },
-  { value: 'financial', label: 'Financial Reports' },
-  { value: 'technical', label: 'Technical Specs' },
-];
+const defaultCategoryOption = { value: 'general', label: 'General' };
 
-const documentOptions = [
-  { value: 'annual', label: 'annual_report_2024.pdf' },
-  { value: 'technical', label: 'technical_spec_v2.pdf' },
-];
+const initialDocumentOptions = [];
 
 // Header Select Styles for Perfect Alignment
 const headerSelectStyles = {
@@ -135,32 +120,174 @@ const headerSelectStyles = {
   indicatorSeparator: () => ({ display: 'none' }),
 };
 
-const CenterPanel = () => {
-  const [view, setView] = useState("list");
+const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning }) => {
   const [showScroll, setShowScroll] = useState(false);
   const scrollAreaRef = React.useRef(null);
+  const fileInputRef = React.useRef(null);
   const [isCreating, setIsCreating] = useState(false);
   const [newProject, setNewProject] = useState("");
   const [newCategory, setNewCategory] = useState("");
+  const [projectListOptions, setProjectListOptions] = useState(initialProjectOptions);
+  const [documentListOptions, setDocumentListOptions] = useState(initialDocumentOptions);
+  const [categoryListOptions, setCategoryListOptions] = useState([defaultCategoryOption]);
 
   // Selection states
-  const [selectedProject, setSelectedProject] = useState(projectOptions[0]);
-  const [selectedCategory, setSelectedCategory] = useState(categoryOptions[0]);
-  const [selectedDocument, setSelectedDocument] = useState(documentOptions[0]);
+  const [selectedProject, setSelectedProject] = useState(initialProjectOptions[0] ?? null);
+  const [selectedCategory, setSelectedCategory] = useState(defaultCategoryOption);
+  const [selectedDocument, setSelectedDocument] = useState(initialDocumentOptions[0] ?? null);
 
   // Header Modes: 'filters' | 'models' | 'actions'
   const [headerMode, setHeaderMode] = useState('filters');
 
   // Model states
   const [modelOptions, setModelOptions] = useState(initialModelOptions);
-  const [selectedModel, setSelectedModel] = useState(initialModelOptions[0]);
+  const [selectedModel, setSelectedModel] = useState(null);
   const [newModelName, setNewModelName] = useState("");
 
-  const files = DASHBOARD_FILES;
-  const [messages, setMessages] = useState(DASHBOARD_MESSAGES);
+  const [messages, setMessages] = useState([]);
   const [query, setQuery] = useState("");
-  const [fileList, setFileList] = useState(DASHBOARD_FILES);
+  const [fileList, setFileList] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+
+  const normalizeProjectValue = (value) =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+  const mapProjectToOption = React.useCallback((project) => ({
+    value:
+      normalizeProjectValue(project?.project_code || project?.project_name || `project-${project?.id || Date.now()}`) ||
+      `project-${project?.id || Date.now()}`,
+    label: project?.project_name || 'Untitled Project',
+    projectId: project?.id ?? null,
+    category: project?.category || 'General',
+    projectCode: project?.project_code || null,
+  }), []);
+
+  const mapUploadedFileToCard = React.useCallback((file) => ({
+    id: file?.id,
+    name: file?.file_name || 'Unknown file',
+    category: selectedProject?.category || selectedCategory?.label || 'Document',
+    pages: file?.pages_count ?? '-',
+    size:
+      typeof file?.file_size === 'number'
+        ? `${(file.file_size / (1024 * 1024)).toFixed(2)} MB`
+        : '0 MB',
+    fileType: file?.file_type || 'application/pdf',
+    projectId: selectedProject?.projectId || null,
+  }), [selectedCategory?.label, selectedProject?.category, selectedProject?.projectId]);
+
+  const mapFileToDocumentOption = React.useCallback((file) => ({
+    value: String(file?.id ?? file?.file_code ?? file?.file_name ?? Date.now()),
+    label: file?.file_name || 'Unknown file',
+    fileId: file?.id ?? null,
+    fileCode: file?.file_code || null,
+    fileType: file?.file_type || null,
+    pagesCount: file?.pages_count ?? null,
+  }), []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProjects = async () => {
+      try {
+        const response = await projectApi.fetchAllProjects();
+        const options = (response?.data || []).map(mapProjectToOption);
+
+        if (!isMounted) return;
+
+        setProjectListOptions(options);
+        setSelectedProject((prev) => {
+          if (prev?.projectId) {
+            const matched = options.find((item) => item.projectId === prev.projectId);
+            return matched || prev;
+          }
+          return options[0] || null;
+        });
+      } catch (error) {
+        if (!isMounted) return;
+        setProjectListOptions([]);
+      }
+    };
+
+    loadProjects();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [mapProjectToOption]);
+
+  useEffect(() => {
+    if (!onSelectionChange) {
+      return;
+    }
+
+    onSelectionChange({
+      projectId: selectedProject?.projectId || null,
+      fileId: selectedDocument?.fileId || null,
+      documentLabel: selectedDocument?.label || "",
+    });
+  }, [onSelectionChange, selectedProject, selectedDocument]);
+
+  useEffect(() => {
+    if (!selectedProject?.category) {
+      setCategoryListOptions([defaultCategoryOption]);
+      setSelectedCategory(defaultCategoryOption);
+      return;
+    }
+
+    const categoryOption = {
+      value: normalizeProjectValue(selectedProject.category) || 'general',
+      label: selectedProject.category,
+    };
+
+    setCategoryListOptions([categoryOption]);
+    setSelectedCategory(categoryOption);
+  }, [selectedProject]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProjectFiles = async () => {
+      if (!selectedProject?.projectId) {
+        if (!isMounted) return;
+        setDocumentListOptions([]);
+        setSelectedDocument(null);
+        return;
+      }
+
+      try {
+        const response = await fileApi.fetchProjectFiles(selectedProject.projectId);
+        const files = response?.data || [];
+
+        if (!isMounted) return;
+
+        const options = files.map(mapFileToDocumentOption);
+        setDocumentListOptions(options);
+        setSelectedDocument((prev) => {
+          if (prev?.fileId) {
+            const matched = options.find((item) => item.fileId === prev.fileId);
+            return matched || options[0] || null;
+          }
+          return options[0] || null;
+        });
+        setFileList(files.map(mapUploadedFileToCard));
+      } catch (error) {
+        if (!isMounted) return;
+        setDocumentListOptions([]);
+        setSelectedDocument(null);
+        setFileList([]);
+      }
+    };
+
+    loadProjectFiles();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [mapFileToDocumentOption, mapUploadedFileToCard, selectedProject]);
 
   const handleAddNewModel = () => {
     if (!newModelName.trim()) return;
@@ -172,26 +299,164 @@ const CenterPanel = () => {
   };
 
   const handleUpload = () => {
+    if (!selectedProject?.projectId) {
+      if (typeof window !== 'undefined') {
+        window.alert('Please create or select a backend project first.');
+      }
+      return;
+    }
+
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelection = async (event) => {
+    const selectedFiles = Array.from(event.target.files || []);
+    if (!selectedFiles.length) return;
+
+    if (!selectedProject?.projectId) {
+      if (typeof window !== 'undefined') {
+        window.alert('Please create or select a backend project first.');
+      }
+      event.target.value = '';
+      return;
+    }
+
+    const formData = new FormData();
+    selectedFiles.forEach((file) => formData.append('files', file));
+
     setIsUploading(true);
-    setTimeout(() => {
-      const newFile = {
-        name: `ANNUAL_REPORT_24.PDF`,
-        category: "Financial",
-        pages: 54,
-        size: "2.4MB"
-      };
-      setFileList(prev => [newFile, ...prev]);
+
+    try {
+      const response = await fileApi.uploadProjectFiles(selectedProject.projectId, formData);
+      const uploadedFiles = response?.data || [];
+      const uploadedCards = uploadedFiles.map(mapUploadedFileToCard);
+      const uploadedDocumentOptions = uploadedFiles.map(mapFileToDocumentOption);
+
+      setFileList((prev) => [...uploadedCards, ...prev]);
+      setDocumentListOptions((prev) => [...uploadedDocumentOptions, ...prev]);
+      if (uploadedDocumentOptions[0]) {
+        setSelectedDocument(uploadedDocumentOptions[0]);
+      }
+    } catch (error) {
+      const message =
+        error?.payload?.detail ||
+        error?.payload?.message ||
+        error?.message ||
+        'Failed to upload files';
+      if (typeof window !== 'undefined') {
+        window.alert(message);
+      }
+    } finally {
       setIsUploading(false);
-    }, 1500);
+      event.target.value = '';
+    }
+  };
+
+  const handleCreateProject = async () => {
+    const trimmedProjectName = newProject.trim();
+    const categoryLabel =
+      newCategory.trim() ||
+      selectedCategory?.label ||
+      'General';
+
+    if (!trimmedProjectName || isCreating) return;
+
+    setIsCreating(true);
+
+    try {
+      const response = await projectApi.createProject({
+        project_name: trimmedProjectName,
+        category: categoryLabel,
+      });
+
+      const createdProject = response?.data;
+      const option = mapProjectToOption(createdProject);
+
+      setProjectListOptions((prev) => {
+        const alreadyExists = prev.some((item) => item.projectId === option.projectId);
+        return alreadyExists ? prev : [option, ...prev];
+      });
+      setSelectedProject(option);
+      setNewProject("");
+      setNewCategory("");
+      setHeaderMode('filters');
+    } catch (error) {
+      const message =
+        error?.payload?.detail ||
+        error?.payload?.message ||
+        error?.message ||
+        'Failed to create project';
+      if (typeof window !== 'undefined') {
+        window.alert(message);
+      }
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleDeleteFile = async (file) => {
+    if (!file) return;
+
+    if (!file.id || !selectedProject?.projectId) {
+      setFileList((prev) => prev.filter((item) => item !== file));
+      return;
+    }
+
+    try {
+      await fileApi.deleteProjectFile(selectedProject.projectId, file.id);
+      setFileList((prev) => prev.filter((item) => item.id !== file.id));
+      setDocumentListOptions((prev) => prev.filter((item) => item.fileId !== file.id));
+      setSelectedDocument((prev) => (prev?.fileId === file.id ? null : prev));
+    } catch (error) {
+      const message =
+        error?.payload?.detail ||
+        error?.payload?.message ||
+        error?.message ||
+        'Failed to delete file';
+      if (typeof window !== 'undefined') {
+        window.alert(message);
+      }
+    }
   };
 
   const handleSend = () => {
-    if (!query.trim()) return;
-    setMessages([...messages, { role: "user", content: query }]);
+    if (!query.trim() || isRunning) return;
+
+    const currentQuery = query.trim();
+    setMessages((prev) => [...prev, { role: "user", content: currentQuery }]);
     setQuery("");
-    setTimeout(() => {
-      setMessages(prev => [...prev, { role: "assistant", content: "Processing your query through the configured RAG pipeline..." }]);
-    }, 500);
+
+    const executeQuery = async () => {
+      if (!onRunQuery) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "Query API is not connected yet." },
+        ]);
+        return;
+      }
+
+      try {
+        const response = await onRunQuery({
+          projectId: selectedProject?.projectId,
+          fileId: selectedDocument?.fileId,
+          query: currentQuery,
+        });
+
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: response?.answer || "No response returned." },
+        ]);
+      } catch (error) {
+        const message =
+          error?.payload?.detail ||
+          error?.payload?.message ||
+          error?.message ||
+          "Failed to run query";
+        setMessages((prev) => [...prev, { role: "assistant", content: message }]);
+      }
+    };
+
+    executeQuery();
   };
 
   const scrollToTop = () => {
@@ -208,6 +473,15 @@ const CenterPanel = () => {
 
   return (
     <div className={styles.centerPanel}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        multiple
+        hidden
+        onChange={handleFileSelection}
+      />
+
       {/* Top Header Aligned with Sidebar/Results */}
       <div className={styles.panelHeader}>
         <MessageSquare size={16} className={styles.headerIcon} />
@@ -256,7 +530,7 @@ const CenterPanel = () => {
                   <span className={styles.filterLabel}>PROJECT</span>
                   <div style={{ flex: 1, minWidth: '130px' }}>
                     <Select
-                      options={projectOptions}
+                      options={projectListOptions}
                       value={selectedProject}
                       onChange={setSelectedProject}
                       styles={headerSelectStyles}
@@ -272,7 +546,7 @@ const CenterPanel = () => {
                   <span className={styles.filterLabel}>CATEGORY</span>
                   <div style={{ flex: 1, minWidth: '130px' }}>
                     <Select
-                      options={categoryOptions}
+                      options={categoryListOptions}
                       value={selectedCategory}
                       onChange={setSelectedCategory}
                       styles={headerSelectStyles}
@@ -288,11 +562,12 @@ const CenterPanel = () => {
                   <span className={styles.filterLabel}>DOCUMENT</span>
                   <div style={{ flex: 1, minWidth: '160px' }}>
                     <Select
-                      options={documentOptions}
+                      options={documentListOptions}
                       value={selectedDocument}
                       onChange={setSelectedDocument}
                       styles={headerSelectStyles}
                       isSearchable={false}
+                      placeholder="Select document"
                     />
                   </div>
                 </div>
@@ -335,28 +610,36 @@ const CenterPanel = () => {
                 style={{ flex: 1 }}
               >
                 <div className={styles.filterGroup}>
-                  <span className={styles.filterLabel}>MODEL INTAKE</span>
-                  <Input
-                    placeholder="DeepSeek-V3..."
-                    value={newModelName}
-                    onChange={(e) => setNewModelName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAddNewModel()}
-                    className={styles.headerInput}
-                  />
-                </div>
-                <Button variant="ghost" size="sm" className={styles.createButtonHeader} onClick={handleAddNewModel}>
-                  ADD MODEL
-                </Button>
-                <div className={styles.filterDivider} />
-                <div className={styles.filterGroup}>
+                  <span className={styles.filterLabel}>PROJECT NAME</span>
                   <Input
                     placeholder="New Project Name..."
                     value={newProject}
                     onChange={(e) => setNewProject(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleCreateProject()}
                     className={styles.headerInput}
                   />
-                  <Button variant="ghost" size="sm" className={styles.createButtonHeader} onClick={() => setHeaderMode('filters')}>
-                    CREATE
+                </div>
+                <div className={styles.filterDivider} />
+                <div className={styles.filterGroup}>
+                  <span className={styles.filterLabel}>CATEGORY</span>
+                  <Input
+                    placeholder="Enter category..."
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleCreateProject()}
+                    className={styles.headerInput}
+                  />
+                </div>
+                <div className={styles.filterDivider} />
+                <div className={styles.filterGroup}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={styles.createButtonHeader}
+                    onClick={handleCreateProject}
+                    disabled={isCreating || !newProject.trim()}
+                  >
+                    {isCreating ? 'CREATING...' : 'CREATE'}
                   </Button>
                 </div>
               </motion.div>
@@ -393,7 +676,7 @@ const CenterPanel = () => {
               <AnimatePresence>
                 {fileList.map((file, idx) => (
                   <motion.div
-                    key={file.name}
+                    key={file.id || `${file.name}-${idx}`}
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
                     className={styles.fileCard}
@@ -406,7 +689,11 @@ const CenterPanel = () => {
                       <Badge variant="outline" className={styles.fileBadge}>{file.category}</Badge>
                       <span className={styles.monoText}>{file.pages}p</span>
                       <span className={styles.monoText}>{file.size}</span>
-                      <button className={styles.removeButton}>
+                      <button
+                        className={styles.removeButton}
+                        onClick={() => handleDeleteFile(file)}
+                        type="button"
+                      >
                         <X size={12} />
                       </button>
                     </div>

@@ -420,7 +420,7 @@ const ConfigPanel = ({ isCollapsed, setIsCollapsed }) => {
             </div>
             <div className={styles.optionRow}>
               <div className={styles.optionInfo}>
-                <Label className={styles.optionLabel}>RAGAS Evaluation</Label>
+                <Label className={styles.optionLabel}>Quality Evaluation</Label>
                 <span className={styles.optionSub}>Automated quality metrics</span>
               </div>
               <Switch checked={true} />
