@@ -24,6 +24,7 @@ import {
   Search,
   Send,
   Sparkles,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -32,6 +33,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import fileApi from "@/networking/apis/file";
+import projectApi from "@/networking/apis/project";
+import queryApi from "@/networking/apis/query";
 import {
   DATA_EXTRACTION_OPTIONS,
   DEFAULT_EXECUTION_METRICS,
@@ -39,7 +43,6 @@ import {
   DEFAULT_RESPONSE,
   EMBEDDING_OPTIONS,
   INITIAL_PROJECTS,
-  PROCESSING_LINES,
   PROJECT_CATEGORIES,
   RETRIEVAL_STRATEGY_OPTIONS,
   TEXT_PROCESSING_OPTIONS,
@@ -64,6 +67,94 @@ const formatBytes = (bytes) => {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 };
 
+const mapUploadedFileToWorkspaceFile = (file, category) => ({
+  id: String(file?.id ?? `${file?.file_name}-${Date.now()}`),
+  name: file?.file_name || "Unknown file",
+  size: formatBytes(file?.file_size || 0),
+  category: category || "General",
+  fileId: file?.id ?? null,
+  fileType: file?.file_type || null,
+  pages: file?.pages_count ?? null,
+});
+
+const buildSharedPipelineConfig = (workspace) => {
+  const normalizedVectorStores = (workspace.vectorStores || []).filter((value) =>
+    ["chromadb", "pgvector", "faiss", "pinecone"].includes(value),
+  );
+  const embeddingProvider = workspace.embeddingModels.includes("ollama-nomic-embed")
+    ? "ollama"
+    : "openai";
+  const embeddingModel = embeddingProvider === "ollama"
+    ? "nomic-embed-text"
+    : workspace.embeddingModels.includes("text-embedding-3-large")
+    ? "text-embedding-3-large"
+    : "text-embedding-3-small";
+  const normalizedExtractionMethods = (workspace.dataExtraction || []).filter((value) =>
+    ["pymupdf", "unstructured", "pdfplumber"].includes(value),
+  );
+
+  const processingConfig = {
+    text_processing: {
+      chunk_size: Number(workspace.chunkLength) || 1000,
+      chunk_overlap: 50,
+      splitter: workspace.textProcessing || "recursive",
+    },
+    data_extraction: {
+      method:
+        normalizedExtractionMethods.length > 1
+          ? normalizedExtractionMethods
+          : normalizedExtractionMethods[0] || "pymupdf",
+    },
+    embeddings: {
+      provider: embeddingProvider,
+      model: embeddingModel,
+    },
+    vector_store: {
+      backends: normalizedVectorStores.length ? normalizedVectorStores : ["faiss"],
+      collection_name: "documents",
+    },
+  };
+
+  const queryConfig = {
+    retrieval_strategy: {
+      top_k: Math.max(1, Number(workspace.topK) || 3),
+      search_type: "similarity",
+      vector_db:
+        processingConfig.vector_store.backends.length > 1
+          ? processingConfig.vector_store.backends
+          : processingConfig.vector_store.backends[0],
+      collection_name: processingConfig.vector_store.collection_name,
+    },
+    embedding: {
+      provider: processingConfig.embeddings.provider,
+      model: processingConfig.embeddings.model,
+    },
+    llm: {
+      provider: "openai",
+      model: "gpt-4o-mini",
+      temperature: 0.2,
+    },
+    self_reflection: {
+      enabled: true,
+      max_retries: 2,
+      retrieval_top_k_step: 2,
+    },
+  };
+
+  return { processingConfig, queryConfig };
+};
+
+const buildQueryPayload = ({ projectId, fileId, workspace, query }) => {
+  const { queryConfig } = buildSharedPipelineConfig(workspace);
+
+  return {
+    project_id: Number(projectId),
+    file_id: Number(fileId),
+    query: query.trim(),
+    config: queryConfig,
+  };
+};
+
 const TypedLine = ({ text }) => {
   const [visibleText, setVisibleText] = useState("");
 
@@ -86,6 +177,11 @@ const TypedLine = ({ text }) => {
 
   return <p className={styles.statusLine}>{visibleText}</p>;
 };
+
+const createStatusLine = (text) => ({
+  id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  text,
+});
 
 const MultiSelectChips = ({ options, selectedValues, onToggle }) => (
   <div className={styles.choiceGrid}>
@@ -157,9 +253,17 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectCategory, setNewProjectCategory] = useState("");
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [deletingProjectId, setDeletingProjectId] = useState(null);
+  const [projectPendingDelete, setProjectPendingDelete] = useState(null);
+  const [deleteProjectInput, setDeleteProjectInput] = useState("");
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false);
   const [isLeftSidebarExpanded, setIsLeftSidebarExpanded] = useState(false);
   const [isRightSidebarExpanded, setIsRightSidebarExpanded] = useState(false);
+  const [chatPanelOffset, setChatPanelOffset] = useState(180);
   const fileInputRef = useRef(null);
+  const workspaceContentRef = useRef(null);
   const timersRef = useRef([]);
   const hasHydratedRef = useRef(false);
 
@@ -175,6 +279,24 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   }, []);
 
   useEffect(() => () => clearTimers(), [clearTimers]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleWindowResize = () => {
+      if (window.innerWidth <= 1200) {
+        setChatPanelOffset(0);
+        return;
+      }
+
+      setChatPanelOffset((current) => Math.min(260, Math.max(80, current || 180)));
+    };
+
+    handleWindowResize();
+    window.addEventListener("resize", handleWindowResize);
+
+    return () => window.removeEventListener("resize", handleWindowResize);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || hasHydratedRef.current) return;
@@ -262,31 +384,60 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     [updateActiveWorkspace],
   );
 
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
     if (!newProjectName.trim() || !newProjectCategory.trim()) return;
 
-    const normalizedName = newProjectName.trim().toLowerCase().replace(/\s+/g, "-");
-    const nextProject = {
-      id: normalizedName,
-      name: normalizedName,
-      category: newProjectCategory.trim(),
-      description: `${newProjectCategory.trim()} workspace for uploads, chunking, embeddings, and query evaluation.`,
-      region: "AWS | ap-south-1",
-      tier: "New",
-      documents: 0,
-      lastUpdated: "Just now",
-    };
+    setIsCreatingProject(true);
 
-    startTransition(() => {
-      setProjects((current) => [nextProject, ...current]);
-      setProjectWorkspaces((current) => ({
-        ...current,
-        [nextProject.id]: createWorkspaceState(),
-      }));
-      setIsCreateProjectOpen(false);
-      setNewProjectName("");
-      setNewProjectCategory("");
-    });
+    try {
+      const response = await projectApi.createProject({
+        project_name: newProjectName.trim(),
+        category: newProjectCategory.trim(),
+      });
+      const createdProject = response?.data;
+
+      if (!createdProject?.id) {
+        throw new Error("Project was created but no project id was returned.");
+      }
+
+      const projectId = String(createdProject.id);
+      const nextProject = {
+        id: projectId,
+        name: createdProject.project_name || newProjectName.trim(),
+        category: createdProject.category || newProjectCategory.trim(),
+        description: `${createdProject.category || newProjectCategory.trim()} workspace for uploads, chunking, embeddings, and query evaluation.`,
+        region: createdProject.project_code || "Backend project",
+        tier: "Connected",
+        documents: 0,
+        lastUpdated: "Just now",
+      };
+
+      startTransition(() => {
+        setProjects((current) => {
+          const alreadyExists = current.some((project) => project.id === projectId);
+          return alreadyExists ? current : [nextProject, ...current];
+        });
+        setProjectWorkspaces((current) => ({
+          ...current,
+          [projectId]: current[projectId] || createWorkspaceState(),
+        }));
+        setActiveProjectId(projectId);
+        setIsCreateProjectOpen(false);
+        setNewProjectName("");
+        setNewProjectCategory("");
+      });
+    } catch (error) {
+      const message =
+        error?.payload?.detail ||
+        error?.payload?.message ||
+        error?.message ||
+        "Failed to create project";
+      if (typeof window !== "undefined") {
+        window.alert(message);
+      }
+    } finally {
+      setIsCreatingProject(false);
+    }
   };
 
   const handleOpenProject = (projectId) => {
@@ -296,93 +447,292 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     });
   };
 
-  const handleFileUpload = (event) => {
-    const selectedFiles = Array.from(event.target.files ?? []).map((file) => ({
-      id: `${file.name}-${file.size}-${file.lastModified}`,
-      name: file.name,
-      size: formatBytes(file.size),
-      category: activeProject?.category ?? "General",
-    }));
+  const handleChatResizeStart = useCallback(
+    (event) => {
+      if (typeof window === "undefined" || window.innerWidth <= 1200) return;
 
+      event.preventDefault();
+      const pointerStartX = event.clientX;
+      const startingOffset = chatPanelOffset;
+      const contentBounds = workspaceContentRef.current?.getBoundingClientRect();
+      const maxOffset = contentBounds ? Math.min(320, Math.max(120, contentBounds.width - 560)) : 320;
+
+      const handlePointerMove = (moveEvent) => {
+        const nextOffset = startingOffset + (moveEvent.clientX - pointerStartX);
+        setChatPanelOffset(Math.min(maxOffset, Math.max(80, nextOffset)));
+      };
+
+      const handlePointerUp = () => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+      };
+
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
+    },
+    [chatPanelOffset],
+  );
+
+  const handleDeleteProject = async () => {
+    const projectId = projectPendingDelete?.id;
+    if (!projectId || !projectPendingDelete?.name) return;
+    if (deleteProjectInput.trim() !== projectPendingDelete.name) return;
+
+    setDeletingProjectId(projectId);
+
+    try {
+      await projectApi.deleteProject(projectId);
+
+      startTransition(() => {
+        setProjects((current) => current.filter((project) => project.id !== projectId));
+        setProjectWorkspaces((current) => {
+          const next = { ...current };
+          delete next[projectId];
+          return next;
+        });
+        if (String(activeProjectId) === String(projectId)) {
+          setActiveProjectId(null);
+          router.replace(ROUTE_PATHS.HOME);
+        }
+      });
+    } catch (error) {
+      const message =
+        error?.payload?.detail ||
+        error?.payload?.message ||
+        error?.message ||
+        "Failed to delete project";
+      if (typeof window !== "undefined") {
+        window.alert(message);
+      }
+    } finally {
+      setDeletingProjectId(null);
+      setProjectPendingDelete(null);
+      setDeleteProjectInput("");
+    }
+  };
+
+  const handleFileUpload = async (event) => {
+    const selectedFiles = Array.from(event.target.files ?? []);
     if (selectedFiles.length === 0) return;
+
+    if (!activeProject?.id) {
+      event.target.value = "";
+      return;
+    }
+
+    const formData = new FormData();
+    selectedFiles.forEach((file) => formData.append("files", file));
+    setIsUploadingFiles(true);
 
     updateActiveWorkspace((current) => ({
       ...current,
-      files: [...current.files, ...selectedFiles],
       phase: "ingestion-setup",
-      query: "",
-      visibleLines: [],
+      visibleLines: [
+        createStatusLine(
+          `Uploading ${selectedFiles.length} PDF file${selectedFiles.length > 1 ? "s" : ""} to backend project...`,
+        ),
+      ],
       response: "",
       responseVisible: false,
       activeRightSection: "response",
     }));
 
-    event.target.value = "";
+    try {
+      const response = await fileApi.uploadProjectFiles(activeProject.id, formData);
+      const uploadedFiles = (response?.data || []).map((file) =>
+        mapUploadedFileToWorkspaceFile(file, activeProject?.category),
+      );
+
+      updateActiveWorkspace((current) => ({
+        ...current,
+        files: [...current.files, ...uploadedFiles],
+        phase: "ingestion-setup",
+        query: "",
+        visibleLines: [
+          ...current.visibleLines,
+          createStatusLine(
+            `Upload complete. ${uploadedFiles.length} file${uploadedFiles.length > 1 ? "s were" : " was"} stored successfully.`,
+          ),
+        ],
+        response: "",
+        responseVisible: false,
+        activeRightSection: "response",
+      }));
+    } catch (error) {
+      const message =
+        error?.payload?.detail ||
+        error?.payload?.message ||
+        error?.message ||
+        "Failed to upload files";
+      if (typeof window !== "undefined") {
+        window.alert(message);
+      }
+      updateActiveWorkspace((current) => ({
+        ...current,
+        visibleLines: [
+          ...current.visibleLines,
+          createStatusLine(`Upload failed: ${message}`),
+        ],
+      }));
+    } finally {
+      setIsUploadingFiles(false);
+      event.target.value = "";
+    }
   };
 
   const handleStartIngestion = () => {
-    if (!activeWorkspace) return;
+    if (!activeWorkspace || !activeProjectId) return;
 
-    clearTimers();
-    const runId = `${activeProjectId}-${Date.now()}`;
+    const filesToProcess = activeWorkspace.files.filter((file) => file.fileId);
+    if (!filesToProcess.length) {
+      if (typeof window !== "undefined") {
+        window.alert("Upload at least one file before processing.");
+      }
+      return;
+    }
 
-    updateActiveWorkspace((current) => ({
-      ...current,
-      phase: "ingestion-processing",
-      visibleLines: [],
-      response: "",
-      responseVisible: false,
-      activeRightSection: "response",
-    }));
+    const processFiles = async () => {
+      clearTimers();
+      setIsProcessingFiles(true);
 
-    PROCESSING_LINES.forEach((line, index) => {
-      timersRef.current.push(
-        window.setTimeout(() => {
-          updateActiveWorkspace((current) => ({
-            ...current,
-            visibleLines: [...current.visibleLines, { id: `${runId}-${index}`, text: line }],
-          }));
-        }, 900 * (index + 1)),
-      );
-    });
+      updateActiveWorkspace((current) => ({
+        ...current,
+        phase: "ingestion-processing",
+        visibleLines: [
+          createStatusLine(
+            `Starting processing for ${filesToProcess.length} file${filesToProcess.length > 1 ? "s" : ""}...`,
+          ),
+          createStatusLine("Preparing chunking configuration..."),
+          createStatusLine("Preparing embedding and vector store configuration..."),
+        ],
+        response: "",
+        responseVisible: false,
+        activeRightSection: "response",
+      }));
 
-    timersRef.current.push(
-      window.setTimeout(() => {
+      try {
+        const { processingConfig } = buildSharedPipelineConfig(activeWorkspace);
+        updateActiveWorkspace((current) => ({
+          ...current,
+          visibleLines: [
+            ...current.visibleLines,
+            createStatusLine(
+              `Chunking with ${processingConfig.text_processing.splitter}, embedding with ${processingConfig.embeddings.provider}/${processingConfig.embeddings.model}.`,
+            ),
+            createStatusLine(
+              `Storing vectors in ${processingConfig.vector_store.backends.join(", ")} using collection ${processingConfig.vector_store.collection_name}.`,
+            ),
+          ],
+        }));
+        await Promise.all(
+          filesToProcess.map((file) =>
+            fileApi.processProjectFile(activeProjectId, file.fileId, processingConfig),
+          ),
+        );
+
         updateActiveWorkspace((current) => ({
           ...current,
           phase: "query-ready",
+          visibleLines: [
+            ...current.visibleLines,
+            createStatusLine("Processing complete. Files are ready for querying."),
+          ],
           retrievalStrategies:
             current.retrievalStrategies.length > 0
               ? current.retrievalStrategies
               : ["semantic-similarity"],
         }));
-      }, 900 * (PROCESSING_LINES.length + 1) + 300),
-    );
+      } catch (error) {
+        const message =
+          error?.payload?.detail ||
+          error?.payload?.message ||
+          error?.message ||
+          "Failed to process files";
+        if (typeof window !== "undefined") {
+          window.alert(message);
+        }
+        updateActiveWorkspace((current) => ({
+          ...current,
+          phase: "ingestion-setup",
+          visibleLines: [
+            ...current.visibleLines,
+            createStatusLine(`Processing failed: ${message}`),
+          ],
+        }));
+      } finally {
+        setIsProcessingFiles(false);
+      }
+    };
+
+    processFiles();
   };
 
   const handleStartQuery = () => {
-    if (!activeWorkspace?.query.trim()) return;
+    if (!activeWorkspace?.query.trim() || !activeProjectId) return;
 
-    clearTimers();
-    updateActiveWorkspace((current) => ({
-      ...current,
-      phase: "query-processing",
-      visibleLines: [],
-      response: "",
-      responseVisible: false,
-      activeRightSection: "response",
-    }));
+    const targetFile = [...(activeWorkspace.files || [])]
+      .reverse()
+      .find((file) => file.fileId);
 
-    timersRef.current.push(
-      window.setTimeout(() => {
+    if (!targetFile?.fileId) {
+      if (typeof window !== "undefined") {
+        window.alert("Upload and process a file before running a query.");
+      }
+      return;
+    }
+
+    const runQuery = async () => {
+      clearTimers();
+      updateActiveWorkspace((current) => ({
+        ...current,
+        phase: "query-processing",
+        visibleLines: [],
+        response: "",
+        responseVisible: false,
+        activeRightSection: "response",
+      }));
+
+      try {
+        const payload = buildQueryPayload({
+          projectId: activeProjectId,
+          fileId: targetFile.fileId,
+          workspace: activeWorkspace,
+          query: activeWorkspace.query,
+        });
+        const response = await queryApi.runQuery(payload);
+        const chunks = response?.chunks || [];
+
         updateActiveWorkspace((current) => ({
           ...current,
           phase: "query-complete",
-          response: DEFAULT_RESPONSE,
+          response: response?.answer || DEFAULT_RESPONSE,
           responseVisible: true,
+          retrievedChunks: chunks.map((chunk, index) => ({
+            title: chunk?.source || targetFile.name || `Chunk ${index + 1}`,
+            page: chunk?.page || index + 1,
+            score: Number(chunk?.relevance_score ?? chunk?.raw_score ?? 0),
+            text: chunk?.content || "",
+          })),
         }));
-      }, 1400),
-    );
+      } catch (error) {
+        const message =
+          error?.payload?.detail ||
+          error?.payload?.message ||
+          error?.message ||
+          "Failed to run query";
+        if (typeof window !== "undefined") {
+          window.alert(message);
+        }
+        updateActiveWorkspace((current) => ({
+          ...current,
+          phase: "query-ready",
+          response: "",
+          responseVisible: false,
+        }));
+      }
+    };
+
+    runQuery();
   };
 
   const isQueryStage = activeWorkspace
@@ -498,9 +848,101 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                       <Button
                         className={styles.createProjectCta}
                         onClick={handleCreateProject}
-                        disabled={!newProjectName.trim() || !newProjectCategory.trim()}
+                        disabled={
+                          isCreatingProject ||
+                          !newProjectName.trim() ||
+                          !newProjectCategory.trim()
+                        }
                       >
-                        Create project
+                        {isCreatingProject ? "Creating..." : "Create project"}
+                      </Button>
+                    </div>
+                  </div>
+                </motion.section>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {projectPendingDelete && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className={styles.modalOverlay}
+                onClick={() => {
+                  if (deletingProjectId) return;
+                  setProjectPendingDelete(null);
+                  setDeleteProjectInput("");
+                }}
+              >
+                <motion.section
+                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                  className={styles.deleteModal}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className={styles.createModalHeader}>
+                    <div>
+                      <h2 className={styles.createModalTitle}>Delete project</h2>
+                      <p className={styles.createModalSubtitle}>
+                        This action permanently deletes the project, its files, and related experiment history.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.modalCloseButton}
+                      onClick={() => {
+                        if (deletingProjectId) return;
+                        setProjectPendingDelete(null);
+                        setDeleteProjectInput("");
+                      }}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  <div className={styles.createModalBody}>
+                    <div className={styles.deleteModalContent}>
+                      <p className={styles.deleteWarningText}>
+                        Type <strong>{projectPendingDelete.name}</strong> to confirm deletion.
+                      </p>
+                      <label className={styles.formField}>
+                        <span className={styles.modalFieldLabel}>Project name confirmation</span>
+                        <Input
+                          value={deleteProjectInput}
+                          onChange={(event) => setDeleteProjectInput(event.target.value)}
+                          placeholder={projectPendingDelete.name}
+                          className={styles.modalInput}
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className={styles.createModalActions}>
+                    <div className={styles.deleteModalActions}>
+                      <Button
+                        variant="outline"
+                        className={styles.deleteCancelButton}
+                        onClick={() => {
+                          if (deletingProjectId) return;
+                          setProjectPendingDelete(null);
+                          setDeleteProjectInput("");
+                        }}
+                        disabled={Boolean(deletingProjectId)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        className={styles.deleteProjectCta}
+                        onClick={handleDeleteProject}
+                        disabled={
+                          deletingProjectId === projectPendingDelete.id ||
+                          deleteProjectInput.trim() !== projectPendingDelete.name
+                        }
+                      >
+                        {deletingProjectId === projectPendingDelete.id ? "Deleting..." : "Delete project"}
                       </Button>
                     </div>
                   </div>
@@ -522,7 +964,22 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                     <h3>{project.name}</h3>
                     <p>{project.region}</p>
                   </div>
-                  <ChevronRight size={18} className={styles.projectCardArrow} />
+                  <div className={styles.projectCardActions}>
+                    <button
+                      type="button"
+                      className={styles.projectDeleteButton}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setProjectPendingDelete(project);
+                        setDeleteProjectInput("");
+                      }}
+                      disabled={deletingProjectId === project.id}
+                      title="Delete project"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                    <ChevronRight size={18} className={styles.projectCardArrow} />
+                  </div>
                 </div>
 
                 <p className={styles.projectDescription}>{project.description}</p>
@@ -752,9 +1209,9 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
               <Button
                 className={styles.processButton}
                 onClick={handleStartIngestion}
-                disabled={isPending}
+                disabled={isPending || isProcessingFiles}
               >
-                Process
+                {isProcessingFiles ? "Processing..." : "Process"}
               </Button>
             </div>
           )}
@@ -774,11 +1231,18 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
               type="button"
               className={classNames(styles.uploadDropzone, styles.headerUploadDropzone)}
               onClick={() => fileInputRef.current?.click()}
+              disabled={isUploadingFiles}
             >
               <Upload size={24} />
               <div>
-                <p className={styles.uploadTitle}>Upload PDF files</p>
-                <p className={styles.uploadSubtitle}>Click to choose PDF documents for this project.</p>
+                <p className={styles.uploadTitle}>
+                  {isUploadingFiles ? "Uploading PDF files..." : "Upload PDF files"}
+                </p>
+                <p className={styles.uploadSubtitle}>
+                  {isUploadingFiles
+                    ? "Please wait while files are sent to the backend."
+                    : "Click to choose PDF documents for this project."}
+                </p>
               </div>
             </button>
 
@@ -828,67 +1292,111 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
         </header>
 
         <section className={styles.workspaceCanvas}>
-          <div className={styles.workspaceCenterStage}>
-            <p className={styles.workspaceHelperText}>
-              please upload the file and select the configurations
-            </p>
+          <div
+            ref={workspaceContentRef}
+            className={styles.workspaceContentLayout}
+            style={{
+              "--chat-panel-offset":
+                chatPanelOffset > 0 ? `${chatPanelOffset}px` : "0px",
+            }}
+          >
+            <div className={styles.uploadRailSpacer} />
+            <button
+              type="button"
+              className={styles.chatResizeHandle}
+              onPointerDown={handleChatResizeStart}
+              aria-label="Resize chat panel"
+              title="Drag to resize chat panel"
+            >
+              <span className={styles.chatResizeGrip} />
+            </button>
 
-            {activeWorkspace.visibleLines.length > 0 && (
-              <div className={styles.statusList}>
-                {activeWorkspace.visibleLines.map((line) => (
-                  <TypedLine key={line.id} text={line.text} />
-                ))}
-              </div>
-            )}
+            <div className={styles.chatPanelShell}>
+            <div className={styles.workspaceCenterStage}>
+              {!activeWorkspace.query && !activeWorkspace.responseVisible && (
+                <p className={styles.workspaceHelperText}>
+                  please upload the file and select the configurations
+                </p>
+              )}
 
-            {activeWorkspace.phase === "query-processing" && (
-              <div className={styles.generatingState}>
-                <div className={styles.loadingDot} />
-                <span>Generating answer...</span>
-              </div>
-            )}
+              {activeWorkspace.visibleLines.length > 0 && (
+                <div className={styles.statusList}>
+                  {activeWorkspace.visibleLines.map((line) => (
+                    <TypedLine key={line.id} text={line.text} />
+                  ))}
+                </div>
+              )}
 
-            {activeWorkspace.responseVisible && (
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={styles.answerCard}
-              >
-                <div className={styles.answerBadge}>Response</div>
-                <p>{activeWorkspace.response}</p>
-              </motion.div>
-            )}
-          </div>
-
-          {isQueryStage && (
-            <div className={styles.queryDock}>
-              <div className={styles.queryInputShell}>
-                <Input
-                  value={activeWorkspace.query}
-                  onChange={(event) =>
-                    updateActiveWorkspace((current) => ({
-                      ...current,
-                      query: event.target.value,
-                    }))
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      handleStartQuery();
-                    }
-                  }}
-                  placeholder="ask a query and select the configuration at left side bar"
-                  className={styles.queryInput}
-                />
-                <Button
-                  className={styles.querySendButton}
-                  onClick={handleStartQuery}
-                  title="Send query"
+              {activeWorkspace.query && (
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={styles.userMessageRow}
                 >
-                  <Send size={16} />
-                </Button>
-              </div>
+                  <div className={styles.userMessageBubble}>
+                    <div className={styles.chatMessageLabel}>You</div>
+                    <p>{activeWorkspace.query}</p>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeWorkspace.phase === "query-processing" && (
+                <div className={styles.aiMessageRow}>
+                  <div className={styles.aiMessageBubble}>
+                    <div className={styles.chatMessageLabel}>Assistant</div>
+                    <div className={styles.generatingState}>
+                      <div className={styles.loadingDot} />
+                      <span>Generating answer...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeWorkspace.responseVisible && (
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={styles.aiMessageRow}
+                >
+                  <div className={styles.aiMessageBubble}>
+                    <div className={styles.chatMessageLabel}>Assistant</div>
+                    <p>{activeWorkspace.response}</p>
+                  </div>
+                </motion.div>
+              )}
             </div>
-          )}
+
+              {isQueryStage && (
+                <div className={styles.queryDock}>
+                  <div className={styles.queryInputShell}>
+                    <Input
+                      value={activeWorkspace.query}
+                      onChange={(event) =>
+                        updateActiveWorkspace((current) => ({
+                          ...current,
+                          query: event.target.value,
+                        }))
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          handleStartQuery();
+                        }
+                      }}
+                      placeholder="ask a query and select the configuration at left side bar"
+                      className={styles.queryInput}
+                    />
+                    <Button
+                      className={styles.querySendButton}
+                      onClick={handleStartQuery}
+                      title="Send query"
+                    >
+                      <Send size={16} />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </section>
       </main>
 
