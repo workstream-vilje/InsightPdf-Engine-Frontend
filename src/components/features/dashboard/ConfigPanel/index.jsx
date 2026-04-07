@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import classNames from 'classnames';
 import { motion, AnimatePresence } from 'framer-motion';
 import Select from 'react-select';
@@ -132,31 +132,23 @@ const customSelectStyles = {
 const extractionOptions = [
   { value: 'pymupdf', label: 'PyMuPDF (High Performance)' },
   { value: 'unstructured', label: 'Unstructured.io (Standard)' },
-  { value: 'nougat', label: 'Meta Nougat (Academic)' },
-  { value: 'tesseract', label: 'Tesseract OCR' },
 ];
 
 const embeddingOptions = [
-  { value: 'openai', label: 'OpenAI (Embed V3 Small)' },
+  { value: 'openai', label: 'OpenAI (text-embedding-3-small)' },
   { value: 'ollama', label: 'Ollama (nomic-embed)' },
-  { value: 'anthropic', label: 'Anthropic (Voyage 2)' },
-  { value: 'cohere', label: 'Cohere (English V3)' },
 ];
 
 const llmOptions = [
-  { value: 'gpt4', label: 'GPT-4 Turbo (Preview)' },
-  { value: 'claude', label: 'Claude 3.5 Sonnet' },
-  { value: 'llama', label: 'Llama 3 (Ollama)' },
-  { value: 'mistral', label: 'Mistral Large' },
-  { value: 'gemini', label: 'Gemini 1.5 Pro' },
+  { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+  { value: 'llama3.2', label: 'Llama 3.2 (Ollama)' },
 ];
 
 const vectorStoreOptions = [
-  { value: 'postgresql', label: 'PostgreSQL (pgvector)' },
+  { value: 'pgvector', label: 'PostgreSQL (pgvector)' },
   { value: 'chromadb', label: 'ChromaDB' },
   { value: 'faiss', label: 'FAISS' },
   { value: 'pinecone', label: 'Pinecone' },
-  { value: 'weaviate', label: 'Weaviate' },
 ];
 
 const Section = ({ title, icon: Icon, badge, children, defaultOpen = false, index, isCollapsed }) => {
@@ -220,15 +212,17 @@ const Field = ({ label, children }) => (
   </div>
 );
 
-const ConfigPanel = ({ isCollapsed, setIsCollapsed }) => {
-  const [chunkLength, setChunkLength] = useState(1000);
-  const [overlap, setOverlap] = useState([200]);
+const ConfigPanel = ({ isCollapsed, setIsCollapsed, onConfigChange }) => {
+  const [chunkLength, setChunkLength] = useState(500);
+  const [overlap, setOverlap] = useState([50]);
+  const [splitter, setSplitter] = useState({ value: 'recursive', label: 'Recursive Text Splitter' });
+  const [retrievalType, setRetrievalType] = useState({ value: 'similarity', label: 'Semantic Similarity Search' });
 
   // Selection states
   const [extraction, setExtraction] = useState([extractionOptions[0]]);
   const [embeddings, setEmbeddings] = useState([embeddingOptions[0]]);
-  const [selectedLLMs, setSelectedLLMs] = useState([llmOptions[0], llmOptions[1]]);
-  const [vectorStores, setVectorStores] = useState([vectorStoreOptions[1]]);
+  const [selectedLLMs, setSelectedLLMs] = useState([llmOptions[0]]);
+  const [vectorStores, setVectorStores] = useState([vectorStoreOptions[2]]);
 
   const [activeArch, setActiveArch] = useState("Simple Retrieval");
 
@@ -240,6 +234,76 @@ const ConfigPanel = ({ isCollapsed, setIsCollapsed }) => {
       </div>
     );
   };
+
+  useEffect(() => {
+    if (!onConfigChange) {
+      return;
+    }
+
+    const selectedEmbeddings = (embeddings || [])
+      .map((item) => {
+        if (!item?.value) return null;
+        if (item.value === 'ollama') {
+          return { provider: 'ollama', model: 'nomic-embed-text' };
+        }
+        return { provider: 'openai', model: 'text-embedding-3-small' };
+      })
+      .filter(Boolean);
+
+    const selectedLlm = selectedLLMs?.[0]?.value === 'llama3.2'
+      ? { provider: 'ollama', model: 'llama3.2', temperature: 0.2 }
+      : { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2 };
+
+    onConfigChange({
+      text_processing: {
+        chunk_size: Number(chunkLength) || 500,
+        chunk_overlap: Number(overlap?.[0]) || 50,
+        splitter: splitter?.value || 'recursive',
+      },
+      data_extraction: {
+        method:
+          extraction.length > 1
+            ? extraction.map((item) => item.value)
+            : extraction[0]?.value || 'pymupdf',
+      },
+      embeddings:
+        selectedEmbeddings.length > 1
+          ? selectedEmbeddings
+          : selectedEmbeddings[0] || { provider: 'openai', model: 'text-embedding-3-small' },
+      vector_store: {
+        backends: (vectorStores || []).map((item) => item.value),
+        collection_name: 'documents',
+      },
+      query: {
+        retrieval_strategy: {
+          top_k: 5,
+          search_type: retrievalType?.value || 'similarity',
+          vector_db:
+            vectorStores.length > 1
+              ? vectorStores.map((item) => item.value)
+              : vectorStores[0]?.value || 'faiss',
+          collection_name: 'documents',
+        },
+        embedding: selectedEmbeddings[0] || { provider: 'openai', model: 'text-embedding-3-small' },
+        llm: selectedLlm,
+        self_reflection: {
+          enabled: true,
+          max_retries: 2,
+          retrieval_top_k_step: 2,
+        },
+      },
+    });
+  }, [
+    chunkLength,
+    embeddings,
+    extraction,
+    onConfigChange,
+    overlap,
+    retrievalType,
+    selectedLLMs,
+    splitter,
+    vectorStores,
+  ]);
 
   return (
     <div className={classNames(styles.configPanel, { [styles.collapsed]: isCollapsed })}>
@@ -284,7 +348,8 @@ const ConfigPanel = ({ isCollapsed, setIsCollapsed }) => {
                 { value: 'token', label: 'Token-based Splitter' },
                 { value: 'fixed', label: 'Fixed-Size Splitter' },
               ]}
-              defaultValue={{ value: 'recursive', label: 'Recursive Text Splitter' }}
+              value={splitter}
+              onChange={setSplitter}
               styles={customSelectStyles}
               isSearchable={false}
               menuPlacement="auto"
@@ -366,11 +431,10 @@ const ConfigPanel = ({ isCollapsed, setIsCollapsed }) => {
           <Field label="Search Type">
             <Select
               options={[
-                { value: 'semantic', label: 'Semantic Similarity Search' },
-                { value: 'hybrid', label: 'Hybrid (Keyword + Vector)' },
-                { value: 'mmr', label: 'MMR (Max Marginal Relevance)' },
+                { value: 'similarity', label: 'Semantic Similarity Search' },
               ]}
-              defaultValue={{ value: 'semantic', label: 'Semantic Similarity Search' }}
+              value={retrievalType}
+              onChange={setRetrievalType}
               styles={customSelectStyles}
               isSearchable={false}
               menuPlacement="auto"

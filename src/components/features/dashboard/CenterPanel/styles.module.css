@@ -338,6 +338,35 @@
   height: 20px;
 }
 
+.processButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(var(--primary), 0.12);
+  border: 1px solid rgba(var(--primary), 0.35);
+  color: rgb(var(--primary));
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  transition: all 0.2s ease;
+}
+
+.processButton:hover:not(:disabled) {
+  background: rgba(var(--primary), 0.18);
+  border-color: rgba(var(--primary), 0.5);
+}
+
+.processButton:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.processingIcon {
+  animation: spin 0.8s linear infinite;
+}
+
 .removeButton {
   background: transparent;
   border: none;

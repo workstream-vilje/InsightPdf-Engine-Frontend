@@ -28,6 +28,47 @@ const defaultResultsData = {
   comparison: null,
 };
 
+const defaultPipelineConfig = {
+  text_processing: {
+    chunk_size: 500,
+    chunk_overlap: 50,
+    splitter: "recursive",
+  },
+  data_extraction: {
+    method: "pymupdf",
+  },
+  embeddings: {
+    provider: "openai",
+    model: "text-embedding-3-small",
+  },
+  vector_store: {
+    backends: ["faiss"],
+    collection_name: "documents",
+  },
+  query: {
+    retrieval_strategy: {
+      top_k: 5,
+      search_type: "similarity",
+      vector_db: "faiss",
+      collection_name: "documents",
+    },
+    embedding: {
+      provider: "openai",
+      model: "text-embedding-3-small",
+    },
+    llm: {
+      provider: "openai",
+      model: "gpt-4o-mini",
+      temperature: 0.2,
+    },
+    self_reflection: {
+      enabled: true,
+      max_retries: 2,
+      retrieval_top_k_step: 2,
+    },
+  },
+};
+
 const buildQualityMetrics = (payload) => {
   const accuracy = Math.round(Number(payload?.accuracy || 0) * 100);
   const relevance = Math.round(Number(payload?.relevance || 0));
@@ -84,6 +125,7 @@ const Dashboard = () => {
   const [bottomPanelState, setBottomPanelState] = React.useState("hidden");
   const [isRunning, setIsRunning] = React.useState(false);
   const [resultsData, setResultsData] = React.useState(defaultResultsData);
+  const [pipelineConfig, setPipelineConfig] = React.useState(defaultPipelineConfig);
   const [selectionState, setSelectionState] = React.useState({
     projectId: null,
     fileId: null,
@@ -112,28 +154,7 @@ const Dashboard = () => {
           project_id: projectId,
           file_id: fileId,
           query: query.trim(),
-          config: {
-            retrieval_strategy: {
-              top_k: 5,
-              search_type: "similarity",
-              vector_db: "faiss",
-              collection_name: "documents",
-            },
-            embedding: {
-              provider: "openai",
-              model: "text-embedding-3-small",
-            },
-            llm: {
-              provider: "openai",
-              model: "gpt-4o-mini",
-              temperature: 0.2,
-            },
-            self_reflection: {
-              enabled: true,
-              max_retries: 2,
-              retrieval_top_k_step: 2,
-            },
-          },
+          config: pipelineConfig.query,
         };
 
         const queryResponse = await queryApi.runQuery(queryPayload);
@@ -200,7 +221,7 @@ const Dashboard = () => {
         setIsRunning(false);
       }
     },
-    [selectionState.documentLabel],
+    [pipelineConfig.query, selectionState.documentLabel],
   );
 
   return (
@@ -214,7 +235,11 @@ const Dashboard = () => {
         />
       }
       sidebar={
-        <ConfigPanel isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
+        <ConfigPanel
+          isCollapsed={isCollapsed}
+          setIsCollapsed={setIsCollapsed}
+          onConfigChange={setPipelineConfig}
+        />
       }
       secondarySidebar={
         <ResultsPanel
@@ -237,6 +262,7 @@ const Dashboard = () => {
             onRunQuery={handleRunQuery}
             onSelectionChange={handleSelectionChange}
             isRunning={isRunning}
+            processingConfig={pipelineConfig}
           />
         </div>
 

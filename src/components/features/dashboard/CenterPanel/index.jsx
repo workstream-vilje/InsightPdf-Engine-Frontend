@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import classNames from 'classnames';
 import { 
   Upload, FileText, X, MessageSquare, 
-  Send, PlusCircle, 
+  Send, PlusCircle, RefreshCw,
   ArrowUp, Cpu, Folder 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,25 @@ const initialProjectOptions = [];
 const defaultCategoryOption = { value: 'general', label: 'General' };
 
 const initialDocumentOptions = [];
+
+const defaultProcessingConfig = {
+  text_processing: {
+    chunk_size: 500,
+    chunk_overlap: 50,
+    splitter: "recursive",
+  },
+  data_extraction: {
+    method: "pymupdf",
+  },
+  embeddings: {
+    provider: "openai",
+    model: "text-embedding-3-small",
+  },
+  vector_store: {
+    backends: ["faiss"],
+    collection_name: "documents",
+  },
+};
 
 // Header Select Styles for Perfect Alignment
 const headerSelectStyles = {
@@ -120,7 +139,7 @@ const headerSelectStyles = {
   indicatorSeparator: () => ({ display: 'none' }),
 };
 
-const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning }) => {
+const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning, processingConfig }) => {
   const [showScroll, setShowScroll] = useState(false);
   const scrollAreaRef = React.useRef(null);
   const fileInputRef = React.useRef(null);
@@ -148,6 +167,7 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning }) => {
   const [query, setQuery] = useState("");
   const [fileList, setFileList] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [processingFileIds, setProcessingFileIds] = useState([]);
 
   const normalizeProjectValue = (value) =>
     value
@@ -329,6 +349,19 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning }) => {
     try {
       const response = await fileApi.uploadProjectFiles(selectedProject.projectId, formData);
       const uploadedFiles = response?.data || [];
+
+      await Promise.all(
+        uploadedFiles
+          .filter((file) => file?.id)
+          .map((file) =>
+            fileApi.processProjectFile(
+              selectedProject.projectId,
+              file.id,
+              processingConfig || defaultProcessingConfig,
+            ),
+          ),
+      );
+
       const uploadedCards = uploadedFiles.map(mapUploadedFileToCard);
       const uploadedDocumentOptions = uploadedFiles.map(mapFileToDocumentOption);
 
@@ -416,6 +449,38 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning }) => {
       if (typeof window !== 'undefined') {
         window.alert(message);
       }
+    }
+  };
+
+  const handleProcessFile = async (file) => {
+    if (!file?.id || !selectedProject?.projectId) {
+      return;
+    }
+
+    setProcessingFileIds((prev) => (
+      prev.includes(file.id) ? prev : [...prev, file.id]
+    ));
+
+    try {
+      await fileApi.processProjectFile(
+        selectedProject.projectId,
+        file.id,
+        processingConfig || defaultProcessingConfig,
+      );
+      if (typeof window !== 'undefined') {
+        window.alert(`Processed "${file.name}" successfully.`);
+      }
+    } catch (error) {
+      const message =
+        error?.payload?.detail ||
+        error?.payload?.message ||
+        error?.message ||
+        'Failed to process file';
+      if (typeof window !== 'undefined') {
+        window.alert(message);
+      }
+    } finally {
+      setProcessingFileIds((prev) => prev.filter((id) => id !== file.id));
     }
   };
 
@@ -689,6 +754,22 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning }) => {
                       <Badge variant="outline" className={styles.fileBadge}>{file.category}</Badge>
                       <span className={styles.monoText}>{file.pages}p</span>
                       <span className={styles.monoText}>{file.size}</span>
+                      <button
+                        className={styles.processButton}
+                        onClick={() => handleProcessFile(file)}
+                        type="button"
+                        disabled={processingFileIds.includes(file.id)}
+                      >
+                        <RefreshCw
+                          size={12}
+                          className={classNames({
+                            [styles.processingIcon]: processingFileIds.includes(file.id),
+                          })}
+                        />
+                        <span>
+                          {processingFileIds.includes(file.id) ? 'Processing' : 'Process'}
+                        </span>
+                      </button>
                       <button
                         className={styles.removeButton}
                         onClick={() => handleDeleteFile(file)}
