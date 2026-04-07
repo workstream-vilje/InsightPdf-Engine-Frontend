@@ -50,7 +50,7 @@
 
 .variant-destructive {
   background-color: rgb(var(--destructive));
-  color: white;
+  color: rgb(var(--destructive-foreground));
 }
 
 /* Sizes */

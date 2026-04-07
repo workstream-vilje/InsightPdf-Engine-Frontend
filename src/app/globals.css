@@ -7,50 +7,55 @@
 }
 
 :root {
-  /* Core Palette (RGB format for opacity support) */
-  --foreground: 255, 255, 255;
-  --background: 13, 13, 13;
-  /* Deep Dark */
+  /* Core Palette (light baby pink pastel) */
+  --foreground: 72, 48, 60;
+  --background: 255, 246, 249;
 
-  --surface-1: 18, 18, 18;  
-  /* Sidebar */
-  --surface-2: 22, 22, 22;
-  /* Cards/Header */
-  --surface-3: 30, 30, 30;
-  /* Hover/Active */
+  --surface-1: 255, 252, 253;
+  --surface-2: 253, 242, 247;
+  --surface-3: 248, 230, 238;
 
-  --primary: 0, 209, 255;
-  /* Cyan Accent */
-  --primary-foreground: 255, 255, 255;
+  --primary: 218, 154, 180;
+  --primary-foreground: 88, 57, 69;
 
-  --secondary: 104, 107, 110;
-  --secondary-foreground: 255, 255, 255;
+  --secondary: 215, 201, 236;
+  --secondary-foreground: 90, 69, 98;
 
-  --muted: 33, 33, 33;
-  --muted-foreground: 160, 160, 160;
+  --muted: 246, 231, 237;
+  --muted-foreground: 122, 92, 104;
 
-  --accent: 0, 209, 255;
-  --accent-foreground: 255, 255, 255;
+  --accent: 255, 223, 231;
+  --accent-foreground: 105, 74, 86;
 
-  --destructive: 255, 78, 78;
-  --destructive-foreground: 255, 255, 255;
+  --destructive: 224, 156, 175;
+  --destructive-foreground: 99, 55, 66;
 
-  --success: 5, 226, 178;
-  /* Teal-Green */
-  --warning: 255, 170, 0;
-  /* Amber */
-  --border: 45, 45, 45;
-  /* Subtle borders */
-  --input: 45, 45, 45;
-  --ring: 0, 209, 255;
+  --success: 176, 217, 196;
+  --warning: 239, 203, 175;
+  --border: 226, 196, 207;
+  --input: 221, 190, 201;
+  --ring: 218, 154, 180;
+
+  /* Additional pastel accents */
+  --info: 188, 218, 244;
+  --gold: 232, 206, 160;
+  --stage-0: 245, 209, 183;
+  --stage-1: 196, 224, 248;
+  --stage-2: 187, 223, 207;
+  --stage-3: 220, 204, 241;
+  --stage-4: 204, 228, 248;
+  --stage-5: 198, 228, 195;
+  --stage-6: 245, 201, 217;
+  --stage-7: 208, 212, 232;
+  --stage-8: 229, 182, 197;
 
   /* Chart Colors */
-  --chart-1: 0, 209, 255;
-  --chart-2: 5, 226, 178;
-  --chart-3: 171, 71, 188;
-  --chart-label: 160, 160, 160;
-  --chart-tooltip-bg: 22, 22, 22;
-  --chart-tooltip-border: 45, 45, 45;
+  --chart-1: 218, 154, 180;
+  --chart-2: 176, 217, 196;
+  --chart-3: 215, 201, 236;
+  --chart-label: 122, 92, 104;
+  --chart-tooltip-bg: 255, 250, 252;
+  --chart-tooltip-border: 226, 196, 207;
 
 
 
@@ -91,7 +96,9 @@
   --radius-full: 9999px;
 
   /* Shadows/Glows */
-  --glow-primary: 0 0 15px rgba(0, 209, 255, 0.4);
+  --glow-primary: 0 0 18px rgba(218, 154, 180, 0.16);
+  --shadow-soft: 0 12px 26px rgba(167, 124, 143, 0.1);
+  --shadow-panel: 0 16px 34px rgba(176, 132, 151, 0.12);
 }
 
 * {
@@ -102,7 +109,11 @@
 }
 
 body {
-  background-color: rgb(var(--background));
+  background:
+    radial-gradient(circle at top left, rgba(var(--secondary), 0.2), transparent 30%),
+    radial-gradient(circle at top right, rgba(var(--primary), 0.16), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.2)),
+    rgb(var(--background));
   color: rgb(var(--foreground));
   font-family: 'Urbanist', sans-serif;
   font-size: var(--text-base);
@@ -123,12 +134,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgb(var(--muted));
+  background: rgba(var(--muted-foreground), 0.26);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--border));
+  background: rgba(var(--primary), 0.45);
 }
 
 /* Utility Classes */
@@ -141,7 +152,7 @@ body {
 }
 
 .text-gradient {
-  background: linear-gradient(135deg, rgb(var(--primary)), rgb(var(--success)));
+  background: linear-gradient(135deg, rgb(var(--primary)), rgb(var(--secondary)));
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;

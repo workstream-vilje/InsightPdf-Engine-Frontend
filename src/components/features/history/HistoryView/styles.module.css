@@ -13,7 +13,9 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: var(--spacing-6);
-  background-color: rgba(var(--surface-2), 0.3);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
+    rgba(var(--surface-2), 0.32);
   padding: var(--spacing-3) var(--spacing-5);
   border-radius: 12px;
   border: 1px solid rgba(var(--border), 0.2);
@@ -93,7 +95,7 @@
 
 .exportBtn {
   background-color: rgb(var(--primary)) !important;
-  color: white !important;
+  color: rgb(var(--primary-foreground)) !important;
   border: none !important;
   box-shadow: 0 4px 12px rgba(var(--primary), 0.2);
   border-radius: 8px !important;
@@ -290,18 +292,18 @@
 }
 
 .status_verified {
-  background: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
+  background: rgba(var(--success), 0.14);
+  color: rgb(var(--success));
 }
 
 .status_stable {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
+  background: rgba(var(--info), 0.14);
+  color: rgb(var(--info));
 }
 
 .status_expiring {
-  background: rgba(245, 158, 11, 0.1);
-  color: #f59e0b;
+  background: rgba(var(--warning), 0.16);
+  color: rgb(var(--warning));
 }
 
 /* Report Action */
