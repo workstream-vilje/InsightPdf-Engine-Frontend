@@ -7,57 +7,56 @@
 }
 
 :root {
-  /* Core Palette (light baby pink pastel) */
-  --foreground: 72, 48, 60;
-  --background: 255, 246, 249;
+  --foreground: 15, 23, 42;
+  --background: 244, 249, 255;
 
-  --surface-1: 255, 252, 253;
-  --surface-2: 253, 242, 247;
-  --surface-3: 248, 230, 238;
+  --surface-1: 255, 255, 255;
+  --surface-2: 239, 246, 255;
+  --surface-3: 219, 234, 254;
 
-  --primary: 218, 154, 180;
-  --primary-foreground: 88, 57, 69;
+  --primary: 37, 99, 235;
+  --primary-foreground: 255, 255, 255;
 
-  --secondary: 215, 201, 236;
-  --secondary-foreground: 90, 69, 98;
+  --secondary: 14, 165, 233;
+  --secondary-foreground: 255, 255, 255;
 
-  --muted: 246, 231, 237;
-  --muted-foreground: 122, 92, 104;
+  --muted: 226, 232, 240;
+  --muted-foreground: 100, 116, 139;
 
-  --accent: 255, 223, 231;
-  --accent-foreground: 105, 74, 86;
+  --accent: 191, 219, 254;
+  --accent-foreground: 30, 64, 175;
 
-  --destructive: 224, 156, 175;
-  --destructive-foreground: 99, 55, 66;
+  --destructive: 239, 68, 68;
+  --destructive-foreground: 255, 255, 255;
 
-  --success: 176, 217, 196;
-  --warning: 239, 203, 175;
-  --border: 226, 196, 207;
-  --input: 221, 190, 201;
-  --ring: 218, 154, 180;
+  --success: 16, 185, 129;
+  --warning: 245, 158, 11;
+  --border: 191, 219, 254;
+  --input: 226, 232, 240;
+  --ring: 59, 130, 246;
 
-  /* Additional pastel accents */
-  --info: 188, 218, 244;
-  --gold: 232, 206, 160;
-  --stage-0: 245, 209, 183;
-  --stage-1: 196, 224, 248;
-  --stage-2: 187, 223, 207;
-  --stage-3: 220, 204, 241;
-  --stage-4: 204, 228, 248;
-  --stage-5: 198, 228, 195;
-  --stage-6: 245, 201, 217;
-  --stage-7: 208, 212, 232;
-  --stage-8: 229, 182, 197;
+  --sky: 125, 211, 252;
+  --sky-strong: 56, 189, 248;
+  --gold: 250, 204, 21;
+  --stage-0: 219, 234, 254;
+  --stage-1: 191, 219, 254;
+  --stage-2: 186, 230, 253;
+  --stage-3: 224, 242, 254;
+  --stage-4: 191, 219, 254;
+  --stage-5: 219, 234, 254;
+  --stage-6: 224, 242, 254;
+  --stage-7: 191, 219, 254;
+  --stage-8: 219, 234, 254;
 
-  /* Chart Colors */
-  --chart-1: 218, 154, 180;
-  --chart-2: 176, 217, 196;
-  --chart-3: 215, 201, 236;
-  --chart-label: 122, 92, 104;
-  --chart-tooltip-bg: 255, 250, 252;
-  --chart-tooltip-border: 226, 196, 207;
+  --chart-1: 37, 99, 235;
+  --chart-2: 14, 165, 233;
+  --chart-3: 125, 211, 252;
+  --chart-label: 71, 85, 105;
+  --chart-tooltip-bg: 255, 255, 255;
+  --chart-tooltip-border: 191, 219, 254;
 
-
+  --font-sans: var(--font-geist-sans), "Urbanist", sans-serif;
+  --font-mono: var(--font-geist-mono), "SFMono-Regular", Consolas, monospace;
 
   --text-xs: 0.7rem;
   --text-sm: 0.8rem;
@@ -95,10 +94,9 @@
   --radius-xl: 18px;
   --radius-full: 9999px;
 
-  /* Shadows/Glows */
-  --glow-primary: 0 0 18px rgba(218, 154, 180, 0.16);
-  --shadow-soft: 0 12px 26px rgba(167, 124, 143, 0.1);
-  --shadow-panel: 0 16px 34px rgba(176, 132, 151, 0.12);
+  --glow-primary: 0 0 18px rgba(37, 99, 235, 0.18);
+  --shadow-soft: 0 16px 40px rgba(15, 23, 42, 0.08);
+  --shadow-panel: 0 24px 48px rgba(37, 99, 235, 0.14);
 }
 
 * {
@@ -110,12 +108,12 @@
 
 body {
   background:
-    radial-gradient(circle at top left, rgba(var(--secondary), 0.2), transparent 30%),
-    radial-gradient(circle at top right, rgba(var(--primary), 0.16), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.2)),
+    radial-gradient(circle at top left, rgba(var(--sky), 0.25), transparent 28%),
+    radial-gradient(circle at top right, rgba(var(--primary), 0.12), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(240, 249, 255, 0.75)),
     rgb(var(--background));
   color: rgb(var(--foreground));
-  font-family: 'Urbanist', sans-serif;
+  font-family: var(--font-sans);
   font-size: var(--text-base);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;

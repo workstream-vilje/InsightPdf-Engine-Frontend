@@ -1,5 +1,8 @@
-import Dashboard from "@/screens/Dashboard";
+import ProjectCanvas from "@/screens/ProjectCanvas";
 
-export default function Home() {
-  return <Dashboard />;
+export default async function Home({ searchParams }) {
+  const params = await searchParams;
+  const initialProjectId = params?.project ?? null;
+
+  return <ProjectCanvas initialProjectId={initialProjectId} />;
 }
