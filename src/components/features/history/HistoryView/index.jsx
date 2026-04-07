@@ -16,72 +16,93 @@ import {
   Search,
   ExternalLink
 } from 'lucide-react';
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DASHBOARD_EXPERIMENTS,
-  COMPARISON_DATA
-} from "@/lib/dashboard/data";
+import projectApi from "@/networking/apis/project";
 import styles from './styles.module.css';
 
 const HistoryView = () => {
-  // Mock history data based on combinations
-  const historyEntries = [
-    {
-      id: "H-240329-01",
-      date: "2024-03-29 14:22",
-      config: {
-        llm: "GPT-4o",
-        embedding: "OpenAI v3-Small",
-        db: "PGVector (v0.5)",
-        retrieval: "Semantic Rerank",
-      },
-      metrics: {
-        accuracy: 94.2,
-        latency: "1.2s",
-        cost: "$0.012",
-        relevance: 91
-      },
-      status: "Verified",
-      isBest: true
-    },
-    {
-      id: "H-240328-15",
-      date: "2024-03-28 09:15",
-      config: {
-        llm: "Claude 3 Sonnet",
-        embedding: "Anthropic v1",
-        db: "Pinecone",
-        retrieval: "Hybrid Search",
-      },
-      metrics: {
-        accuracy: 88.5,
-        latency: "1.5s",
-        cost: "$0.009",
-        relevance: 84
-      },
-      status: "Stable",
-      isBest: false
-    },
-    {
-      id: "H-240327-11",
-      date: "2024-03-27 16:45",
-      config: {
-        llm: "Mistral Large",
-        embedding: "MiniLM-L6",
-        db: "FAISS (Local)",
-        retrieval: "MMR (k=5)",
-      },
-      metrics: {
-        accuracy: 82.1,
-        latency: "0.4s",
-        cost: "$0.002",
-        relevance: 78
-      },
-      status: "Expiring",
-      isBest: false
-    }
-  ];
+  const [projects, setProjects] = React.useState([]);
+  const [selectedProjectId, setSelectedProjectId] = React.useState("");
+  const [historyEntries, setHistoryEntries] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [searchValue, setSearchValue] = React.useState("");
+
+  React.useEffect(() => {
+    let isMounted = true;
+
+    const loadProjects = async () => {
+      try {
+        const response = await projectApi.fetchAllProjects();
+        const projectRows = response?.data || [];
+        if (!isMounted) return;
+        setProjects(projectRows);
+        setSelectedProjectId(projectRows[0]?.id ? String(projectRows[0].id) : "");
+      } catch (error) {
+        if (!isMounted) return;
+        setProjects([]);
+        setSelectedProjectId("");
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadProjects();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    let isMounted = true;
+
+    const loadHistory = async () => {
+      if (!selectedProjectId) {
+        if (!isMounted) return;
+        setHistoryEntries([]);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const response = await projectApi.fetchProjectHistory(selectedProjectId);
+        if (!isMounted) return;
+        setHistoryEntries(Array.isArray(response) ? response : []);
+      } catch (error) {
+        if (!isMounted) return;
+        setHistoryEntries([]);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadHistory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedProjectId]);
+
+  const filteredEntries = historyEntries.filter((entry) => {
+    const search = searchValue.trim().toLowerCase();
+    if (!search) return true;
+
+    return [
+      entry?.id,
+      entry?.date,
+      entry?.config?.llm,
+      entry?.config?.embedding,
+      entry?.config?.db,
+      entry?.config?.retrieval,
+      entry?.status,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(search));
+  });
 
   return (
     <div className={styles.container}>
@@ -90,8 +111,26 @@ const HistoryView = () => {
         <div className={styles.utilityLeft}>
           <div className={styles.searchBox}>
             <Search size={14} className={styles.searchIcon} />
-            <input type="text" placeholder="Filter combinations..." className={styles.searchInput} />
+            <input
+              type="text"
+              placeholder="Filter combinations..."
+              className={styles.searchInput}
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+            />
           </div>
+          <select
+            className={styles.searchInput}
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+          >
+            <option value="">Select project</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.project_name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className={styles.utilityRight}>
@@ -117,8 +156,11 @@ const HistoryView = () => {
         </div>
 
         <div className={styles.tableBody}>
-          <AnimatePresence>
-            {historyEntries.map((entry, index) => (
+          {isLoading ? (
+            <div className={styles.row}>Loading history...</div>
+          ) : filteredEntries.length ? (
+            <AnimatePresence>
+            {filteredEntries.map((entry, index) => (
               <motion.div
                 key={entry.id}
                 initial={{ opacity: 0, y: 10 }}
@@ -198,7 +240,10 @@ const HistoryView = () => {
                 </div>
               </motion.div>
             ))}
-          </AnimatePresence>
+            </AnimatePresence>
+          ) : (
+            <div className={styles.row}>No history data available for the selected project.</div>
+          )}
         </div>
       </div>
     </div>

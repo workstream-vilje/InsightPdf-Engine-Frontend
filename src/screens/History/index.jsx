@@ -6,9 +6,6 @@ import HistoryView from "@/components/features/history/HistoryView";
 import styles from './styles.module.css';
 
 const HistoryScreen = () => {
-  // Navigation dummy state
-  const [bottomPanelState, setBottomPanelState] = React.useState('hidden');
-
   return (
     <DashboardLayout
       header={
