@@ -30,21 +30,21 @@ const initialDocumentOptions = [];
 const headerSelectStyles = {
   control: (base, state) => ({
     ...base,
-    background: 'rgba(255, 255, 255, 0.03)',
-    borderColor: state.isFocused ? 'rgba(var(--primary), 0.5)' : 'rgba(255, 255, 255, 0.1)',
+    background: 'rgba(var(--surface-1), 0.95)',
+    borderColor: state.isFocused ? 'rgba(var(--primary), 0.75)' : 'rgba(var(--border), 0.9)',
     borderRadius: '8px',
     height: '28px',
     minHeight: '28px',
     fontSize: '0.68rem',
     fontFamily: 'var(--font-mono)',
     fontWeight: '700',
-    color: '#ffffff',
+    color: 'rgb(var(--foreground))',
     boxShadow: 'none',
     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     cursor: 'pointer',
     '&:hover': {
-      borderColor: 'rgba(var(--primary), 0.4)',
-      background: 'rgba(255, 255, 255, 0.06)',
+      borderColor: 'rgba(var(--primary), 0.7)',
+      background: 'rgba(var(--surface-1), 1)',
     },
     display: 'flex',
     alignItems: 'center',
@@ -65,16 +65,20 @@ const headerSelectStyles = {
   }),
   menu: (base) => ({
     ...base,
-    background: '#0f0f14',
+    background: 'rgb(var(--surface-1))',
     backdropFilter: 'blur(20px)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
+    border: '1px solid rgba(var(--border), 0.85)',
     borderRadius: '10px',
-    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)',
+    boxShadow: '0 10px 30px rgba(173, 129, 148, 0.16)',
     zIndex: 1000,
     marginTop: '6px',
     overflow: 'hidden',
     width: 'max-content',
     minWidth: '100%',
+  }),
+  menuPortal: (base) => ({
+    ...base,
+    zIndex: 5000,
   }),
   menuList: (base) => ({
     ...base,
@@ -83,7 +87,7 @@ const headerSelectStyles = {
   option: (base, state) => ({
     ...base,
     background: state.isFocused ? 'rgba(var(--primary), 0.15)' : 'transparent',
-    color: state.isSelected ? 'rgb(var(--primary))' : 'rgba(255, 255, 255, 0.8)',
+    color: state.isSelected ? 'rgb(var(--primary-foreground))' : 'rgba(var(--foreground), 0.88)',
     padding: '8px 12px',
     fontSize: '0.7rem',
     fontWeight: state.isSelected ? '700' : '500',
@@ -96,25 +100,25 @@ const headerSelectStyles = {
   }),
   singleValue: (base) => ({
     ...base,
-    color: '#ffffff',
+    color: 'rgb(var(--foreground))',
     margin: 0,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   }),
   input: (base) => ({
     ...base,
-    color: '#ffffff',
+    color: 'rgb(var(--foreground))',
     margin: 0,
     padding: 0,
   }),
   placeholder: (base) => ({
     ...base,
-    color: 'rgba(255, 255, 255, 0.3)',
+    color: 'rgba(var(--muted-foreground), 0.9)',
   }),
   dropdownIndicator: (base) => ({
     ...base,
     padding: '0 4px',
-    color: 'rgba(255, 255, 255, 0.3)',
+    color: 'rgba(var(--muted-foreground), 0.9)',
     '&:hover': { color: 'rgb(var(--primary))' },
   }),
   indicatorSeparator: () => ({ display: 'none' }),
@@ -148,6 +152,7 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning }) => {
   const [query, setQuery] = useState("");
   const [fileList, setFileList] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const menuPortalTarget = typeof window !== "undefined" ? document.body : null;
 
   const normalizeProjectValue = (value) =>
     value
@@ -535,6 +540,8 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning }) => {
                       onChange={setSelectedProject}
                       styles={headerSelectStyles}
                       isSearchable={false}
+                      menuPortalTarget={menuPortalTarget}
+                      menuPosition="fixed"
                     />
                   </div>
                 </div>
@@ -551,6 +558,8 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning }) => {
                       onChange={setSelectedCategory}
                       styles={headerSelectStyles}
                       isSearchable={false}
+                      menuPortalTarget={menuPortalTarget}
+                      menuPosition="fixed"
                     />
                   </div>
                 </div>
@@ -567,7 +576,12 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning }) => {
                       onChange={setSelectedDocument}
                       styles={headerSelectStyles}
                       isSearchable={false}
+<<<<<<< HEAD
                       placeholder="Select document"
+=======
+                      menuPortalTarget={menuPortalTarget}
+                      menuPosition="fixed"
+>>>>>>> 2ffbacf78fc392198088eb4014e9b73592d57630
                     />
                   </div>
                 </div>
@@ -592,6 +606,8 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning }) => {
                       styles={headerSelectStyles}
                       placeholder="Search model..."
                       isSearchable={true}
+                      menuPortalTarget={menuPortalTarget}
+                      menuPosition="fixed"
                     />
                   </div>
                 </div>

@@ -15,7 +15,7 @@
   height: var(--topbar-height);
   border-bottom: 1px solid rgb(var(--border));
   flex-shrink: 0;
-  background: linear-gradient(to bottom, rgba(var(--surface-2), 0.8), rgba(var(--surface-1), 0.8));
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.035), rgba(var(--surface-1), 0.9));
   backdrop-filter: blur(8px);
 }
 
@@ -41,7 +41,7 @@
 
 .headerIcon {
   color: rgb(var(--primary));
-  filter: drop-shadow(0 0 5px rgba(var(--primary), 0.4));
+  filter: drop-shadow(0 0 5px rgba(var(--primary), 0.22));
 }
 
 .headerTitle {
@@ -75,7 +75,7 @@
   background-color: rgba(var(--primary), 0.1);
   color: rgb(var(--primary));
   border-color: rgb(var(--primary));
-  box-shadow: 0 0 10px rgba(var(--primary), 0.2);
+  box-shadow: 0 0 10px rgba(var(--primary), 0.14);
   transform: scale(1.05);
 }
 
@@ -84,7 +84,7 @@
   height: 28px;
   border-color: rgb(var(--primary));
   color: rgb(var(--primary));
-  box-shadow: 0 0 12px rgba(var(--primary), 0.2);
+  box-shadow: 0 0 12px rgba(var(--primary), 0.14);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -201,116 +201,116 @@
 
 /* Unique Stage Coloring — Professional & Decent Palette */
 .sectionStage0 .iconWrapper {
-  border-color: #ff9d00;
+  border-color: rgb(var(--stage-0));
 }
 
 .sectionStage0 .sectionIcon {
-  color: #ff9d00;
-  filter: drop-shadow(0 0 3px rgba(255, 157, 0, 0.4));
+  color: rgb(var(--stage-0));
+  filter: drop-shadow(0 0 3px rgba(var(--stage-0), 0.35));
 }
 
 .sectionStage0 .timelineLine {
-  background: linear-gradient(to bottom, #ff9d00, #00e5ff);
+  background: linear-gradient(to bottom, rgb(var(--stage-0)), rgb(var(--stage-1)));
 }
 
 .sectionStage1 .iconWrapper {
-  border-color: #00e5ff;
+  border-color: rgb(var(--stage-1));
 }
 
 .sectionStage1 .sectionIcon {
-  color: #00e5ff;
-  filter: drop-shadow(0 0 3px rgba(0, 229, 255, 0.4));
+  color: rgb(var(--stage-1));
+  filter: drop-shadow(0 0 3px rgba(var(--stage-1), 0.35));
 }
 
 .sectionStage1 .timelineLine {
-  background: linear-gradient(to bottom, #00e5ff, #00ffa3);
+  background: linear-gradient(to bottom, rgb(var(--stage-1)), rgb(var(--stage-2)));
 }
 
 .sectionStage2 .iconWrapper {
-  border-color: #00ffa3;
+  border-color: rgb(var(--stage-2));
 }
 
 .sectionStage2 .sectionIcon {
-  color: #00ffa3;
-  filter: drop-shadow(0 0 3px rgba(0, 255, 163, 0.4));
+  color: rgb(var(--stage-2));
+  filter: drop-shadow(0 0 3px rgba(var(--stage-2), 0.35));
 }
 
 .sectionStage2 .timelineLine {
-  background: linear-gradient(to bottom, #00ffa3, #818cf8);
+  background: linear-gradient(to bottom, rgb(var(--stage-2)), rgb(var(--stage-3)));
 }
 
 .sectionStage3 .iconWrapper {
-  border-color: #818cf8;
+  border-color: rgb(var(--stage-3));
 }
 
 .sectionStage3 .sectionIcon {
-  color: #818cf8;
-  filter: drop-shadow(0 0 3px rgba(129, 140, 248, 0.4));
+  color: rgb(var(--stage-3));
+  filter: drop-shadow(0 0 3px rgba(var(--stage-3), 0.35));
 }
 
 .sectionStage3 .timelineLine {
-  background: linear-gradient(to bottom, #818cf8, #3b82f6);
+  background: linear-gradient(to bottom, rgb(var(--stage-3)), rgb(var(--stage-4)));
 }
 
 .sectionStage4 .iconWrapper {
-  border-color: #3b82f6;
+  border-color: rgb(var(--stage-4));
 }
 
 .sectionStage4 .sectionIcon {
-  color: #3b82f6;
-  filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.4));
+  color: rgb(var(--stage-4));
+  filter: drop-shadow(0 0 3px rgba(var(--stage-4), 0.35));
 }
 
 .sectionStage4 .timelineLine {
-  background: linear-gradient(to bottom, #3b82f6, #10b981);
+  background: linear-gradient(to bottom, rgb(var(--stage-4)), rgb(var(--stage-5)));
 }
 
 .sectionStage5 .iconWrapper {
-  border-color: #10b981;
+  border-color: rgb(var(--stage-5));
 }
 
 .sectionStage5 .sectionIcon {
-  color: #10b981;
-  filter: drop-shadow(0 0 3px rgba(16, 185, 129, 0.4));
+  color: rgb(var(--stage-5));
+  filter: drop-shadow(0 0 3px rgba(var(--stage-5), 0.35));
 }
 
 .sectionStage5 .timelineLine {
-  background: linear-gradient(to bottom, #10b981, #a855f7);
+  background: linear-gradient(to bottom, rgb(var(--stage-5)), rgb(var(--stage-6)));
 }
 
 .sectionStage6 .iconWrapper {
-  border-color: #a855f7;
+  border-color: rgb(var(--stage-6));
 }
 
 .sectionStage6 .sectionIcon {
-  color: #a855f7;
-  filter: drop-shadow(0 0 3px rgba(168, 85, 247, 0.4));
+  color: rgb(var(--stage-6));
+  filter: drop-shadow(0 0 3px rgba(var(--stage-6), 0.35));
 }
 
 .sectionStage6 .timelineLine {
-  background: linear-gradient(to bottom, #a855f7, #64748b);
+  background: linear-gradient(to bottom, rgb(var(--stage-6)), rgb(var(--stage-7)));
 }
 
 .sectionStage7 .iconWrapper {
-  border-color: #64748b;
+  border-color: rgb(var(--stage-7));
 }
 
 .sectionStage7 .sectionIcon {
-  color: #64748b;
-  filter: drop-shadow(0 0 3px rgba(100, 116, 139, 0.4));
+  color: rgb(var(--stage-7));
+  filter: drop-shadow(0 0 3px rgba(var(--stage-7), 0.35));
 }
 
 .sectionStage7 .timelineLine {
-  background: linear-gradient(to bottom, #64748b, #ef4444);
+  background: linear-gradient(to bottom, rgb(var(--stage-7)), rgb(var(--stage-8)));
 }
 
 .sectionStage8 .iconWrapper {
-  border-color: #ef4444;
+  border-color: rgb(var(--stage-8));
 }
 
 .sectionStage8 .sectionIcon {
-  color: #ef4444;
-  filter: drop-shadow(0 0 3px rgba(239, 68, 68, 0.4));
+  color: rgb(var(--stage-8));
+  filter: drop-shadow(0 0 3px rgba(var(--stage-8), 0.35));
 }
 
 .sectionStage8 .timelineLine {
@@ -396,39 +396,39 @@
 
 /* Color matched content sidebars */
 .sectionStage0 .sectionContent {
-  border-left-color: #ff9d00;
+  border-left-color: rgb(var(--stage-0));
 }
 
 .sectionStage1 .sectionContent {
-  border-left-color: #00d1ff;
+  border-left-color: rgb(var(--stage-1));
 }
 
 .sectionStage2 .sectionContent {
-  border-left-color: #05e2b2;
+  border-left-color: rgb(var(--stage-2));
 }
 
 .sectionStage3 .sectionContent {
-  border-left-color: #7c4dff;
+  border-left-color: rgb(var(--stage-3));
 }
 
 .sectionStage4 .sectionContent {
-  border-left-color: #5591ff;
+  border-left-color: rgb(var(--stage-4));
 }
 
 .sectionStage5 .sectionContent {
-  border-left-color: #10b981;
+  border-left-color: rgb(var(--stage-5));
 }
 
 .sectionStage6 .sectionContent {
-  border-left-color: #ff4081;
+  border-left-color: rgb(var(--stage-6));
 }
 
 .sectionStage7 .sectionContent {
-  border-left-color: #90a4ae;
+  border-left-color: rgb(var(--stage-7));
 }
 
 .sectionStage8 .sectionContent {
-  border-left-color: #ef4444;
+  border-left-color: rgb(var(--stage-8));
 }
 
 
@@ -598,9 +598,9 @@
 }
 
 .manualEntryInput {
-  background: rgba(15, 15, 20, 0.4) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  color: #ffffff !important;
+  background: rgba(var(--surface-1), 0.96) !important;
+  border: 1px solid rgba(var(--border), 0.9) !important;
+  color: rgb(var(--foreground)) !important;
   font-family: var(--font-mono) !important;
   font-size: 0.85rem !important;
   font-weight: 600 !important;
@@ -613,8 +613,8 @@
 
 .manualEntryInput:focus {
   border-color: rgb(var(--primary)) !important;
-  background: rgba(var(--primary), 0.05) !important;
-  box-shadow: 0 0 12px rgba(var(--primary), 0.2) !important;
+  background: rgba(var(--accent), 0.3) !important;
+  box-shadow: 0 0 0 3px rgba(var(--primary), 0.14) !important;
   outline: none;
 }
 

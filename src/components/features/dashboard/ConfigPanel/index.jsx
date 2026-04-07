@@ -21,13 +21,13 @@ import styles from './styles.module.css';
 const customSelectStyles = {
   control: (base, state) => ({
     ...base,
-    background: 'rgba(15, 15, 20, 0.6)',
-    borderColor: state.isFocused ? 'rgb(var(--primary))' : 'rgba(255, 255, 255, 0.1)',
+    background: 'rgba(var(--surface-1), 0.92)',
+    borderColor: state.isFocused ? 'rgb(var(--primary))' : 'rgba(var(--border), 0.9)',
     borderRadius: '10px',
     padding: '1px 4px',
-    boxShadow: state.isFocused ? '0 0 0 1px rgba(var(--primary), 0.3)' : 'none',
+    boxShadow: state.isFocused ? '0 0 0 1px rgba(var(--primary), 0.32)' : 'none',
     '&:hover': {
-      borderColor: 'rgba(var(--primary), 0.5)',
+      borderColor: 'rgba(var(--primary), 0.7)',
     },
     minHeight: '36px',
     transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -36,11 +36,11 @@ const customSelectStyles = {
   }),
   menu: (base) => ({
     ...base,
-    background: '#0f0f14',
+    background: 'rgb(var(--surface-1))',
     backdropFilter: 'blur(20px)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
+    border: '1px solid rgba(var(--border), 0.85)',
     borderRadius: '12px',
-    boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.6)',
+    boxShadow: '0 20px 40px -10px rgba(173, 129, 148, 0.18)',
     overflow: 'hidden',
     zIndex: 100,
     marginTop: '8px',
@@ -48,8 +48,8 @@ const customSelectStyles = {
   }),
   option: (base, state) => ({
     ...base,
-    background: state.isFocused ? 'rgba(var(--primary), 0.15)' : 'transparent',
-    color: state.isSelected ? 'rgb(var(--primary))' : 'rgba(255, 255, 255, 0.8)',
+    background: state.isFocused ? 'rgba(var(--primary), 0.14)' : 'transparent',
+    color: state.isSelected ? 'rgb(var(--primary-foreground))' : 'rgba(var(--foreground), 0.88)',
     padding: '10px 14px',
     fontSize: '0.75rem',
     fontWeight: state.isSelected ? '600' : '400',
@@ -94,24 +94,24 @@ const customSelectStyles = {
   }),
   placeholder: (base) => ({
     ...base,
-    color: 'rgba(255, 255, 255, 0.4)',
+    color: 'rgba(var(--muted-foreground), 0.8)',
     fontSize: '0.75rem',
     fontWeight: '500',
   }),
   singleValue: (base) => ({
     ...base,
-    color: '#ffffff',
+    color: 'rgb(var(--foreground))',
     fontSize: '0.75rem',
     fontWeight: '500',
   }),
   input: (base) => ({
     ...base,
-    color: '#ffffff',
+    color: 'rgb(var(--foreground))',
     fontSize: '0.75rem',
   }),
   dropdownIndicator: (base) => ({
     ...base,
-    color: 'rgba(255, 255, 255, 0.4)',
+    color: 'rgba(var(--muted-foreground), 0.85)',
     padding: '4px',
     '&:hover': {
       color: 'rgb(var(--primary))',
@@ -120,10 +120,10 @@ const customSelectStyles = {
   indicatorSeparator: () => ({ display: 'none' }),
   clearIndicator: (base) => ({
     ...base,
-    color: 'rgba(255, 255, 255, 0.4)',
+    color: 'rgba(var(--muted-foreground), 0.85)',
     padding: '4px',
     '&:hover': {
-      color: '#ef4444',
+      color: 'rgb(var(--destructive))',
     },
   }),
 };

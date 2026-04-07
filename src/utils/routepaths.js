@@ -9,4 +9,5 @@ export const ROUTE_PATHS = {
   SETTINGS: '/settings',
   HISTORY: '/history',
   DOCUMENTATION: '/docs',
+  METRICS: '/metrics',
 };
