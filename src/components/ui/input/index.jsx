@@ -8,6 +8,7 @@ const Input = React.forwardRef(({ className, type, ...props }, ref) => {
     <input
       ref={ref}
       type={type}
+      suppressHydrationWarning
       className={classNames(styles.input, className)}
       {...props}
     />

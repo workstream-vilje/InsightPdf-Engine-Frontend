@@ -107,10 +107,13 @@ export const createWorkspaceState = () => ({
   retrievalStrategies: ["semantic-similarity"],
   topK: "3",
   query: "",
+  submittedQuery: "",
   visibleLines: [],
   phase: "ingestion-setup",
   response: "",
   responseVisible: false,
+  usedStrategies: [],
+  responseVariants: [],
   activeRightSection: "response",
   retrievedChunks: DEFAULT_RETRIEVED_CHUNKS,
 });

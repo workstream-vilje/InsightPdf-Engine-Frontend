@@ -13,7 +13,6 @@ import classNames from "classnames";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  ArrowUp,
   BarChart3,
   Blocks,
   ChevronRight,
@@ -21,7 +20,6 @@ import {
   FileText,
   FolderKanban,
   MessageSquare,
-  Mic,
   Plus,
   Search,
   Send,
@@ -38,6 +36,7 @@ import { Slider } from "@/components/ui/slider";
 import fileApi from "@/networking/apis/file";
 import projectApi from "@/networking/apis/project";
 import queryApi from "@/networking/apis/query";
+import { getExperimentPerformanceById } from "@/lib/api";
 import {
   DATA_EXTRACTION_OPTIONS,
   DEFAULT_QUALITY_METRICS,
@@ -73,6 +72,10 @@ const formatBytes = (bytes) => {
   }
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 };
+
+const formatMs = (value) => `${(Number(value || 0) / 1000).toFixed(2)}s`;
+
+const formatNumber = (value) => Number(value || 0).toLocaleString();
 
 const mapUploadedFileToWorkspaceFile = (file, category) => ({
   id: String(file?.id ?? `${file?.file_name}-${Date.now()}`),
@@ -179,6 +182,84 @@ const buildQueryPayload = ({ projectId, fileId, workspace, query }) => {
   };
 };
 
+const buildUsedStrategiesSummary = (workspace) => {
+  const { processingConfig, queryConfig } = buildSharedPipelineConfig(workspace);
+
+  const extractionMethod = processingConfig?.data_extraction?.method;
+  const vectorDb = queryConfig?.retrieval_strategy?.vector_db;
+  const embeddingLabel = queryConfig?.embedding
+    ? `${queryConfig.embedding.provider}/${queryConfig.embedding.model}`
+    : null;
+
+  return [
+    {
+      label: "Retrieval",
+      value: (workspace?.retrievalStrategies || []).join(", ") || queryConfig?.retrieval_strategy?.search_type,
+    },
+    {
+      label: "Vector DB",
+      value: Array.isArray(vectorDb) ? vectorDb.join(", ") : vectorDb,
+    },
+    {
+      label: "Embedding",
+      value: embeddingLabel,
+    },
+    {
+      label: "Splitter",
+      value: Array.isArray(workspace?.textProcessing)
+        ? workspace.textProcessing.join(", ")
+        : workspace?.textProcessing,
+    },
+    {
+      label: "Extraction",
+      value: Array.isArray(extractionMethod) ? extractionMethod.join(", ") : extractionMethod,
+    },
+  ].filter((item) => item.value);
+};
+
+const buildVariantStrategiesSummary = (workspace, result, allowedTechniques = null) => {
+  const persistedStrategies = allowedTechniques
+    ? [
+        {
+          label: "Splitter",
+          value: (allowedTechniques?.splitters || []).join(", "),
+        },
+        {
+          label: "Extraction",
+          value: (allowedTechniques?.data_extraction_methods || []).join(", "),
+        },
+        {
+          label: "Embedding",
+          value: (allowedTechniques?.embeddings || [])
+            .map((item) => `${item.provider}/${item.model}`)
+            .join(", "),
+        },
+      ].filter((item) => item.value)
+    : buildUsedStrategiesSummary(workspace).filter((item) => item.label !== "Vector DB");
+
+  const vectorDb = result?.db || result?.vector_db || null;
+  const retrieval = result?.retrieval || (workspace?.retrievalStrategies || []).join(", ");
+
+  return [
+    {
+      label: "Vector DB",
+      value: vectorDb,
+    },
+    {
+      label: "Retrieval",
+      value: retrieval,
+    },
+    {
+      label: "Time",
+      value:
+        result?.total_time != null
+          ? `${(Number(result.total_time || 0) / 1000).toFixed(2)}s`
+          : null,
+    },
+    ...persistedStrategies.filter((item) => item.label !== "Retrieval"),
+  ].filter((item) => item.value);
+};
+
 const TypedLine = ({ text }) => {
   const [visibleText, setVisibleText] = useState("");
 
@@ -255,6 +336,7 @@ const FileSelect = ({ files, selectedFileId, onChange }) => {
     <label className={styles.formField}>
       <span className={styles.modalFieldLabel}>Active file</span>
       <select
+        suppressHydrationWarning
         className={styles.dropdown}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -292,6 +374,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const [isLeftSidebarExpanded, setIsLeftSidebarExpanded] = useState(false);
   const [isRightSidebarExpanded, setIsRightSidebarExpanded] = useState(false);
   const [chatPanelOffset, setChatPanelOffset] = useState(420);
+  const [chatGreeting, setChatGreeting] = useState("Hello");
   const fileInputRef = useRef(null);
   const queryInputRef = useRef(null);
   const workspaceContentRef = useRef(null);
@@ -340,6 +423,10 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   }, []);
 
   useEffect(() => () => clearTimers(), [clearTimers]);
+
+  useEffect(() => {
+    setChatGreeting(getGreeting());
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -800,6 +887,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
 
   const handleStartQuery = () => {
     if (!activeWorkspace?.query.trim() || !activeProjectId) return;
+    const submittedQuery = activeWorkspace.query.trim();
 
     const selectableFiles = (activeWorkspace.files || []).filter((file) => file?.fileId);
     const selectedFileIdRaw =
@@ -822,9 +910,12 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
       updateActiveWorkspace((current) => ({
         ...current,
         phase: "query-processing",
+        query: "",
+        submittedQuery,
         visibleLines: [],
         response: "",
         responseVisible: false,
+        responseVariants: [],
         activeRightSection: "response",
       }));
 
@@ -833,38 +924,69 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
           projectId: activeProjectId,
           fileId: selectedFileId ?? targetFile.fileId,
           workspace: activeWorkspace,
-          query: activeWorkspace.query,
+          query: submittedQuery,
         });
-        const response = await queryApi.runQuery(payload);
-        const primaryResult =
-          Array.isArray(response?.comparison_results) && response.comparison_results.length > 0
-            ? response.comparison_results[0]
-            : response;
-        let savedResponse = null;
-
-        if (primaryResult?.experiment_id) {
-          try {
-            const saved = await queryApi.fetchSavedResponse({
-              projectId: activeProjectId,
-              fileId: selectedFileId ?? targetFile.fileId,
-              experimentId: primaryResult.experiment_id,
-            });
-            savedResponse = saved?.data?.[0] || null;
-          } catch (savedResponseError) {
-            savedResponse = null;
-          }
+        let allowedTechniques = null;
+        try {
+          const fileRecord = await fileApi.getProjectFile(
+            activeProjectId,
+            selectedFileId ?? targetFile.fileId,
+          );
+          allowedTechniques = fileRecord?.allowed_techniques || null;
+        } catch (fileRecordError) {
+          allowedTechniques = null;
         }
 
-        const finalAnswer = savedResponse?.response || primaryResult?.answer || "";
-        const finalChunks = savedResponse?.chunks || primaryResult?.chunks || [];
+        const response = await queryApi.runQuery(payload);
+        const results =
+          Array.isArray(response?.comparison_results) && response.comparison_results.length > 0
+            ? response.comparison_results
+            : [response];
+
+        const responseVariants = await Promise.all(
+          results.map(async (result) => {
+            let savedResponse = null;
+
+            if (result?.experiment_id) {
+              try {
+                const saved = await queryApi.fetchSavedResponse({
+                  projectId: activeProjectId,
+                  fileId: selectedFileId ?? targetFile.fileId,
+                  experimentId: result.experiment_id,
+                });
+                savedResponse = saved?.data?.[0] || null;
+              } catch (savedResponseError) {
+                savedResponse = null;
+              }
+            }
+
+            return {
+              experimentId: result?.experiment_id || null,
+              db: result?.db || result?.retrieval || "Default",
+              response: savedResponse?.response || result?.answer || "",
+              chunks: savedResponse?.chunks || result?.chunks || [],
+              usedStrategies: buildVariantStrategiesSummary(
+                activeWorkspace,
+                result,
+                allowedTechniques,
+              ),
+            };
+          }),
+        );
+
+        const primaryVariant = responseVariants[0] || null;
+        const finalAnswer = primaryVariant?.response || "";
+        const finalChunks = primaryVariant?.chunks || [];
 
         updateActiveWorkspace((current) => ({
           ...current,
-          experimentId: primaryResult?.experiment_id || current?.experimentId || null,
+          experimentId: primaryVariant?.experimentId || current?.experimentId || null,
           selectedFileId: selectedFileId ?? current?.selectedFileId ?? null,
           phase: "query-complete",
           response: finalAnswer,
           responseVisible: true,
+          usedStrategies: primaryVariant?.usedStrategies || [],
+          responseVariants,
           retrievedChunks: finalChunks.map((chunk, index) => ({
             title: chunk?.source || targetFile.name || `Chunk ${index + 1}`,
             page: chunk?.page || index + 1,
@@ -897,7 +1019,6 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     ? ["query-ready", "query-processing", "query-complete"].includes(activeWorkspace.phase)
     : false;
   const showChatWelcome = !!activeWorkspace;
-  const chatGreeting = getGreeting();
 
   if (!activeProject || !activeWorkspace) {
     return (
@@ -927,6 +1048,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
             <div className={styles.toolbarActions}>
               <label className={styles.dropdownWrap}>
                 <select
+                  suppressHydrationWarning
                   value={projectFilter}
                   onChange={(event) => setProjectFilter(event.target.value)}
                   className={styles.dropdown}
@@ -1400,7 +1522,24 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
               <span className={styles.workspaceCategory}>{activeProject.category}</span>
             </h1>
           </div>
-
+          <div className={styles.workspaceHeaderActions}>
+            <div className={styles.chatWelcomeBadge}>
+              <span>Insight Chat</span>
+              <span className={styles.chatWelcomeBadgeAccent}>Workspace</span>
+            </div>
+            <button
+              type="button"
+              className={styles.chatWelcomeMetricsButton}
+              onClick={() =>
+                router.push(
+                  `${ROUTE_PATHS.METRICS}?project=${activeProject.id}&name=${activeProject.name}&category=${activeProject.category}`,
+                )
+              }
+              title="Open metrics"
+            >
+              <BarChart3 size={15} />
+            </button>
+          </div>
         </header>
 
         <section className={styles.workspaceCanvas}>
@@ -1486,78 +1625,12 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
             <div className={styles.workspaceCenterStage}>
               {showChatWelcome && (
                 <div className={styles.chatWelcomeShell}>
-                  <div className={styles.chatWelcomeBadge}>
-                    <span>Insight Chat</span>
-                    <span className={styles.chatWelcomeBadgeAccent}>Workspace</span>
-                    <button
-                      type="button"
-                      className={styles.chatWelcomeMetricsButton}
-                      onClick={() =>
-                        router.push(
-                          `${ROUTE_PATHS.METRICS}?project=${activeProject.id}&name=${activeProject.name}&category=${activeProject.category}`,
-                        )
-                      }
-                      title="Open metrics"
-                    >
-                      <BarChart3 size={15} />
-                    </button>
-                  </div>
-
                   <div className={styles.chatWelcomeHeadingBlock}>
                     <h2 className={styles.chatWelcomeTitle}>{chatGreeting}</h2>
                     <p className={styles.chatWelcomeSubtitle}>
                       Ask questions, summarize uploaded files, or explore ideas from your document set.
                     </p>
                   </div>
-
-                  <div className={styles.queryDockFloating}>
-                    <div className={classNames(styles.queryInputShell, styles.queryInputShellHero)}>
-                      <Input
-                        ref={queryInputRef}
-                        value={activeWorkspace.query}
-                        onChange={(event) =>
-                          updateActiveWorkspace((current) => ({
-                            ...current,
-                            query: event.target.value,
-                          }))
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            handleStartQuery();
-                          }
-                        }}
-                        placeholder="How can I help you today?"
-                        className={classNames(styles.queryInput, styles.queryInputHero)}
-                      />
-
-                      <div className={styles.queryComposerFooter}>
-                        <div className={styles.queryComposerTools}>
-                          {[Plus, Mic].map((Icon, index) => (
-                            <button
-                              key={`tool-${index}`}
-                              type="button"
-                              className={styles.queryToolButton}
-                              aria-label="Chat tool"
-                            >
-                              <Icon size={15} />
-                            </button>
-                          ))}
-                        </div>
-
-                        <div className={styles.queryComposerActions}>
-                          <div className={styles.queryModelPill}>Insight Agent</div>
-                          <Button
-                            className={classNames(styles.querySendButton, styles.querySendButtonHero)}
-                            onClick={handleStartQuery}
-                            title="Send query"
-                          >
-                            <ArrowUp size={16} />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
                 </div>
               )}
 
@@ -1569,7 +1642,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                 </div>
               )}
 
-              {activeWorkspace.query && (
+              {activeWorkspace.submittedQuery && (
                 <motion.div
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1577,7 +1650,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                 >
                   <div className={styles.userMessageBubble}>
                     <div className={styles.chatMessageLabel}>You</div>
-                    <p>{activeWorkspace.query}</p>
+                    <p>{activeWorkspace.submittedQuery}</p>
                   </div>
                 </motion.div>
               )}
@@ -1595,49 +1668,71 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
               )}
 
               {activeWorkspace.responseVisible && (
-                <motion.div
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={styles.aiMessageRow}
-                >
-                  <div className={styles.aiMessageBubble}>
-                    <div className={styles.chatMessageLabel}>Assistant</div>
-                    <p>{activeWorkspace.response}</p>
-                  </div>
-                </motion.div>
+                (activeWorkspace.responseVariants?.length > 0
+                  ? activeWorkspace.responseVariants
+                  : [
+                      {
+                        db: "Default",
+                        response: activeWorkspace.response,
+                        usedStrategies: activeWorkspace.usedStrategies || [],
+                      },
+                    ]).map((variant, index) => (
+                  <motion.div
+                    key={`${variant.db}-${variant.experimentId || index}`}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={styles.aiMessageRow}
+                  >
+                    <div className={styles.aiMessageBubble}>
+                      <div className={styles.chatMessageLabel}>
+                        Assistant{variant?.db ? ` - ${variant.db}` : ""}
+                      </div>
+                      {variant.usedStrategies?.length > 0 && (
+                        <div className={styles.strategySummary}>
+                          {variant.usedStrategies.map((item) => (
+                            <span key={`${variant.db}-${item.label}-${item.value}`} className={styles.strategyPill}>
+                              <strong>{item.label}:</strong> {item.value}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <p>{variant.response}</p>
+                    </div>
+                  </motion.div>
+                ))
               )}
+
+              <div className={styles.queryDock}>
+                <div className={classNames(styles.queryInputShell, styles.queryInputShellHero)}>
+                  <Input
+                    ref={queryInputRef}
+                    value={activeWorkspace.query}
+                    onChange={(event) =>
+                      updateActiveWorkspace((current) => ({
+                        ...current,
+                        query: event.target.value,
+                      }))
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        handleStartQuery();
+                      }
+                    }}
+                    placeholder="How can I help you today?"
+                    className={classNames(styles.queryInput, styles.queryInputHero)}
+                  />
+
+                  <Button
+                    className={classNames(styles.querySendButton, styles.querySendButtonHero)}
+                    onClick={handleStartQuery}
+                    title="Send query"
+                  >
+                    <Send size={16} />
+                  </Button>
+                </div>
+              </div>
             </div>
 
-              {isQueryStage && (
-                <div className={styles.queryDock}>
-                  <div className={styles.queryInputShell}>
-                    <Input
-                      ref={queryInputRef}
-                      value={activeWorkspace.query}
-                      onChange={(event) =>
-                        updateActiveWorkspace((current) => ({
-                          ...current,
-                          query: event.target.value,
-                        }))
-                      }
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          handleStartQuery();
-                        }
-                      }}
-                      placeholder="ask a query and select the configuration at left side bar"
-                      className={styles.queryInput}
-                    />
-                    <Button
-                      className={styles.querySendButton}
-                      onClick={handleStartQuery}
-                      title="Send query"
-                    >
-                      <Send size={16} />
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </section>

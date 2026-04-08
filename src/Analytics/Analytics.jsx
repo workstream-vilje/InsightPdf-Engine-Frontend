@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -29,13 +29,8 @@ import {
   YAxis,
 } from "recharts";
 import { Button } from "@/components/ui/button";
-import {
-  CHUNK_ACCURACY_DATA,
-  COMPARISON_DATA,
-  DASHBOARD_EXPERIMENTS,
-  QUALITY_RADAR_DATA,
-  RESPONSE_CHART_DATA,
-} from "@/lib/dashboard/data";
+import comparisonApi from "@/networking/apis/comparison";
+import projectApi from "@/networking/apis/project";
 import { METRICS_NAV_ITEMS } from "@/lib/projects/data";
 import { ROUTE_PATHS } from "@/utils/routepaths";
 import styles from "./Analytics.module.css";
@@ -51,11 +46,206 @@ const TAB_ICONS = {
 const MetricsScreen = ({ projectId, projectName, categoryName }) => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("experiments");
+  const [historyEntries, setHistoryEntries] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [comparisonData, setComparisonData] = useState(null);
+  const [isLoadingComparison, setIsLoadingComparison] = useState(false);
+  const [comparisonError, setComparisonError] = useState("");
 
-  const bestComparison = useMemo(
-    () => COMPARISON_DATA.find((item) => item.winner) ?? COMPARISON_DATA[0],
-    [],
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadHistory = async () => {
+      if (!projectId) return;
+
+      setIsLoadingHistory(true);
+      setHistoryError("");
+
+      try {
+        const response = await projectApi.fetchProjectHistory(projectId);
+        if (!isMounted) return;
+        setHistoryEntries(Array.isArray(response) ? response : []);
+      } catch (error) {
+        if (!isMounted) return;
+        setHistoryEntries([]);
+        setHistoryError(
+          error?.payload?.detail ||
+            error?.payload?.message ||
+            error?.message ||
+            "Failed to load experiment history",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingHistory(false);
+        }
+      }
+    };
+
+    loadHistory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadComparison = async () => {
+      if (!projectId) return;
+
+      setIsLoadingComparison(true);
+      setComparisonError("");
+
+      try {
+        const response = await comparisonApi.fetchComparisonAnalytics(projectId);
+        if (!isMounted) return;
+        setComparisonData(response?.data || null);
+      } catch (error) {
+        if (!isMounted) return;
+        setComparisonData(null);
+        setComparisonError(
+          error?.payload?.detail ||
+            error?.payload?.message ||
+            error?.message ||
+            "Failed to load comparison analytics",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingComparison(false);
+        }
+      }
+    };
+
+    loadComparison();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [projectId]);
+
+  const experimentRows = useMemo(
+    () =>
+      historyEntries.map((entry) => ({
+        id: entry?.id || "-",
+        llm: entry?.config?.llm || "-",
+        embedding: entry?.config?.embedding || "-",
+        db: entry?.config?.db || "-",
+        retrieval: entry?.config?.retrieval || "-",
+        accuracy:
+          typeof entry?.metrics?.accuracy === "number"
+            ? `${Math.round(entry.metrics.accuracy)}%`
+            : "-",
+      })),
+    [historyEntries],
   );
+
+  const averageLatency = useMemo(() => {
+    if (!historyEntries.length) return "0.00s";
+
+    const seconds = historyEntries
+      .map((entry) => Number.parseFloat(String(entry?.metrics?.latency || "0").replace("s", "")))
+      .filter((value) => Number.isFinite(value));
+
+    if (!seconds.length) return "0.00s";
+
+    return `${(seconds.reduce((sum, value) => sum + value, 0) / seconds.length).toFixed(2)}s`;
+  }, [historyEntries]);
+
+  const currentLlm = historyEntries[0]?.config?.llm || "-";
+  const responseTimeVsDb = comparisonData?.responseTimeVsDb || [];
+  const chunkSizeVsAccuracy = comparisonData?.chunkSizeVsAccuracy || [];
+  const embeddingVsAccuracy = comparisonData?.embeddingVsAccuracy || [];
+  const retrievalVsAccuracy = comparisonData?.retrievalVsAccuracy || [];
+  const dbCostMap = useMemo(() => {
+    const buckets = new Map();
+
+    historyEntries.forEach((entry) => {
+      const dbName = String(entry?.config?.db || "").trim().toLowerCase();
+      const costValue = Number.parseFloat(String(entry?.metrics?.cost || "0").replace("$", ""));
+
+      if (!dbName || !Number.isFinite(costValue)) return;
+
+      const current = buckets.get(dbName) || { total: 0, count: 0 };
+      buckets.set(dbName, {
+        total: current.total + costValue,
+        count: current.count + 1,
+      });
+    });
+
+    return buckets;
+  }, [historyEntries]);
+
+  const comparisonCards = useMemo(
+    () =>
+      responseTimeVsDb.map((item) => {
+        const dbKey = String(item?.name || "").trim().toLowerCase();
+        const latency = Number(item?.time || 0) / 1000;
+        const costBucket = dbCostMap.get(dbKey);
+        const costValue =
+          costBucket && costBucket.count > 0 ? costBucket.total / costBucket.count : 0;
+
+        return {
+          strategy: item?.name || "Unknown",
+          accuracy: Number(item?.accuracy || 0),
+          latency,
+          cost: costValue,
+          winner: false,
+        };
+      }),
+    [dbCostMap, responseTimeVsDb],
+  );
+
+  const bestComparison = useMemo(() => {
+    if (!comparisonCards.length) return null;
+    return comparisonCards.reduce((best, current) =>
+      Number(current.accuracy || 0) > Number(best.accuracy || 0) ? current : best,
+    );
+  }, [comparisonCards]);
+
+  const responseChartData = useMemo(
+    () =>
+      responseTimeVsDb.map((item) => ({
+        name: item?.name || "Unknown",
+        time: Number(item?.time || 0) / 1000,
+      })),
+    [responseTimeVsDb],
+  );
+
+  const chunkAccuracyData = useMemo(
+    () =>
+      chunkSizeVsAccuracy.map((item) => ({
+        size: item?.size || 0,
+        ...Object.fromEntries(
+          Object.entries(item || {})
+            .filter(([key]) => key !== "size")
+            .map(([key, value]) => [key, Number(value || 0)]),
+        ),
+      })),
+    [chunkSizeVsAccuracy],
+  );
+
+  const qualityRadarData = useMemo(() => {
+    const bestAccuracy = bestComparison ? Number(bestComparison.accuracy || 0) : 0;
+    const avgRetrievalAccuracy =
+      retrievalVsAccuracy.length > 0
+        ? retrievalVsAccuracy.reduce((sum, item) => sum + Number(item?.accuracy || 0), 0) /
+          retrievalVsAccuracy.length
+        : 0;
+    const avgEmbeddingAccuracy =
+      embeddingVsAccuracy.length > 0
+        ? embeddingVsAccuracy.reduce((sum, item) => sum + Number(item?.accuracy || 0), 0) /
+          embeddingVsAccuracy.length
+        : 0;
+
+    return [
+      { subject: "Best DB", A: Math.round(bestAccuracy) },
+      { subject: "Retrieval", A: Math.round(avgRetrievalAccuracy) },
+      { subject: "Embedding", A: Math.round(avgEmbeddingAccuracy) },
+      { subject: "History", A: Math.round(Number(historyEntries[0]?.metrics?.accuracy || 0)) },
+    ];
+  }, [bestComparison, embeddingVsAccuracy, historyEntries, retrievalVsAccuracy]);
 
   return (
     <div className={styles.metricsShell}>
@@ -80,14 +270,14 @@ const MetricsScreen = ({ projectId, projectName, categoryName }) => {
             <div className={styles.summaryCard}>
               <Clock size={16} />
               <div>
-                <strong>1.3s</strong>
+                <strong>{averageLatency}</strong>
                 <span>Average latency</span>
               </div>
             </div>
             <div className={styles.summaryCard}>
               <Cpu size={16} />
               <div>
-                <strong>gpt-4o-mini</strong>
+                <strong>{currentLlm}</strong>
                 <span>Current LLM</span>
               </div>
             </div>
@@ -110,16 +300,25 @@ const MetricsScreen = ({ projectId, projectName, categoryName }) => {
                   <span>Retrieval</span>
                   <span>Accuracy</span>
                 </div>
-                {DASHBOARD_EXPERIMENTS.map((item) => (
-                  <div key={item.id} className={styles.tableRow}>
-                    <span>{item.id}</span>
-                    <span>{item.llm}</span>
-                    <span>{item.embedding}</span>
-                    <span>{item.db}</span>
-                    <span>{item.retrieval}</span>
-                    <strong>{item.accuracy}%</strong>
-                  </div>
-                ))}
+                {isLoadingHistory && <div className={styles.tableRow}>Loading experiments...</div>}
+                {!isLoadingHistory && historyError && (
+                  <div className={styles.tableRow}>{historyError}</div>
+                )}
+                {!isLoadingHistory &&
+                  !historyError &&
+                  experimentRows.map((item) => (
+                    <div key={item.id} className={styles.tableRow}>
+                      <span>{item.id}</span>
+                      <span>{item.llm}</span>
+                      <span>{item.embedding}</span>
+                      <span>{item.db}</span>
+                      <span>{item.retrieval}</span>
+                      <strong>{item.accuracy}</strong>
+                    </div>
+                  ))}
+                {!isLoadingHistory && !historyError && experimentRows.length === 0 && (
+                  <div className={styles.tableRow}>No experiments found for this project.</div>
+                )}
               </div>
             </div>
           )}
@@ -131,19 +330,25 @@ const MetricsScreen = ({ projectId, projectName, categoryName }) => {
                 <h2>Comparison</h2>
               </div>
               <div className={styles.comparisonGrid}>
-                {COMPARISON_DATA.map((item) => (
+                {isLoadingComparison && <div className={styles.comparisonCard}>Loading comparison...</div>}
+                {!isLoadingComparison && comparisonError && (
+                  <div className={styles.comparisonCard}>{comparisonError}</div>
+                )}
+                {!isLoadingComparison &&
+                  !comparisonError &&
+                  comparisonCards.map((item) => (
                   <div key={item.strategy} className={styles.comparisonCard}>
                     <div className={styles.comparisonHeader}>
                       <h3>{item.strategy}</h3>
-                      {item.winner && <span className={styles.winnerBadge}>Recommended</span>}
+                      {bestComparison?.strategy === item.strategy && (
+                        <span className={styles.winnerBadge}>Recommended</span>
+                      )}
                     </div>
-                    <p>Chunk size: {item.chunkSize}</p>
-                    <p>Overlap: {item.overlap}</p>
                     <p>Accuracy: {item.accuracy}%</p>
                     <p>Latency: {item.latency}s</p>
                     <p>Cost/query: ${item.cost.toFixed(4)}</p>
                   </div>
-                ))}
+                  ))}
               </div>
             </div>
           )}
@@ -157,7 +362,7 @@ const MetricsScreen = ({ projectId, projectName, categoryName }) => {
                     <h2>Response Time by Vector Store</h2>
                   </div>
                   <ResponsiveContainer width="100%" height={190}>
-                    <BarChart data={RESPONSE_CHART_DATA}>
+                    <BarChart data={responseChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
                       <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
                       <YAxis stroke="#64748b" fontSize={11} />
@@ -174,13 +379,24 @@ const MetricsScreen = ({ projectId, projectName, categoryName }) => {
                       <h2>Chunk Accuracy</h2>
                     </div>
                     <ResponsiveContainer width="100%" height={180}>
-                      <LineChart data={CHUNK_ACCURACY_DATA}>
+                      <LineChart data={chunkAccuracyData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
                         <XAxis dataKey="size" stroke="#64748b" fontSize={11} />
                         <YAxis stroke="#64748b" fontSize={11} />
                         <Tooltip />
-                        <Line type="monotone" dataKey="recursive" stroke="#38bdf8" strokeWidth={3} dot={false} />
-                        <Line type="monotone" dataKey="semantic" stroke="#2563eb" strokeWidth={3} dot={false} />
+                        {chunkAccuracyData[0] &&
+                          Object.keys(chunkAccuracyData[0])
+                            .filter((key) => key !== "size")
+                            .map((key, index) => (
+                              <Line
+                                key={key}
+                                type="monotone"
+                                dataKey={key}
+                                stroke={index % 2 === 0 ? "#38bdf8" : "#2563eb"}
+                                strokeWidth={3}
+                                dot={false}
+                              />
+                            ))}
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -191,7 +407,7 @@ const MetricsScreen = ({ projectId, projectName, categoryName }) => {
                       <h2>Quality Radar</h2>
                     </div>
                     <ResponsiveContainer width="100%" height={180}>
-                      <RadarChart data={QUALITY_RADAR_DATA}>
+                      <RadarChart data={qualityRadarData}>
                         <PolarGrid />
                         <PolarAngleAxis dataKey="subject" tick={{ fill: "#64748b", fontSize: 11 }} />
                         <Radar
@@ -217,16 +433,22 @@ const MetricsScreen = ({ projectId, projectName, categoryName }) => {
               </div>
               <div className={styles.recommendationCard}>
                 <p className={styles.eyebrow}>Best configuration</p>
-                <h3>{bestComparison.strategy}</h3>
-                <p>
-                  Best accuracy and relevance balance with chunk size {bestComparison.chunkSize} and
-                  overlap {bestComparison.overlap}.
-                </p>
-                <div className={styles.recommendationMetrics}>
-                  <span>{bestComparison.accuracy}% accuracy</span>
-                  <span>{bestComparison.latency}s latency</span>
-                  <span>${bestComparison.cost.toFixed(4)} cost/query</span>
-                </div>
+                {bestComparison ? (
+                  <>
+                    <h3>{bestComparison.strategy}</h3>
+                    <p>
+                      Highest observed backend accuracy for this project based on
+                      stored experiment logs.
+                    </p>
+                    <div className={styles.recommendationMetrics}>
+                      <span>{bestComparison.accuracy}% accuracy</span>
+                      <span>{bestComparison.latency}s latency</span>
+                      <span>${bestComparison.cost.toFixed(4)} cost/query</span>
+                    </div>
+                  </>
+                ) : (
+                  <p>No recommendation available yet.</p>
+                )}
               </div>
             </div>
           )}
@@ -259,7 +481,6 @@ const MetricsScreen = ({ projectId, projectName, categoryName }) => {
 
       <aside className={styles.metricsSidebar}>
         <div className={styles.sidebarHeader}>
-          <p className={styles.eyebrow}>Fixed right sidebar</p>
           <h2>Metrics views</h2>
         </div>
 
