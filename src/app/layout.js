@@ -1,15 +1,13 @@
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import NextTopLoader from 'nextjs-toploader';
 import "./globals.css";
 
-const geistSans = Geist({
+const urbanist = localFont({
+  src: "../assets/fonts/Urbanist-VariableFont_wght.ttf",
   variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: "100 900",
+  display: "swap",
+  fallback: ["system-ui", "sans-serif"],
 });
 
 export const metadata = {
@@ -19,7 +17,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="en" className={urbanist.variable}>
       <body style={{ margin: 0, padding: 0 }}>
         <NextTopLoader
           color="rgb(var(--primary))"

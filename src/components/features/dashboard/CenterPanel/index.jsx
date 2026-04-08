@@ -595,6 +595,7 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning, processingConfi
                   <span className={styles.filterLabel}>PROJECT</span>
                   <div style={{ flex: 1, minWidth: '130px' }}>
                     <Select
+                      instanceId="center-project-select"
                       options={projectListOptions}
                       value={selectedProject}
                       onChange={setSelectedProject}
@@ -611,6 +612,7 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning, processingConfi
                   <span className={styles.filterLabel}>CATEGORY</span>
                   <div style={{ flex: 1, minWidth: '130px' }}>
                     <Select
+                      instanceId="center-category-select"
                       options={categoryListOptions}
                       value={selectedCategory}
                       onChange={setSelectedCategory}
@@ -627,6 +629,7 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning, processingConfi
                   <span className={styles.filterLabel}>DOCUMENT</span>
                   <div style={{ flex: 1, minWidth: '160px' }}>
                     <Select
+                      instanceId="center-document-select"
                       options={documentListOptions}
                       value={selectedDocument}
                       onChange={setSelectedDocument}
@@ -651,6 +654,7 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning, processingConfi
                   <span className={styles.filterLabel}>ACTIVE MODEL</span>
                   <div style={{ flex: 1, minWidth: '220px' }}>
                     <Select
+                      instanceId="center-model-select"
                       options={modelOptions}
                       value={selectedModel}
                       onChange={setSelectedModel}

@@ -342,6 +342,7 @@ const ConfigPanel = ({ isCollapsed, setIsCollapsed, onConfigChange }) => {
         <Section title="Text Processing" icon={FileText} defaultOpen={false} index={1} isCollapsed={isCollapsed}>
           <Field label="Splitter Strategy">
             <Select
+              instanceId="config-splitter-select"
               options={[
                 { value: 'recursive', label: 'Recursive Text Splitter' },
                 { value: 'semantic', label: 'Semantic Splitter' },
@@ -366,6 +367,7 @@ const ConfigPanel = ({ isCollapsed, setIsCollapsed, onConfigChange }) => {
         <Section title="Data Extraction" icon={Database} defaultOpen={false} index={2} isCollapsed={isCollapsed}>
           <Field label="Engines (Multi-select)">
             <Select
+              instanceId="config-extraction-select"
               isMulti
               options={extractionOptions}
               value={extraction}
@@ -382,6 +384,7 @@ const ConfigPanel = ({ isCollapsed, setIsCollapsed, onConfigChange }) => {
         <Section title="Embedding Model" icon={Cpu} index={3} isCollapsed={isCollapsed}>
           <Field label="Providers (Multi-select)">
             <Select
+              instanceId="config-embeddings-select"
               isMulti
               options={embeddingOptions}
               value={embeddings}
@@ -398,6 +401,7 @@ const ConfigPanel = ({ isCollapsed, setIsCollapsed, onConfigChange }) => {
         <Section title="LLM Selection" icon={Zap} index={4} isCollapsed={isCollapsed}>
           <Field label="Models (Multi-select)">
             <Select
+              instanceId="config-llm-select"
               isMulti
               options={llmOptions}
               value={selectedLLMs}
@@ -414,6 +418,7 @@ const ConfigPanel = ({ isCollapsed, setIsCollapsed, onConfigChange }) => {
         <Section title="Vector Store" icon={Share2} index={5} isCollapsed={isCollapsed}>
           <Field label="Providers (Multi-select)">
             <Select
+              instanceId="config-vector-store-select"
               isMulti
               options={vectorStoreOptions}
               value={vectorStores}
@@ -430,6 +435,7 @@ const ConfigPanel = ({ isCollapsed, setIsCollapsed, onConfigChange }) => {
         <Section title="Retrieval Strategy" icon={Search} index={6} isCollapsed={isCollapsed}>
           <Field label="Search Type">
             <Select
+              instanceId="config-retrieval-select"
               options={[
                 { value: 'similarity', label: 'Semantic Similarity Search' },
               ]}
