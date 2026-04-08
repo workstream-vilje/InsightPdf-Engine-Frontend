@@ -1,4 +1,4 @@
-import ProjectCanvas from "@/screens/ProjectCanvas";
+import ProjectCanvas from "@/Home/Projects";
 
 export default async function Home({ searchParams }) {
   const params = await searchParams;

@@ -1,4 +1,4 @@
-import ChunkingExperiments from "@/screens/ChunkingExperiments";
+import ChunkingExperiments from "@/Chunking/Chunking";
 
 export default function ChunkingPage() {
   return <ChunkingExperiments />;

@@ -4,10 +4,12 @@
  */
 export const ROUTE_PATHS = {
   HOME: '/',
+  DASHBOARD: '/dashboard',
   CHUNKING: '/chunking',
   COMPARE: '/compare',
   SETTINGS: '/settings',
   HISTORY: '/history',
   DOCUMENTATION: '/docs',
-  METRICS: '/metrics',
+  METRICS: '/analytics',
+  ANALYTICS: '/analytics',
 };
