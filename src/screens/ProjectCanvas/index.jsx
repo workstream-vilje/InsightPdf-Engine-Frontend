@@ -38,7 +38,6 @@ import projectApi from "@/networking/apis/project";
 import queryApi from "@/networking/apis/query";
 import {
   DATA_EXTRACTION_OPTIONS,
-  DEFAULT_EXECUTION_METRICS,
   DEFAULT_QUALITY_METRICS,
   EMBEDDING_OPTIONS,
   INITIAL_PROJECTS,
@@ -50,6 +49,12 @@ import {
 } from "@/lib/projects/data";
 import { ROUTE_PATHS } from "@/utils/routepaths";
 import styles from "./styles.module.css";
+import { getExperimentPerformanceById } from "../../lib/api";
+
+const formatMs = (value) => `${(Number(value || 0) / 1000).toFixed(2)}s`;
+const formatCurrency = (value) => `$${Number(value || 0).toFixed(3)}`;
+const formatNumber = (value) => new Intl.NumberFormat().format(Number(value || 0));
+
 
 const RIGHT_SIDEBAR_ITEMS = [
   { value: "response", label: "Response", icon: MessageSquare },
@@ -249,6 +254,35 @@ const SidebarSection = ({ icon: Icon, title, description, expanded, children }) 
   </section>
 );
 
+const FileSelect = ({ files, selectedFileId, onChange }) => {
+  const selectable = (files || []).filter((file) => file?.fileId);
+  if (selectable.length === 0) return null;
+
+  const value =
+    selectedFileId != null
+      ? String(selectedFileId)
+      : selectable[0]?.fileId != null
+      ? String(selectable[0].fileId)
+      : "";
+
+  return (
+    <label className={styles.formField}>
+      <span className={styles.modalFieldLabel}>Active file</span>
+      <select
+        className={styles.dropdown}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {selectable.map((file) => (
+          <option key={String(file.fileId)} value={String(file.fileId)}>
+            {file.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+};
+
 const ProjectCanvas = ({ initialProjectId = null }) => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -282,6 +316,36 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     [activeProjectId, projects],
   );
   const activeWorkspace = activeProjectId ? projectWorkspaces[activeProjectId] : null;
+
+  // Execution Performance (dynamic from backend by experiment_id)
+  const [perf, setPerf] = useState(null);
+  const [perfLoading, setPerfLoading] = useState(false);
+  const [perfError, setPerfError] = useState(null);
+
+  // Prefer workspace-stored experiment id if available
+  const experimentId = activeWorkspace?.experimentId || activeWorkspace?.experiment_id || null;
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!experimentId) return;
+      if (activeWorkspace?.activeRightSection !== "performance") return;
+      setPerfLoading(true);
+      setPerfError(null);
+      try {
+        const data = await getExperimentPerformanceById(experimentId);
+        if (!cancelled) setPerf(data);
+      } catch (e) {
+        if (!cancelled) setPerfError(e?.message || "Failed to load performance");
+      } finally {
+        if (!cancelled) setPerfLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [experimentId, activeWorkspace?.activeRightSection]);
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
@@ -406,6 +470,45 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     },
     [activeProjectId],
   );
+
+  // Sync files from backend so DB deletes don't linger in UI
+  const syncProjectFilesFromBackend = useCallback(async () => {
+    if (!activeProjectId) return;
+    try {
+      const response = await fileApi.fetchProjectFiles(activeProjectId);
+      const backendFiles = response?.data || [];
+      const mapped = backendFiles.map((file) =>
+        mapUploadedFileToWorkspaceFile(file, activeProject?.category),
+      );
+
+      updateActiveWorkspace((current) => {
+        const backendIds = new Set(mapped.map((f) => String(f.fileId)));
+        const nextSelected =
+          current.selectedFileId != null && backendIds.has(String(current.selectedFileId))
+            ? current.selectedFileId
+            : mapped[0]?.fileId ?? null;
+
+        return {
+          ...current,
+          files: mapped,
+          selectedFileId: nextSelected,
+        };
+      });
+    } catch (e) {
+      // keep existing UI state if fetch fails
+    }
+  }, [activeProject?.category, activeProjectId, updateActiveWorkspace]);
+
+  useEffect(() => {
+    syncProjectFilesFromBackend();
+  }, [syncProjectFilesFromBackend]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const onFocus = () => syncProjectFilesFromBackend();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [syncProjectFilesFromBackend]);
 
   const visibleProjects = useMemo(() => {
     const normalizedSearch = deferredSearchValue.trim().toLowerCase();
@@ -608,6 +711,10 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
       updateActiveWorkspace((current) => ({
         ...current,
         files: [...current.files, ...uploadedFiles],
+        selectedFileId:
+          current.selectedFileId ??
+          uploadedFiles.find((file) => file.fileId)?.fileId ??
+          null,
         phase: "ingestion-setup",
         query: "",
         visibleLines: [
@@ -620,6 +727,8 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
         responseVisible: false,
         activeRightSection: "response",
       }));
+      // Ensure UI matches backend (and prunes deleted DB files)
+      await syncProjectFilesFromBackend();
     } catch (error) {
       const message =
         error?.payload?.detail ||
@@ -741,9 +850,14 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const handleStartQuery = () => {
     if (!activeWorkspace?.query.trim() || !activeProjectId) return;
 
-    const targetFile = [...(activeWorkspace.files || [])]
-      .reverse()
-      .find((file) => file.fileId);
+    const selectableFiles = (activeWorkspace.files || []).filter((file) => file?.fileId);
+    const selectedFileIdRaw =
+      activeWorkspace.selectedFileId ?? selectableFiles[0]?.fileId ?? null;
+    const selectedFileId = selectedFileIdRaw != null ? Number(selectedFileIdRaw) : null;
+    const targetFile =
+      selectableFiles.find((file) => Number(file.fileId) === selectedFileId) ??
+      selectableFiles[0] ??
+      null;
 
     if (!targetFile?.fileId) {
       if (typeof window !== "undefined") {
@@ -766,7 +880,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
       try {
         const payload = buildQueryPayload({
           projectId: activeProjectId,
-          fileId: targetFile.fileId,
+          fileId: selectedFileId ?? targetFile.fileId,
           workspace: activeWorkspace,
           query: activeWorkspace.query,
         });
@@ -781,7 +895,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
           try {
             const saved = await queryApi.fetchSavedResponse({
               projectId: activeProjectId,
-              fileId: targetFile.fileId,
+              fileId: selectedFileId ?? targetFile.fileId,
               experimentId: primaryResult.experiment_id,
             });
             savedResponse = saved?.data?.[0] || null;
@@ -795,6 +909,8 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
 
         updateActiveWorkspace((current) => ({
           ...current,
+          experimentId: primaryResult?.experiment_id || current?.experimentId || null,
+          selectedFileId: selectedFileId ?? current?.selectedFileId ?? null,
           phase: "query-complete",
           response: finalAnswer,
           responseVisible: true,
@@ -1221,6 +1337,24 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
             {isQueryStage && (
               <>
                 <SidebarSection
+                  icon={FileText}
+                  title="Active file"
+                  description="Choose which uploaded file to query"
+                  expanded={isLeftSidebarExpanded}
+                >
+                  <FileSelect
+                    files={activeWorkspace.files}
+                    selectedFileId={activeWorkspace.selectedFileId}
+                    onChange={(nextId) =>
+                      updateActiveWorkspace((current) => ({
+                        ...current,
+                        selectedFileId: nextId ? Number(nextId) : null,
+                      }))
+                    }
+                  />
+                </SidebarSection>
+
+                <SidebarSection
                   icon={Database}
                   title="Retrieved Strategy"
                   description="Select multiple retrieval strategies"
@@ -1557,15 +1691,27 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
               {activeWorkspace.activeRightSection === "performance" && (
                 <div className={styles.insightPanel}>
                   <h3>Execution Performance</h3>
-                  <div className={styles.metricGrid}>
-                    {DEFAULT_EXECUTION_METRICS.map((metric) => (
-                      <div key={metric.label} className={styles.metricCard}>
-                        <span>{metric.label}</span>
-                        <strong>{metric.value}</strong>
-                        <small>{metric.sub}</small>
-                      </div>
-                    ))}
-                  </div>
+                  {perfLoading && <div>Loading…</div>}
+                  {perfError && <div>{perfError}</div>}
+                  {!perfLoading && !perfError && (
+                    <div className={styles.metricGrid}>
+                      {[
+                        { label: "Total Time", value: formatMs(perf?.totalTime), sub: "Response latency" },
+                        { label: "Embed Time", value: formatMs(perf?.embedTime), sub: "Vector encoding" },
+                        { label: "Retrieval", value: formatMs(perf?.retrievalTime), sub: "Chunk search" },
+                        { label: "LLM Gen", value: formatMs(perf?.llmGenTime), sub: "Token generation" },
+                        { label: "Tokens", value: formatNumber(perf?.totalTokens), sub: "Input + Output" },
+                        // Show cost exactly as returned by backend (no rounding/formatting)
+                        { label: "Cost", value: perf?.cost, sub: "Per query" },
+                      ].map((metric) => (
+                        <div key={metric.label} className={styles.metricCard}>
+                          <span>{metric.label}</span>
+                          <strong>{metric.value}</strong>
+                          <small>{metric.sub}</small>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

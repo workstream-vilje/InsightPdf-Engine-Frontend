@@ -98,6 +98,7 @@ export const PROCESSING_LINES = [
 
 export const createWorkspaceState = () => ({
   files: [],
+  selectedFileId: null,
   chunkLength: 1000,
   dataExtraction: ["pymupdf", "unstructured"],
   textProcessing: "recursive",
