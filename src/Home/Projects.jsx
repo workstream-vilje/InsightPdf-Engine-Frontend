@@ -36,7 +36,7 @@ import { Slider } from "@/components/ui/slider";
 import fileApi from "@/networking/apis/file";
 import projectApi from "@/networking/apis/project";
 import queryApi from "@/networking/apis/query";
-import { getExperimentPerformanceById } from "@/lib/api";
+import { getExperimentLogs, getExperimentPerformanceById } from "@/lib/api";
 import {
   DATA_EXTRACTION_OPTIONS,
   DEFAULT_QUALITY_METRICS,
@@ -77,6 +77,55 @@ const formatMs = (value) => `${(Number(value || 0) / 1000).toFixed(2)}s`;
 
 const formatNumber = (value) => Number(value || 0).toLocaleString();
 
+const formatCost = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return String(value ?? "-");
+  return numeric < 0.001 ? numeric.toFixed(4) : numeric.toFixed(3);
+};
+
+const formatAccuracy = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "-";
+  return `${Math.round(numeric * 100)}%`;
+};
+
+const pruneWorkspaceDataForFiles = (workspace, backendFileIds) => {
+  const allowedIds = new Set(Array.from(backendFileIds || []).map((id) => String(id)));
+  const fileStillExists =
+    workspace?.selectedFileId != null && allowedIds.has(String(workspace.selectedFileId));
+
+  const conversation = (workspace?.conversation || []).filter((entry) => {
+    if (entry?.fileId != null) {
+      return allowedIds.has(String(entry.fileId));
+    }
+    return true;
+  });
+
+  const responseVariants = fileStillExists
+    ? (workspace?.responseVariants || []).filter((variant) => {
+        if (variant?.fileId != null) {
+          return allowedIds.has(String(variant.fileId));
+        }
+        return true;
+      })
+    : [];
+
+  return {
+    conversation,
+    responseVariants,
+    response: fileStillExists ? workspace?.response || "" : "",
+    responseVisible: fileStillExists ? workspace?.responseVisible : false,
+    retrievedChunks: fileStillExists ? workspace?.retrievedChunks || [] : [],
+    usedStrategies: fileStillExists ? workspace?.usedStrategies || [] : [],
+    experimentId: fileStillExists ? workspace?.experimentId || null : null,
+    submittedQuery: fileStillExists ? workspace?.submittedQuery || "" : "",
+    activeRightSection:
+      !fileStillExists && workspace?.activeRightSection === "performance"
+        ? "response"
+        : workspace?.activeRightSection,
+  };
+};
+
 const mapUploadedFileToWorkspaceFile = (file, category) => ({
   id: String(file?.id ?? `${file?.file_name}-${Date.now()}`),
   name: file?.file_name || "Unknown file",
@@ -85,6 +134,7 @@ const mapUploadedFileToWorkspaceFile = (file, category) => ({
   fileId: file?.id ?? null,
   fileType: file?.file_type || null,
   pages: file?.pages_count ?? null,
+  allowedTechniques: file?.allowed_techniques || null,
 });
 
 const mapBackendProjectToCanvasProject = (project) => ({
@@ -260,6 +310,36 @@ const buildVariantStrategiesSummary = (workspace, result, allowedTechniques = nu
   ].filter((item) => item.value);
 };
 
+const getAllowedVectorStoreOptions = (allowedTechniques) => {
+  const allowed = new Set((allowedTechniques?.vector_stores || []).map(String));
+  return VECTOR_STORE_OPTIONS.filter((option) => allowed.has(option.value));
+};
+
+const getAllowedEmbeddingOptions = (allowedTechniques) => {
+  const embeddings = allowedTechniques?.embeddings || [];
+  const allowedValues = new Set();
+
+  embeddings.forEach((item) => {
+    const provider = String(item?.provider || "").toLowerCase();
+    const model = String(item?.model || "").toLowerCase();
+
+    if (provider === "openai") {
+      allowedValues.add("openai");
+    }
+    if (provider === "ollama" || model === "nomic-embed-text") {
+      allowedValues.add("ollama-nomic-embed");
+    }
+    if (model === "text-embedding-3-large") {
+      allowedValues.add("text-embedding-3-large");
+    }
+    if (model === "text-embedding-3-small") {
+      allowedValues.add("text-embedding-3-small");
+    }
+  });
+
+  return EMBEDDING_OPTIONS.filter((option) => allowedValues.has(option.value));
+};
+
 const TypedLine = ({ text }) => {
   const [visibleText, setVisibleText] = useState("");
 
@@ -375,6 +455,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const [isRightSidebarExpanded, setIsRightSidebarExpanded] = useState(false);
   const [chatPanelOffset, setChatPanelOffset] = useState(420);
   const [chatGreeting, setChatGreeting] = useState("Hello");
+  const [techniqueOverlay, setTechniqueOverlay] = useState(null);
   const fileInputRef = useRef(null);
   const queryInputRef = useRef(null);
   const workspaceContentRef = useRef(null);
@@ -391,22 +472,86 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const [perf, setPerf] = useState(null);
   const [perfLoading, setPerfLoading] = useState(false);
   const [perfError, setPerfError] = useState(null);
+  const [experimentRuns, setExperimentRuns] = useState([]);
+  const [selectedPerformanceResponseIndex, setSelectedPerformanceResponseIndex] = useState(0);
 
-  // Prefer workspace-stored experiment id if available
-  const experimentId = activeWorkspace?.experimentId || activeWorkspace?.experiment_id || null;
+  const performanceResponseVariants = activeWorkspace?.responseVariants || [];
+  const selectedPerformanceVariant =
+    performanceResponseVariants[selectedPerformanceResponseIndex] || performanceResponseVariants[0] || null;
+  const experimentId =
+    selectedPerformanceVariant?.experimentId ||
+    activeWorkspace?.experimentId ||
+    activeWorkspace?.experiment_id ||
+    null;
+
+  useEffect(() => {
+    if (selectedPerformanceResponseIndex < performanceResponseVariants.length) return;
+    setSelectedPerformanceResponseIndex(0);
+  }, [performanceResponseVariants.length, selectedPerformanceResponseIndex]);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      if (!experimentId) return;
+      if (!experimentId) {
+        setPerf(null);
+        setExperimentRuns([]);
+        setPerfError(null);
+        return;
+      }
       if (activeWorkspace?.activeRightSection !== "performance") return;
       setPerfLoading(true);
       setPerfError(null);
       try {
-        const data = await getExperimentPerformanceById(experimentId);
-        if (!cancelled) setPerf(data);
+        const [performanceResult, logsResult] = await Promise.allSettled([
+          getExperimentPerformanceById(experimentId),
+          getExperimentLogs(experimentId),
+        ]);
+        const logsData =
+          logsResult.status === "fulfilled" && Array.isArray(logsResult.value)
+            ? logsResult.value
+            : [];
+        const latestLog = logsData[0] || null;
+        const performanceData =
+          performanceResult.status === "fulfilled"
+            ? performanceResult.value
+            : latestLog
+            ? {
+                totalTime: latestLog.totalTime,
+                embedTime: latestLog.embedTime,
+                retrievalTime: latestLog.retrievalTime,
+                llmGenTime: latestLog.llmGenTime,
+                totalTokens: latestLog.totalTokens,
+                cost: latestLog.cost,
+                experimentId: latestLog.experimentId,
+                experimentCode: latestLog.experimentCode,
+                createdAt: latestLog.createdAt,
+              }
+            : null;
+
+        if (!cancelled) {
+          setPerf(performanceData);
+          setExperimentRuns(logsData);
+          if (performanceData || logsData.length > 0) {
+            setPerfError(null);
+          } else {
+            const performanceMessage =
+              performanceResult.status === "rejected"
+                ? performanceResult.reason?.payload?.detail ||
+                  performanceResult.reason?.message
+                : null;
+            const logsMessage =
+              logsResult.status === "rejected"
+                ? logsResult.reason?.payload?.detail || logsResult.reason?.message
+                : null;
+            setPerfError(performanceMessage || logsMessage || "No stored rows found for this experiment");
+          }
+        }
       } catch (e) {
-        if (!cancelled) setPerfError(e?.message || "Failed to load performance");
+        if (!cancelled) {
+          setPerfError(e?.message || "Failed to load performance");
+          setPerf(null);
+          setExperimentRuns([]);
+        }
       } finally {
         if (!cancelled) setPerfLoading(false);
       }
@@ -416,6 +561,19 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
       cancelled = true;
     };
   }, [experimentId, activeWorkspace?.activeRightSection]);
+
+  const latestPerformanceCards = useMemo(() => {
+    if (!perf) return [];
+
+    return [
+      { label: "Total Time", value: formatMs(perf?.totalTime), sub: "Response latency" },
+      { label: "Embed Time", value: formatMs(perf?.embedTime), sub: "Vector encoding" },
+      { label: "Retrieval", value: formatMs(perf?.retrievalTime), sub: "Chunk search" },
+      { label: "LLM Gen", value: formatMs(perf?.llmGenTime), sub: "Token generation" },
+      { label: "Tokens", value: formatNumber(perf?.totalTokens), sub: "Input + output" },
+      { label: "Cost", value: formatCost(perf?.cost), sub: "Per query" },
+    ];
+  }, [perf]);
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
@@ -561,11 +719,19 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
           current.selectedFileId != null && backendIds.has(String(current.selectedFileId))
             ? current.selectedFileId
             : mapped[0]?.fileId ?? null;
+        const prunedData = pruneWorkspaceDataForFiles(
+          {
+            ...current,
+            selectedFileId: nextSelected,
+          },
+          backendIds,
+        );
 
         return {
           ...current,
           files: mapped,
           selectedFileId: nextSelected,
+          ...prunedData,
         };
       });
     } catch (e) {
@@ -576,6 +742,20 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   useEffect(() => {
     syncProjectFilesFromBackend();
   }, [syncProjectFilesFromBackend]);
+
+  useEffect(() => {
+    if (!activeWorkspace?.files) return;
+
+    const selectedFile =
+      activeWorkspace.files.find(
+        (file) => Number(file?.fileId) === Number(activeWorkspace?.selectedFileId),
+      ) || activeWorkspace.files[0];
+
+    updateActiveWorkspace((current) => ({
+      ...current,
+      allowedTechniques: selectedFile?.allowedTechniques || null,
+    }));
+  }, [activeWorkspace?.files, activeWorkspace?.selectedFileId, updateActiveWorkspace]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -601,6 +781,18 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     () => Array.from(new Set([...PROJECT_CATEGORIES, ...projects.map((project) => project.category).filter(Boolean)])),
     [projects],
   );
+
+  const allowedVectorStoreOptions = useMemo(() => {
+    if (!activeWorkspace?.allowedTechniques) return VECTOR_STORE_OPTIONS;
+    const options = getAllowedVectorStoreOptions(activeWorkspace.allowedTechniques);
+    return options.length > 0 ? options : VECTOR_STORE_OPTIONS;
+  }, [activeWorkspace?.allowedTechniques]);
+
+  const allowedEmbeddingOptions = useMemo(() => {
+    if (!activeWorkspace?.allowedTechniques) return EMBEDDING_OPTIONS;
+    const options = getAllowedEmbeddingOptions(activeWorkspace.allowedTechniques);
+    return options.length > 0 ? options : EMBEDDING_OPTIONS;
+  }, [activeWorkspace?.allowedTechniques]);
 
   const toggleWorkspaceValue = useCallback(
     (key, value) => {
@@ -888,6 +1080,20 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const handleStartQuery = () => {
     if (!activeWorkspace?.query.trim() || !activeProjectId) return;
     const submittedQuery = activeWorkspace.query.trim();
+    const hasConfigurationSelected =
+      Array.isArray(activeWorkspace?.retrievalStrategies) &&
+      activeWorkspace.retrievalStrategies.length > 0 &&
+      Array.isArray(activeWorkspace?.vectorStores) &&
+      activeWorkspace.vectorStores.length > 0 &&
+      Array.isArray(activeWorkspace?.embeddingModels) &&
+      activeWorkspace.embeddingModels.length > 0;
+
+    if (!hasConfigurationSelected) {
+      if (typeof window !== "undefined") {
+        window.alert("Please select configuration then send the query.");
+      }
+      return;
+    }
 
     const selectableFiles = (activeWorkspace.files || []).filter((file) => file?.fileId);
     const selectedFileIdRaw =
@@ -962,6 +1168,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
 
             return {
               experimentId: result?.experiment_id || null,
+              fileId: selectedFileId ?? targetFile.fileId,
               db: result?.db || result?.retrieval || "Default",
               response: savedResponse?.response || result?.answer || "",
               chunks: savedResponse?.chunks || result?.chunks || [],
@@ -983,10 +1190,20 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
           experimentId: primaryVariant?.experimentId || current?.experimentId || null,
           selectedFileId: selectedFileId ?? current?.selectedFileId ?? null,
           phase: "query-complete",
+          submittedQuery: "",
           response: finalAnswer,
           responseVisible: true,
           usedStrategies: primaryVariant?.usedStrategies || [],
           responseVariants,
+          conversation: [
+            ...(current?.conversation || []),
+            {
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              fileId: selectedFileId ?? targetFile.fileId,
+              query: submittedQuery,
+              responseVariants,
+            },
+          ],
           retrievedChunks: finalChunks.map((chunk, index) => ({
             title: chunk?.source || targetFile.name || `Chunk ${index + 1}`,
             page: chunk?.page || index + 1,
@@ -1006,6 +1223,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
         updateActiveWorkspace((current) => ({
           ...current,
           phase: "query-ready",
+          submittedQuery: "",
           response: "",
           responseVisible: false,
         }));
@@ -1460,13 +1678,11 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                 <SidebarSection
                   icon={FolderKanban}
                   title="Vector DB"
-                  description="Only previously selected vector stores"
+                  description="Only techniques selected during file processing"
                   expanded={isLeftSidebarExpanded}
                 >
                   <MultiSelectChips
-                    options={VECTOR_STORE_OPTIONS.filter((option) =>
-                      activeWorkspace.vectorStores.includes(option.value),
-                    )}
+                    options={allowedVectorStoreOptions}
                     selectedValues={activeWorkspace.vectorStores}
                     onToggle={(value) => toggleWorkspaceValue("vectorStores", value)}
                   />
@@ -1475,13 +1691,11 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                 <SidebarSection
                   icon={Sparkles}
                   title="Embedding"
-                  description="Only previously selected embeddings"
+                  description="Only techniques selected during file processing"
                   expanded={isLeftSidebarExpanded}
                 >
                   <MultiSelectChips
-                    options={EMBEDDING_OPTIONS.filter((option) =>
-                      activeWorkspace.embeddingModels.includes(option.value),
-                    )}
+                    options={allowedEmbeddingOptions}
                     selectedValues={activeWorkspace.embeddingModels}
                     onToggle={(value) => toggleWorkspaceValue("embeddingModels", value)}
                   />
@@ -1622,7 +1836,6 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
             </button>
 
             <div className={styles.chatPanelShell}>
-            <div className={styles.workspaceCenterStage}>
               {showChatWelcome && (
                 <div className={styles.chatWelcomeShell}>
                   <div className={styles.chatWelcomeHeadingBlock}>
@@ -1634,6 +1847,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                 </div>
               )}
 
+            <div className={styles.workspaceCenterStage}>
               {activeWorkspace.visibleLines.length > 0 && (
                 <div className={styles.statusList}>
                   {activeWorkspace.visibleLines.map((line) => (
@@ -1642,100 +1856,117 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                 </div>
               )}
 
+              {(activeWorkspace.conversation || []).map((entry) => (
+                <div key={entry.id} className={styles.conversationBlock}>
+                  <div className={styles.queryLine}>{entry.query}</div>
+                  {(entry.responseVariants || []).map((variant, index) => (
+                    <motion.div
+                      key={`${entry.id}-${variant.db}-${variant.experimentId || index}`}
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={styles.responseBlock}
+                    >
+                      <div className={styles.responseTextBlock}>
+                        <div className={styles.chatMessageLabel}>
+                          Response-{index + 1}
+                        </div>
+                        <p>{variant.response}</p>
+                        {variant.usedStrategies?.length > 0 && (
+                          <button
+                            type="button"
+                            className={styles.techniqueButton}
+                            onClick={() =>
+                              setTechniqueOverlay({
+                                title: `Response-${index + 1}`,
+                                strategies: variant.usedStrategies,
+                              })
+                            }
+                          >
+                            Techniques used
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              ))}
+
               {activeWorkspace.submittedQuery && (
-                <motion.div
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={styles.userMessageRow}
-                >
-                  <div className={styles.userMessageBubble}>
-                    <div className={styles.chatMessageLabel}>You</div>
-                    <p>{activeWorkspace.submittedQuery}</p>
-                  </div>
-                </motion.div>
+                <div className={styles.queryLine}>{activeWorkspace.submittedQuery}</div>
               )}
 
               {activeWorkspace.phase === "query-processing" && (
-                <div className={styles.aiMessageRow}>
-                  <div className={styles.aiMessageBubble}>
-                    <div className={styles.chatMessageLabel}>Assistant</div>
-                    <div className={styles.generatingState}>
-                      <div className={styles.loadingDot} />
-                      <span>Generating answer...</span>
-                    </div>
-                  </div>
-                </div>
+                <div className={styles.answeringState}>answering...</div>
               )}
+            </div>
 
-              {activeWorkspace.responseVisible && (
-                (activeWorkspace.responseVariants?.length > 0
-                  ? activeWorkspace.responseVariants
-                  : [
-                      {
-                        db: "Default",
-                        response: activeWorkspace.response,
-                        usedStrategies: activeWorkspace.usedStrategies || [],
-                      },
-                    ]).map((variant, index) => (
-                  <motion.div
-                    key={`${variant.db}-${variant.experimentId || index}`}
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={styles.aiMessageRow}
-                  >
-                    <div className={styles.aiMessageBubble}>
-                      <div className={styles.chatMessageLabel}>
-                        Assistant{variant?.db ? ` - ${variant.db}` : ""}
-                      </div>
-                      {variant.usedStrategies?.length > 0 && (
-                        <div className={styles.strategySummary}>
-                          {variant.usedStrategies.map((item) => (
-                            <span key={`${variant.db}-${item.label}-${item.value}`} className={styles.strategyPill}>
-                              <strong>{item.label}:</strong> {item.value}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <p>{variant.response}</p>
-                    </div>
-                  </motion.div>
-                ))
-              )}
-
-              <div className={styles.queryDock}>
-                <div className={classNames(styles.queryInputShell, styles.queryInputShellHero)}>
-                  <Input
-                    ref={queryInputRef}
-                    value={activeWorkspace.query}
-                    onChange={(event) =>
-                      updateActiveWorkspace((current) => ({
-                        ...current,
-                        query: event.target.value,
-                      }))
+            <div className={styles.queryDock}>
+              <div className={classNames(styles.queryInputShell, styles.queryInputShellHero)}>
+                <Input
+                  ref={queryInputRef}
+                  value={activeWorkspace.query}
+                  onChange={(event) =>
+                    updateActiveWorkspace((current) => ({
+                      ...current,
+                      query: event.target.value,
+                    }))
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      handleStartQuery();
                     }
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        handleStartQuery();
-                      }
-                    }}
-                    placeholder="How can I help you today?"
-                    className={classNames(styles.queryInput, styles.queryInputHero)}
-                  />
+                  }}
+                  placeholder="How can I help you today?"
+                  className={classNames(styles.queryInput, styles.queryInputHero)}
+                />
 
-                  <Button
-                    className={classNames(styles.querySendButton, styles.querySendButtonHero)}
-                    onClick={handleStartQuery}
-                    title="Send query"
-                  >
-                    <Send size={16} />
-                  </Button>
-                </div>
+                <Button
+                  className={classNames(styles.querySendButton, styles.querySendButtonHero)}
+                  onClick={handleStartQuery}
+                  title="Send query"
+                >
+                  <Send size={16} />
+                </Button>
               </div>
             </div>
 
             </div>
           </div>
         </section>
+
+        {techniqueOverlay && (
+          <div
+            className={styles.techniqueOverlayBackdrop}
+            onClick={() => setTechniqueOverlay(null)}
+          >
+            <div
+              className={styles.techniqueOverlayCard}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className={styles.techniqueOverlayHeader}>
+                <div className={styles.chatMessageLabel}>{techniqueOverlay.title}</div>
+                <button
+                  type="button"
+                  className={styles.techniqueOverlayClose}
+                  onClick={() => setTechniqueOverlay(null)}
+                >
+                  Close
+                </button>
+              </div>
+              <div className={styles.strategySummary}>
+                {techniqueOverlay.strategies.map((item) => (
+                  <div
+                    key={`${item.label}-${item.value}`}
+                    className={styles.strategyRow}
+                  >
+                    <span className={styles.strategyLabel}>{item.label}</span>
+                    <span className={styles.strategyValue}>{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       <aside
@@ -1801,7 +2032,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                 </div>
               )}
 
-              {activeWorkspace.activeRightSection === "performance" && (
+              {activeWorkspace.activeRightSection === "performance-legacy-disabled" && (
                 <div className={styles.insightPanel}>
                   <h3>Execution Performance</h3>
                   {perfLoading && <div>Loading…</div>}
@@ -1823,6 +2054,53 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                           <small>{metric.sub}</small>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeWorkspace.activeRightSection === "performance" && (
+                <div className={styles.insightPanel}>
+                  <div className={styles.performanceHeader}>
+                    <div>
+                      <h3>Execution Performance</h3>
+                      <p>Switch between responses to view their stored performance metrics.</p>
+                    </div>
+                    {performanceResponseVariants.length > 0 && (
+                      <div className={styles.performanceSelector}>
+                        {performanceResponseVariants.slice(0, 2).map((variant, index) => (
+                          <button
+                            key={variant?.experimentId || `response-${index}`}
+                            type="button"
+                            className={`${styles.performanceSelectorButton} ${
+                              index === selectedPerformanceResponseIndex
+                                ? styles.performanceSelectorButtonActive
+                                : ""
+                            }`}
+                            onClick={() => setSelectedPerformanceResponseIndex(index)}
+                          >
+                            Res-{index + 1}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {perfLoading && <div>Loading...</div>}
+                  {perfError && <div>{perfError}</div>}
+                  {!perfLoading && !perfError && !perf && experimentRuns.length === 0 && (
+                    <div>No stored rows found for this experiment yet.</div>
+                  )}
+                  {!perfLoading && !perfError && perf && (
+                    <div className={styles.performancePanel}>
+                      <div className={styles.metricGrid}>
+                        {latestPerformanceCards.map((metric) => (
+                          <div key={metric.label} className={styles.metricCard}>
+                            <span>{metric.label}</span>
+                            <strong>{metric.value}</strong>
+                            <small>{metric.sub}</small>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
