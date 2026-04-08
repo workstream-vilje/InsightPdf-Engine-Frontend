@@ -100,7 +100,7 @@ export const createWorkspaceState = () => ({
   files: [],
   chunkLength: 1000,
   dataExtraction: ["pymupdf", "unstructured"],
-  textProcessing: "recursive",
+  textProcessing: ["recursive"],
   embeddingModels: ["openai", "text-embedding-3-large"],
   vectorStores: ["chromadb", "pgvector"],
   retrievalStrategies: ["semantic-similarity"],
