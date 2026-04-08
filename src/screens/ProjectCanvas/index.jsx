@@ -40,7 +40,6 @@ import {
   DATA_EXTRACTION_OPTIONS,
   DEFAULT_EXECUTION_METRICS,
   DEFAULT_QUALITY_METRICS,
-  DEFAULT_RESPONSE,
   EMBEDDING_OPTIONS,
   INITIAL_PROJECTS,
   PROJECT_CATEGORIES,
@@ -75,6 +74,17 @@ const mapUploadedFileToWorkspaceFile = (file, category) => ({
   fileId: file?.id ?? null,
   fileType: file?.file_type || null,
   pages: file?.pages_count ?? null,
+});
+
+const mapBackendProjectToCanvasProject = (project) => ({
+  id: String(project?.id),
+  name: project?.project_name || "Untitled Project",
+  category: project?.category || "General",
+  description: `${project?.category || "General"} workspace for uploads, chunking, embeddings, and query evaluation.`,
+  region: project?.project_code || "Backend project",
+  tier: "Connected",
+  documents: 0,
+  lastUpdated: "Synced",
 });
 
 const buildSharedPipelineConfig = (workspace) => {
@@ -326,6 +336,49 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const syncProjectsFromBackend = async () => {
+      try {
+        const response = await projectApi.fetchAllProjects();
+        const backendProjects = (response?.data || []).map(mapBackendProjectToCanvasProject);
+
+        if (!isMounted) return;
+
+        setProjects(backendProjects);
+        setProjectWorkspaces((current) => {
+          const next = {};
+          backendProjects.forEach((project) => {
+            next[project.id] = current[project.id] || createWorkspaceState();
+          });
+          return next;
+        });
+        setActiveProjectId((current) => {
+          const requestedProjectId = initialProjectId ? String(initialProjectId) : null;
+          const currentProjectId = current ? String(current) : null;
+          const availableIds = new Set(backendProjects.map((project) => String(project.id)));
+
+          if (requestedProjectId && availableIds.has(requestedProjectId)) {
+            return requestedProjectId;
+          }
+          if (currentProjectId && availableIds.has(currentProjectId)) {
+            return currentProjectId;
+          }
+          return backendProjects[0]?.id ?? null;
+        });
+      } catch (error) {
+        console.error("Failed to sync projects from backend", error);
+      }
+    };
+
+    syncProjectsFromBackend();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [initialProjectId]);
+
+  useEffect(() => {
     if (typeof window === "undefined" || !hasHydratedRef.current) return;
     window.localStorage.setItem("rag-canvas-projects", JSON.stringify(projects));
   }, [projects]);
@@ -538,6 +591,15 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     }));
 
     try {
+      const availableProjects = await projectApi.fetchAllProjects();
+      const activeProjectExists = (availableProjects?.data || []).some(
+        (project) => String(project?.id) === String(activeProject.id),
+      );
+
+      if (!activeProjectExists) {
+        throw new Error("The selected project no longer exists. Please reselect or recreate it.");
+      }
+
       const response = await fileApi.uploadProjectFiles(activeProject.id, formData);
       const uploadedFiles = (response?.data || []).map((file) =>
         mapUploadedFileToWorkspaceFile(file, activeProject?.category),
@@ -611,6 +673,15 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
       }));
 
       try {
+        const availableProjects = await projectApi.fetchAllProjects();
+        const activeProjectExists = (availableProjects?.data || []).some(
+          (project) => String(project?.id) === String(activeProjectId),
+        );
+
+        if (!activeProjectExists) {
+          throw new Error("The selected project no longer exists. Please reselect or recreate it.");
+        }
+
         const { processingConfig } = buildSharedPipelineConfig(activeWorkspace);
         updateActiveWorkspace((current) => ({
           ...current,
@@ -700,14 +771,34 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
           query: activeWorkspace.query,
         });
         const response = await queryApi.runQuery(payload);
-        const chunks = response?.chunks || [];
+        const primaryResult =
+          Array.isArray(response?.comparison_results) && response.comparison_results.length > 0
+            ? response.comparison_results[0]
+            : response;
+        let savedResponse = null;
+
+        if (primaryResult?.experiment_id) {
+          try {
+            const saved = await queryApi.fetchSavedResponse({
+              projectId: activeProjectId,
+              fileId: targetFile.fileId,
+              experimentId: primaryResult.experiment_id,
+            });
+            savedResponse = saved?.data?.[0] || null;
+          } catch (savedResponseError) {
+            savedResponse = null;
+          }
+        }
+
+        const finalAnswer = savedResponse?.response || primaryResult?.answer || "";
+        const finalChunks = savedResponse?.chunks || primaryResult?.chunks || [];
 
         updateActiveWorkspace((current) => ({
           ...current,
           phase: "query-complete",
-          response: response?.answer || DEFAULT_RESPONSE,
+          response: finalAnswer,
           responseVisible: true,
-          retrievedChunks: chunks.map((chunk, index) => ({
+          retrievedChunks: finalChunks.map((chunk, index) => ({
             title: chunk?.source || targetFile.name || `Chunk ${index + 1}`,
             page: chunk?.page || index + 1,
             score: Number(chunk?.relevance_score ?? chunk?.raw_score ?? 0),
