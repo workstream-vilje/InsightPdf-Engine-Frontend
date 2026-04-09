@@ -227,7 +227,7 @@
 }
 
 .chartGrid {
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .chartScroller {
@@ -300,6 +300,10 @@
 
   .sidebarButton {
     flex: 1 1 180px;
+  }
+
+  .chartGrid {
+    grid-template-columns: 1fr;
   }
 }
 

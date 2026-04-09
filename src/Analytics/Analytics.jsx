@@ -17,8 +17,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
   PolarAngleAxis,
   PolarGrid,
   Radar,
@@ -42,6 +40,8 @@ const TAB_ICONS = {
   recommendation: Trophy,
   profiles: Sparkles,
 };
+
+const CHART_BAR_SIZE = 56;
 
 const MetricsScreen = ({ projectId, projectName, categoryName }) => {
   const router = useRouter();
@@ -155,46 +155,22 @@ const MetricsScreen = ({ projectId, projectName, categoryName }) => {
 
   const currentLlm = historyEntries[0]?.config?.llm || "-";
   const responseTimeVsDb = comparisonData?.responseTimeVsDb || [];
-  const chunkSizeVsAccuracy = comparisonData?.chunkSizeVsAccuracy || [];
   const embeddingVsAccuracy = comparisonData?.embeddingVsAccuracy || [];
   const retrievalVsAccuracy = comparisonData?.retrievalVsAccuracy || [];
-  const dbCostMap = useMemo(() => {
-    const buckets = new Map();
-
-    historyEntries.forEach((entry) => {
-      const dbName = String(entry?.config?.db || "").trim().toLowerCase();
-      const costValue = Number.parseFloat(String(entry?.metrics?.cost || "0").replace("$", ""));
-
-      if (!dbName || !Number.isFinite(costValue)) return;
-
-      const current = buckets.get(dbName) || { total: 0, count: 0 };
-      buckets.set(dbName, {
-        total: current.total + costValue,
-        count: current.count + 1,
-      });
-    });
-
-    return buckets;
-  }, [historyEntries]);
-
   const comparisonCards = useMemo(
     () =>
       responseTimeVsDb.map((item) => {
-        const dbKey = String(item?.name || "").trim().toLowerCase();
         const latency = Number(item?.time || 0) / 1000;
-        const costBucket = dbCostMap.get(dbKey);
-        const costValue =
-          costBucket && costBucket.count > 0 ? costBucket.total / costBucket.count : 0;
 
         return {
           strategy: item?.name || "Unknown",
           accuracy: Number(item?.accuracy || 0),
           latency,
-          cost: costValue,
+          cost: Number(item?.cost || 0),
           winner: false,
         };
       }),
-    [dbCostMap, responseTimeVsDb],
+    [responseTimeVsDb],
   );
 
   const bestComparison = useMemo(() => {
@@ -213,17 +189,22 @@ const MetricsScreen = ({ projectId, projectName, categoryName }) => {
     [responseTimeVsDb],
   );
 
-  const chunkAccuracyData = useMemo(
+  const costByVectorStoreData = useMemo(
     () =>
-      chunkSizeVsAccuracy.map((item) => ({
-        size: item?.size || 0,
-        ...Object.fromEntries(
-          Object.entries(item || {})
-            .filter(([key]) => key !== "size")
-            .map(([key, value]) => [key, Number(value || 0)]),
-        ),
+      responseTimeVsDb.map((item) => ({
+        name: item?.name || "Unknown",
+        cost: Number(item?.cost || 0),
       })),
-    [chunkSizeVsAccuracy],
+    [responseTimeVsDb],
+  );
+
+  const totalTokensByVectorStoreData = useMemo(
+    () =>
+      responseTimeVsDb.map((item) => ({
+        name: item?.name || "Unknown",
+        totalTokens: Number(item?.total_tokens || 0),
+      })),
+    [responseTimeVsDb],
   );
 
   const qualityRadarData = useMemo(() => {
@@ -356,48 +337,67 @@ const MetricsScreen = ({ projectId, projectName, categoryName }) => {
           {activeTab === "charts" && (
             <div className={styles.chartScroller}>
               <div className={styles.chartStack}>
-                <div className={styles.chartCard}>
-                  <div className={styles.panelHeader}>
-                    <BarChart3 size={18} />
-                    <h2>Response Time by Vector Store</h2>
-                  </div>
-                  <ResponsiveContainer width="100%" height={190}>
-                    <BarChart data={responseChartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
-                      <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
-                      <YAxis stroke="#64748b" fontSize={11} />
-                      <Tooltip />
-                      <Bar dataKey="time" fill="rgb(var(--primary))" radius={[8, 8, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
                 <div className={styles.chartGrid}>
                   <div className={styles.chartCard}>
                     <div className={styles.panelHeader}>
-                      <Sparkles size={18} />
-                      <h2>Chunk Accuracy</h2>
+                      <BarChart3 size={18} />
+                      <h2>Response Time by Vector Store</h2>
                     </div>
-                    <ResponsiveContainer width="100%" height={180}>
-                      <LineChart data={chunkAccuracyData}>
+                    <ResponsiveContainer width="100%" height={190}>
+                      <BarChart data={responseChartData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
-                        <XAxis dataKey="size" stroke="#64748b" fontSize={11} />
+                        <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
                         <YAxis stroke="#64748b" fontSize={11} />
                         <Tooltip />
-                        {chunkAccuracyData[0] &&
-                          Object.keys(chunkAccuracyData[0])
-                            .filter((key) => key !== "size")
-                            .map((key, index) => (
-                              <Line
-                                key={key}
-                                type="monotone"
-                                dataKey={key}
-                                stroke={index % 2 === 0 ? "#38bdf8" : "#2563eb"}
-                                strokeWidth={3}
-                                dot={false}
-                              />
-                            ))}
-                      </LineChart>
+                        <Bar
+                          dataKey="time"
+                          fill="rgb(var(--primary))"
+                          radius={[8, 8, 0, 0]}
+                          barSize={CHART_BAR_SIZE}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className={styles.chartCard}>
+                    <div className={styles.panelHeader}>
+                      <Database size={18} />
+                      <h2>Total Tokens by Vector Store</h2>
+                    </div>
+                    <ResponsiveContainer width="100%" height={190}>
+                      <BarChart data={totalTokensByVectorStoreData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
+                        <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
+                        <YAxis stroke="#64748b" fontSize={11} />
+                        <Tooltip />
+                        <Bar
+                          dataKey="totalTokens"
+                          fill="#0f766e"
+                          radius={[8, 8, 0, 0]}
+                          barSize={CHART_BAR_SIZE}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className={styles.chartCard}>
+                    <div className={styles.panelHeader}>
+                      <Sparkles size={18} />
+                      <h2>Cost by Vector Store</h2>
+                    </div>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={costByVectorStoreData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
+                        <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
+                        <YAxis stroke="#64748b" fontSize={11} />
+                        <Tooltip />
+                        <Bar
+                          dataKey="cost"
+                          fill="#38bdf8"
+                          radius={[8, 8, 0, 0]}
+                          barSize={CHART_BAR_SIZE}
+                        />
+                      </BarChart>
                     </ResponsiveContainer>
                   </div>
 

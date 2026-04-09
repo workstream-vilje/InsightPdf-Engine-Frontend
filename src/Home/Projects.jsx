@@ -36,13 +36,12 @@ import { Slider } from "@/components/ui/slider";
 import fileApi from "@/networking/apis/file";
 import projectApi from "@/networking/apis/project";
 import queryApi from "@/networking/apis/query";
-import { getExperimentLogs, getExperimentPerformanceById } from "@/lib/api";
+import { getExperimentPerformanceById } from "@/lib/api";
 import {
   DATA_EXTRACTION_OPTIONS,
   DEFAULT_QUALITY_METRICS,
   EMBEDDING_OPTIONS,
   INITIAL_PROJECTS,
-  PROJECT_CATEGORIES,
   RETRIEVAL_STRATEGY_OPTIONS,
   TEXT_PROCESSING_OPTIONS,
   VECTOR_STORE_OPTIONS,
@@ -144,7 +143,7 @@ const mapBackendProjectToCanvasProject = (project) => ({
   description: `${project?.category || "General"} workspace for uploads, chunking, embeddings, and query evaluation.`,
   region: project?.project_code || "Backend project",
   tier: "Connected",
-  documents: 0,
+  documents: Number(project?.documents || 0),
   lastUpdated: "Synced",
 });
 
@@ -472,7 +471,6 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const [perf, setPerf] = useState(null);
   const [perfLoading, setPerfLoading] = useState(false);
   const [perfError, setPerfError] = useState(null);
-  const [experimentRuns, setExperimentRuns] = useState([]);
   const [selectedPerformanceResponseIndex, setSelectedPerformanceResponseIndex] = useState(0);
 
   const performanceResponseVariants = activeWorkspace?.responseVariants || [];
@@ -494,7 +492,6 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     const load = async () => {
       if (!experimentId) {
         setPerf(null);
-        setExperimentRuns([]);
         setPerfError(null);
         return;
       }
@@ -502,55 +499,20 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
       setPerfLoading(true);
       setPerfError(null);
       try {
-        const [performanceResult, logsResult] = await Promise.allSettled([
-          getExperimentPerformanceById(experimentId),
-          getExperimentLogs(experimentId),
-        ]);
-        const logsData =
-          logsResult.status === "fulfilled" && Array.isArray(logsResult.value)
-            ? logsResult.value
-            : [];
-        const latestLog = logsData[0] || null;
-        const performanceData =
-          performanceResult.status === "fulfilled"
-            ? performanceResult.value
-            : latestLog
-            ? {
-                totalTime: latestLog.totalTime,
-                embedTime: latestLog.embedTime,
-                retrievalTime: latestLog.retrievalTime,
-                llmGenTime: latestLog.llmGenTime,
-                totalTokens: latestLog.totalTokens,
-                cost: latestLog.cost,
-                experimentId: latestLog.experimentId,
-                experimentCode: latestLog.experimentCode,
-                createdAt: latestLog.createdAt,
-              }
-            : null;
+        const performanceData = await getExperimentPerformanceById(experimentId);
 
         if (!cancelled) {
           setPerf(performanceData);
-          setExperimentRuns(logsData);
-          if (performanceData || logsData.length > 0) {
+          if (performanceData) {
             setPerfError(null);
           } else {
-            const performanceMessage =
-              performanceResult.status === "rejected"
-                ? performanceResult.reason?.payload?.detail ||
-                  performanceResult.reason?.message
-                : null;
-            const logsMessage =
-              logsResult.status === "rejected"
-                ? logsResult.reason?.payload?.detail || logsResult.reason?.message
-                : null;
-            setPerfError(performanceMessage || logsMessage || "No stored rows found for this experiment");
+            setPerfError("No stored rows found for this experiment");
           }
         }
       } catch (e) {
         if (!cancelled) {
           setPerfError(e?.message || "Failed to load performance");
           setPerf(null);
-          setExperimentRuns([]);
         }
       } finally {
         if (!cancelled) setPerfLoading(false);
@@ -767,7 +729,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const visibleProjects = useMemo(() => {
     const normalizedSearch = deferredSearchValue.trim().toLowerCase();
     return projects.filter((project) => {
-      const matchesFilter = projectFilter === "all" || project.category === projectFilter;
+      const matchesFilter = projectFilter === "all" || project.name === projectFilter;
       const matchesSearch =
         normalizedSearch.length === 0 ||
         project.name.toLowerCase().includes(normalizedSearch) ||
@@ -777,8 +739,15 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     });
   }, [deferredSearchValue, projectFilter, projects]);
 
-  const availableCategories = useMemo(
-    () => Array.from(new Set([...PROJECT_CATEGORIES, ...projects.map((project) => project.category).filter(Boolean)])),
+  const availableProjectNames = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          projects
+            .map((project) => project.name)
+            .filter((name) => typeof name === "string" && name.trim().length > 0),
+        ),
+      ),
     [projects],
   );
 
@@ -1008,7 +977,12 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const handleStartIngestion = () => {
     if (!activeWorkspace || !activeProjectId) return;
 
-    const filesToProcess = activeWorkspace.files.filter((file) => file.fileId);
+    const selectableFiles = activeWorkspace.files.filter((file) => file.fileId);
+    const selectedFile =
+      selectableFiles.find(
+        (file) => Number(file.fileId) === Number(activeWorkspace.selectedFileId),
+      ) || selectableFiles[0];
+    const filesToProcess = selectedFile ? [selectedFile] : [];
     if (!filesToProcess.length) {
       if (typeof window !== "undefined") {
         window.alert("Upload at least one file before processing.");
@@ -1040,11 +1014,9 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
         }
 
         const { processingConfig } = buildSharedPipelineConfig(activeWorkspace);
-        await Promise.all(
-          filesToProcess.map((file) =>
-            fileApi.processProjectFile(activeProjectId, file.fileId, processingConfig),
-          ),
-        );
+        for (const file of filesToProcess) {
+          await fileApi.processProjectFile(activeProjectId, file.fileId, processingConfig);
+        }
 
         updateActiveWorkspace((current) => ({
           ...current,
@@ -1272,9 +1244,9 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                   className={styles.dropdown}
                 >
                   <option value="all">All Projects</option>
-                  {availableCategories.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
+                  {availableProjectNames.map((projectName) => (
+                    <option key={projectName} value={projectName}>
+                      {projectName}
                     </option>
                   ))}
                 </select>
@@ -1622,26 +1594,28 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
               </>
             )}
 
+            {activeWorkspace.files.length > 0 && (
+              <SidebarSection
+                icon={FileText}
+                title="Active file"
+                description="Choose which uploaded file to process and query"
+                expanded={isLeftSidebarExpanded}
+              >
+                <FileSelect
+                  files={activeWorkspace.files}
+                  selectedFileId={activeWorkspace.selectedFileId}
+                  onChange={(nextId) =>
+                    updateActiveWorkspace((current) => ({
+                      ...current,
+                      selectedFileId: nextId ? Number(nextId) : null,
+                    }))
+                  }
+                />
+              </SidebarSection>
+            )}
+
             {isQueryStage && (
               <>
-                <SidebarSection
-                  icon={FileText}
-                  title="Active file"
-                  description="Choose which uploaded file to query"
-                  expanded={isLeftSidebarExpanded}
-                >
-                  <FileSelect
-                    files={activeWorkspace.files}
-                    selectedFileId={activeWorkspace.selectedFileId}
-                    onChange={(nextId) =>
-                      updateActiveWorkspace((current) => ({
-                        ...current,
-                        selectedFileId: nextId ? Number(nextId) : null,
-                      }))
-                    }
-                  />
-                </SidebarSection>
-
                 <SidebarSection
                   icon={Database}
                   title="Retrieved Strategy"
@@ -1812,7 +1786,6 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                               {file.category} . {file.size}
                             </p>
                           </div>
-                          <span className={styles.fileItemBadge}>Ready</span>
                         </div>
                       ))}
                     </div>
@@ -2087,7 +2060,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                   </div>
                   {perfLoading && <div>Loading...</div>}
                   {perfError && <div>{perfError}</div>}
-                  {!perfLoading && !perfError && !perf && experimentRuns.length === 0 && (
+                  {!perfLoading && !perfError && !perf && (
                     <div>No stored rows found for this experiment yet.</div>
                   )}
                   {!perfLoading && !perfError && perf && (

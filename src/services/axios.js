@@ -1,11 +1,29 @@
-const DEFAULT_BASE_URL = "http://127.0.0.1:8000/api/v1";
+/**
+ * API base for FastAPI (default uvicorn :8000, routes under /api/v1).
+ * Override with NEXT_PUBLIC_API_BASE_URL, or host/port via NEXT_PUBLIC_API_HOST / NEXT_PUBLIC_API_PORT.
+ * NEXT_PUBLIC_BACKEND_URL may be origin only (e.g. http://192.168.0.14:8000) — /api/v1 is appended if missing.
+ */
+const normalizeApiBase = (url) => {
+  const trimmed = url.trim().replace(/\/+$/, "");
+  if (!trimmed) return trimmed;
+  if (/\/api\/v\d+(\/|$)/i.test(trimmed)) {
+    return trimmed;
+  }
+  return `${trimmed}/api/v1`;
+};
 
-const getBaseUrl = () =>
-  (
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    process.env.NEXT_PUBLIC_BACKEND_URL ||
-    DEFAULT_BASE_URL
-  ).replace(/\/+$/, "");
+const defaultBaseFromHostPort = () => {
+  const host = process.env.NEXT_PUBLIC_API_HOST || "127.0.0.1";
+  const port = process.env.NEXT_PUBLIC_API_PORT || "8000";
+  return `http://${host}:${port}/api/v1`;
+};
+
+const getBaseUrl = () => {
+  const explicit =
+    process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
+  const raw = explicit ? normalizeApiBase(explicit) : defaultBaseFromHostPort();
+  return raw.replace(/\/+$/, "");
+};
 
 const buildHeaders = (headers = {}) => {
   const token =
