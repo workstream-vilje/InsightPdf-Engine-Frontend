@@ -1,4 +1,4 @@
-import httpClient from "@/services/axios";
+import httpClient, { getStoredUserId, withQuery } from "@/services/axios";
 import {
   fetchProjectFiles,
   uploadProjectFiles,
@@ -8,7 +8,10 @@ import {
 } from "@/services/api/networking/endpoints";
 
 export const fileApi = {
-  fetchProjectFiles: (projectId) => httpClient.get(fetchProjectFiles(projectId)),
+  fetchProjectFiles: (projectId) =>
+    httpClient.get(
+      withQuery(fetchProjectFiles(projectId), { user_id: getStoredUserId() }),
+    ),
   uploadProjectFiles: (projectId, formData) =>
     httpClient.post(uploadProjectFiles(projectId), formData),
   processProjectFile: (projectId, fileId, config) => {

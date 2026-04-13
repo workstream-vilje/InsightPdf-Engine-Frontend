@@ -21,9 +21,10 @@ const initialLoginForm = {
 const emailLooksValid = (value) => /\S+@\S+\.\S+/.test(value);
 
 const authBases = () => {
-  const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "");
+  const host = process.env.NEXT_PUBLIC_API_HOST || "localhost";
+  const port = process.env.NEXT_PUBLIC_API_PORT || "8000";
   const candidates = [
-    configured,
+    `http://${host}:${port}/api/v1`,
     "http://127.0.0.1:8000/api/v1",
     "http://localhost:8000/api/v1",
   ].filter(Boolean);

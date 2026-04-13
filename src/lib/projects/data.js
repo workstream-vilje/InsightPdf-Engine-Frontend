@@ -12,8 +12,6 @@ export const TEXT_PROCESSING_OPTIONS = [
 ];
 
 export const EMBEDDING_OPTIONS = [
-  { value: "openai", label: "OpenAI embeddings" },
-  { value: "text-embedding-3-small", label: "OpenAI text-embedding-3-small" },
   { value: "text-embedding-3-large", label: "OpenAI text-embedding-3-large" },
   { value: "ollama-nomic-embed", label: "Ollama nomic-embed-text" },
 ];

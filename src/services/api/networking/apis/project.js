@@ -1,4 +1,4 @@
-import httpClient from "@/services/axios";
+import httpClient, { getStoredUserId, withQuery } from "@/services/axios";
 import {
   createProject,
   deleteProject,
@@ -7,8 +7,13 @@ import {
 } from "@/services/api/networking/endpoints";
 
 export const projectApi = {
-  createProject: (payload) => httpClient.post(createProject, payload),
-  fetchAllProjects: () => httpClient.get(fetchProjects),
+  createProject: (payload) =>
+    httpClient.post(createProject, {
+      user_id: getStoredUserId(),
+      ...payload,
+    }),
+  fetchAllProjects: () =>
+    httpClient.get(withQuery(fetchProjects, { user_id: getStoredUserId() })),
   deleteProject: (projectId) => httpClient.delete(deleteProject(projectId)),
   fetchProjectHistory: (projectId) => httpClient.get(fetchProjectHistory(projectId)),
 };

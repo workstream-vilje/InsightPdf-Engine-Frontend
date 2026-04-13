@@ -344,9 +344,9 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning }) => {
       }
     } catch (error) {
       const message =
-        error?.payload?.detail ||
-        error?.payload?.message ||
         error?.message ||
+        error?.payload?.message ||
+        error?.payload?.detail ||
         'Failed to upload files';
       if (typeof window !== 'undefined') {
         window.alert(message);

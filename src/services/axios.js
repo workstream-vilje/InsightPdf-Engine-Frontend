@@ -1,7 +1,6 @@
 /**
- * API base must come from environment variables only.
- * Set NEXT_PUBLIC_API_BASE_URL (preferred) or NEXT_PUBLIC_BACKEND_URL in .env.local.
- * If the URL does not include /api/v1, it is appended automatically.
+ * API base defaults to the local FastAPI backend.
+ * Set NEXT_PUBLIC_API_HOST or NEXT_PUBLIC_API_PORT only when overriding localhost:8000.
  */
 const normalizeApiBase = (url) => {
   const trimmed = url.trim().replace(/\/+$/, "");
@@ -13,15 +12,28 @@ const normalizeApiBase = (url) => {
 };
 
 const getBaseUrl = () => {
-  const explicit =
-    process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
-  const raw = explicit ? normalizeApiBase(explicit) : "";
-  if (!raw) {
-    throw new Error(
-      "Missing API base URL. Set NEXT_PUBLIC_API_BASE_URL or NEXT_PUBLIC_BACKEND_URL in .env.local",
-    );
-  }
+  const host = process.env.NEXT_PUBLIC_API_HOST || "localhost";
+  const port = process.env.NEXT_PUBLIC_API_PORT || "8000";
+  const raw = normalizeApiBase(`http://${host}:${port}`);
   return raw.replace(/\/+$/, "");
+};
+
+const getStoredUserId = () =>
+  typeof window !== "undefined" ? window.localStorage.getItem("user_id") : null;
+
+const withQuery = (path, params = {}) => {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      searchParams.set(key, String(value));
+    }
+  });
+
+  const query = searchParams.toString();
+  if (!query) return path;
+
+  return `${path}${path.includes("?") ? "&" : "?"}${query}`;
 };
 
 const buildHeaders = (headers = {}) => {
@@ -50,8 +62,12 @@ const parseResponse = async (response) => {
   const payload = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
+    const detail = isJson ? payload?.detail : null;
     const message =
-      (isJson && (payload?.detail || payload?.message || payload?.error)) ||
+      (Array.isArray(detail) || (detail && typeof detail === "object")
+        ? JSON.stringify(detail)
+        : detail) ||
+      (isJson && (payload?.message || payload?.error)) ||
       response.statusText ||
       "Request failed";
 
@@ -98,5 +114,5 @@ const httpClient = {
   delete: (path, options = {}) => request(path, { ...options, method: "DELETE" }),
 };
 
-export { buildUrl, getBaseUrl, request };
+export { buildUrl, getBaseUrl, getStoredUserId, request, withQuery };
 export default httpClient;
