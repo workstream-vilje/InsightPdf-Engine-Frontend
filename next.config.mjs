@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactCompiler: true,
-  // Allow HMR when opening the dev app via LAN IP (e.g. http://192.168.0.14:3000)
-  allowedDevOrigins: ["192.168.0.14"],
+  // Dev HMR when using http://127.0.0.1:3000 or http://localhost:3000 (not only default hostname)
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
 };
 
 export default nextConfig;

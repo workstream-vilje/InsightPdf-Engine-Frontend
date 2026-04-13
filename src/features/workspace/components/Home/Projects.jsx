@@ -13,14 +13,15 @@ import classNames from "classnames";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  BarChart3,
   Blocks,
   ChevronRight,
   Database,
   FileText,
   FolderKanban,
+  LogOut,
   MessageSquare,
   Send,
+  Settings,
   Sparkles,
   Upload,
   X,
@@ -36,6 +37,7 @@ import fileApi from "@/services/api/networking/apis/file";
 import projectApi from "@/services/api/networking/apis/project";
 import queryApi from "@/services/api/networking/apis/query";
 import {
+  clearAuthSession,
   getCurrentUserId,
   getScopedStorageKey,
   getStoredUserProfile,
@@ -51,7 +53,7 @@ import {
   VECTOR_STORE_OPTIONS,
   createWorkspaceState,
 } from "@/lib/projects/data";
-import { ROUTE_PATHS } from "@/utils/routepaths";
+import { ROUTE_PATHS, workspaceQueryUrl, workspaceUploadUrl } from "@/utils/routepaths";
 import styles from "./Projects.module.css";
 
 const RIGHT_SIDEBAR_ITEMS = [
@@ -60,6 +62,45 @@ const RIGHT_SIDEBAR_ITEMS = [
   { value: "performance", label: "Execution Performance", icon: Sparkles },
   { value: "quality", label: "Quality Metrics", icon: Database },
 ];
+
+const AppWorkspaceRail = ({ onProjects, onSettings, onLogout }) => (
+  <aside className={styles.appWorkspaceRail} aria-label="Account and navigation">
+    <div className={styles.appWorkspaceRailFlyout}>
+      <div className={styles.appWorkspaceRailTop}>
+        <button
+          type="button"
+          className={styles.appWorkspaceRailItem}
+          onClick={onProjects}
+          title="Projects"
+        >
+          <ArrowLeft size={18} className={styles.appWorkspaceRailIcon} />
+          <span className={styles.appWorkspaceRailLabel}>Projects</span>
+        </button>
+      </div>
+      <div className={styles.appWorkspaceRailSpacer} aria-hidden />
+      <div className={styles.appWorkspaceRailBottom}>
+        <button
+          type="button"
+          className={styles.appWorkspaceRailItem}
+          onClick={onSettings}
+          title="Settings"
+        >
+          <Settings size={18} className={styles.appWorkspaceRailIcon} />
+          <span className={styles.appWorkspaceRailLabel}>Settings</span>
+        </button>
+        <button
+          type="button"
+          className={classNames(styles.appWorkspaceRailItem, styles.appWorkspaceRailItemDanger)}
+          onClick={onLogout}
+          title="Log out"
+        >
+          <LogOut size={18} className={styles.appWorkspaceRailIcon} />
+          <span className={styles.appWorkspaceRailLabel}>Log out</span>
+        </button>
+      </div>
+    </div>
+  </aside>
+);
 
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -181,7 +222,7 @@ const normalizeFallbackLabel = (usedMethod) => {
 
 const buildExecutionRuns = ({
   workspace,
-  selectedFile,
+  targetFile,
   response = null,
   activeStage = "chunking",
   failed = false,
@@ -195,7 +236,7 @@ const buildExecutionRuns = ({
     ? activeStage
     : "chunking";
   const activeStageIndex = EXECUTION_STAGE_ORDER.indexOf(normalizedActiveStage);
-  const fileName = selectedFile?.name || data?.document?.name || "Document";
+  const fileName = targetFile?.name || data?.document?.name || "Document";
   const configuredSplitters = toExecutionList(
     processingConfig?.text_processing?.splitter,
     ["recursive"],
@@ -340,7 +381,7 @@ const buildExecutionRuns = ({
   }));
 };
 
-const buildExecutionSummary = ({ response, selectedFile, workspace }) => {
+const buildExecutionSummary = ({ response, targetFile, workspace }) => {
   const data = response?.data || {};
   const comparisonResults = Array.isArray(data.comparison_results)
     ? data.comparison_results
@@ -383,9 +424,9 @@ const buildExecutionSummary = ({ response, selectedFile, workspace }) => {
     status: response?.status || "success",
     stage: "completed",
     message: response?.message || "Document processed successfully",
-    fileId: selectedFile?.fileId != null ? Number(selectedFile.fileId) : null,
-    fileCode: selectedFile?.fileCode || null,
-    fileName: selectedFile?.name || primaryData?.document?.name || "Unknown file",
+    fileId: targetFile?.fileId != null ? Number(targetFile.fileId) : null,
+    fileCode: targetFile?.fileCode || null,
+    fileName: targetFile?.name || primaryData?.document?.name || "Unknown file",
     chunkCount: chunkTotal,
     previewCount,
     embedding: embeddingLabel,
@@ -399,7 +440,7 @@ const buildExecutionSummary = ({ response, selectedFile, workspace }) => {
     details,
     runs: buildExecutionRuns({
       workspace,
-      selectedFile,
+      targetFile,
       response,
       activeStage: "vector-store",
     }),
@@ -476,7 +517,7 @@ const buildBatchExecutionSummary = ({ responses, files, workspace }) => {
     const file = safeFiles[index] || null;
     return buildExecutionRuns({
       workspace,
-      selectedFile: file,
+      targetFile: file,
       response,
       activeStage: "vector-store",
     }).map((run, runIndex) => ({
@@ -886,7 +927,7 @@ const MultiSelectChips = ({ options, selectedValues, onToggle }) => (
           })}
           onClick={() => onToggle(option.value)}
         >
-          <Checkbox checked={checked} className={styles.choiceCheckbox} />
+          <Checkbox checked={checked} className={styles.choiceCheckbox} asSpan />
           <span>{option.label}</span>
         </button>
       );
@@ -911,7 +952,7 @@ const SidebarSection = ({ icon: Icon, title, description, expanded, children }) 
   </section>
 );
 
-const ProjectCanvas = ({ initialProjectId = null }) => {
+const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [projects, setProjects] = useState(INITIAL_PROJECTS);
@@ -934,7 +975,6 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const [deleteProjectInput, setDeleteProjectInput] = useState("");
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
-  const [isLeftSidebarExpanded, setIsLeftSidebarExpanded] = useState(false);
   const [isRightSidebarExpanded, setIsRightSidebarExpanded] = useState(false);
   const [chatPanelOffset, setChatPanelOffset] = useState(420);
   const [chatGreeting, setChatGreeting] = useState("Hello");
@@ -945,11 +985,14 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const workspaceContentRef = useRef(null);
   const timersRef = useRef([]);
   const hasHydratedRef = useRef(false);
+  const projectFilesListSyncPromiseRef = useRef(null);
+  const focusResyncTimeoutRef = useRef(null);
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
     [activeProjectId, projects],
   );
+  const activeProjectCategory = activeProject?.category ?? null;
   const activeWorkspace = activeProjectId ? projectWorkspaces[activeProjectId] : null;
 
   // Execution Performance (dynamic from backend by experiment_id)
@@ -1179,65 +1222,94 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     [activeProjectId],
   );
 
-  // Sync files from backend so DB deletes don't linger in UI
+  // Sync files from backend so DB deletes don't linger in UI.
+  // Coalesce concurrent calls (effects + focus + manual refresh) into one in-flight GET.
   const syncProjectFilesFromBackend = useCallback(async () => {
-    if (!activeProjectId) return;
-    try {
-      const response = await fileApi.fetchProjectFiles(activeProjectId);
-      const backendFiles = response?.data || [];
-      const mapped = backendFiles.map((file) =>
-        mapUploadedFileToWorkspaceFile(file, activeProject?.category),
-      );
-
-      updateActiveWorkspace((current) => {
-        const backendIds = new Set(mapped.map((f) => String(f.fileId)));
-        const nextSelected =
-          current.selectedFileId != null && backendIds.has(String(current.selectedFileId))
-            ? current.selectedFileId
-            : null;
-        const prunedData = pruneWorkspaceDataForFiles(
-          {
-            ...current,
-            selectedFileId: nextSelected,
-          },
-          backendIds,
+    if (!activeProjectId) return undefined;
+    if (projectFilesListSyncPromiseRef.current) {
+      return projectFilesListSyncPromiseRef.current;
+    }
+    const run = (async () => {
+      try {
+        const response = await fileApi.fetchProjectFiles(activeProjectId);
+        const backendFiles = response?.data || [];
+        const mapped = backendFiles.map((file) =>
+          mapUploadedFileToWorkspaceFile(file, activeProjectCategory),
         );
 
-        return {
-          ...current,
-          files: mapped,
-          selectedFileId: nextSelected,
-          ...prunedData,
-        };
-      });
-    } catch (e) {
-      // keep existing UI state if fetch fails
-    }
-  }, [activeProject?.category, activeProjectId, updateActiveWorkspace]);
+        updateActiveWorkspace((current) => {
+          const backendIds = new Set(mapped.map((f) => String(f.fileId)));
+          const nextSelected =
+            current.selectedFileId != null && backendIds.has(String(current.selectedFileId))
+              ? current.selectedFileId
+              : null;
+          const prunedData = pruneWorkspaceDataForFiles(
+            {
+              ...current,
+              selectedFileId: nextSelected,
+            },
+            backendIds,
+          );
+
+          return {
+            ...current,
+            files: mapped,
+            selectedFileId: nextSelected,
+            ...prunedData,
+          };
+        });
+      } catch (e) {
+        // keep existing UI state if fetch fails
+      } finally {
+        projectFilesListSyncPromiseRef.current = null;
+      }
+      return undefined;
+    })();
+    projectFilesListSyncPromiseRef.current = run;
+    return run;
+  }, [activeProjectCategory, activeProjectId, updateActiveWorkspace]);
 
   useEffect(() => {
+    if (!activeProjectId) return undefined;
     syncProjectFilesFromBackend();
-  }, [syncProjectFilesFromBackend]);
+    return undefined;
+  }, [activeProjectId, activeProjectCategory, syncProjectFilesFromBackend]);
 
   useEffect(() => {
-    if (!activeWorkspace?.files) return;
+    if (!activeWorkspace?.files?.length) return;
 
-    const selectedFile =
-      activeWorkspace.files.find(
-        (file) => Number(file?.fileId) === Number(activeWorkspace?.selectedFileId),
-      ) || activeWorkspace.files[0];
-
-    updateActiveWorkspace((current) => ({
-      ...current,
-      allowedTechniques: selectedFile?.allowedTechniques || null,
-    }));
+    updateActiveWorkspace((current) => {
+      if (!current?.files?.length) return current;
+      const resolvedFile =
+        current.files.find(
+          (file) => Number(file?.fileId) === Number(current.selectedFileId),
+        ) || current.files[0];
+      return {
+        ...current,
+        allowedTechniques: resolvedFile?.allowedTechniques || null,
+      };
+    });
   }, [activeWorkspace?.files, activeWorkspace?.selectedFileId, updateActiveWorkspace]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
-    const onFocus = () => syncProjectFilesFromBackend();
+    const onFocus = () => {
+      if (focusResyncTimeoutRef.current) {
+        window.clearTimeout(focusResyncTimeoutRef.current);
+      }
+      focusResyncTimeoutRef.current = window.setTimeout(() => {
+        focusResyncTimeoutRef.current = null;
+        syncProjectFilesFromBackend();
+      }, 500);
+    };
     window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      if (focusResyncTimeoutRef.current) {
+        window.clearTimeout(focusResyncTimeoutRef.current);
+        focusResyncTimeoutRef.current = null;
+      }
+    };
   }, [syncProjectFilesFromBackend]);
 
   const visibleProjects = useMemo(() => {
@@ -1268,7 +1340,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     });
   }, [deferredSearchValue, projectFilter, projects, sortOption]);
 
-  const PROJECTS_PER_PAGE = 8;
+  const PROJECTS_PER_PAGE = 5;
   const totalProjectPages = Math.max(1, Math.ceil(visibleProjects.length / PROJECTS_PER_PAGE));
 
   const paginatedVisibleProjects = useMemo(() => {
@@ -1382,7 +1454,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const handleOpenProject = (projectId) => {
     startTransition(() => {
       setActiveProjectId(projectId);
-      router.replace(`/workspace?project=${projectId}`);
+      router.replace(workspaceUploadUrl(projectId));
     });
   };
 
@@ -1478,13 +1550,17 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
       }));
 
     try {
-      const availableProjects = await projectApi.fetchAllProjects();
-      const activeProjectExists = (availableProjects?.data || []).some(
+      const projectKnownLocally = projects.some(
         (project) => String(project?.id) === String(activeProject.id),
       );
-
-      if (!activeProjectExists) {
-        throw new Error("The selected project no longer exists. Please reselect or recreate it.");
+      if (!projectKnownLocally) {
+        const availableProjects = await projectApi.fetchAllProjects();
+        const activeProjectExists = (availableProjects?.data || []).some(
+          (project) => String(project?.id) === String(activeProject.id),
+        );
+        if (!activeProjectExists) {
+          throw new Error("The selected project no longer exists. Please reselect or recreate it.");
+        }
       }
 
       const response = await fileApi.uploadProjectFiles(activeProject.id, formData);
@@ -1607,7 +1683,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
           details: null,
           runs: buildExecutionRuns({
             workspace: current,
-            selectedFile: executionTargetFile,
+            targetFile: executionTargetFile,
             activeStage: currentStage,
           }),
         },
@@ -1615,13 +1691,17 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
 
       try {
         const processResponses = [];
-        const availableProjects = await projectApi.fetchAllProjects();
-        const activeProjectExists = (availableProjects?.data || []).some(
+        const projectKnownLocally = projects.some(
           (project) => String(project?.id) === String(activeProjectId),
         );
-
-        if (!activeProjectExists) {
-          throw new Error("The selected project no longer exists. Please reselect or recreate it.");
+        if (!projectKnownLocally) {
+          const availableProjects = await projectApi.fetchAllProjects();
+          const activeProjectExists = (availableProjects?.data || []).some(
+            (project) => String(project?.id) === String(activeProjectId),
+          );
+          if (!activeProjectExists) {
+            throw new Error("The selected project no longer exists. Please reselect or recreate it.");
+          }
         }
 
         const { processingConfig } = buildSharedPipelineConfig(activeWorkspace);
@@ -1635,7 +1715,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                 stage,
                 runs: buildExecutionRuns({
                   workspace: current,
-                  selectedFile,
+                  targetFile: executionTargetFile,
                   activeStage: stage,
                 }),
               },
@@ -1713,7 +1793,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
             details: null,
             runs: buildExecutionRuns({
               workspace: activeWorkspace,
-              selectedFile: executionTargetFile,
+              targetFile: executionTargetFile,
               activeStage: currentStage,
               failed: true,
             }),
@@ -1998,32 +2078,122 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   };
   const isChatInputDisabled = !hasSelectedFile;
 
+  const handleRailProjects = useCallback(() => {
+    setActiveProjectId(null);
+    router.replace(ROUTE_PATHS.WORKSPACE_UPLOAD);
+  }, [router]);
+
+  const handleRailSettings = useCallback(() => {
+    router.push(ROUTE_PATHS.SETTINGS);
+  }, [router]);
+
+  const handleRailLogout = useCallback(() => {
+    clearAuthSession();
+    if (typeof window !== "undefined") {
+      window.location.href = ROUTE_PATHS.AUTH_LOGIN;
+    }
+  }, []);
+
+  const topNavbarActions = useMemo(
+    () => [
+      {
+        id: "notifications",
+        label: "Notifications",
+        icon: "notifications",
+        onClick: () => window.alert("No new notifications"),
+      },
+      {
+        id: "history",
+        label: "History",
+        icon: "history",
+        onClick: () =>
+          activeProject
+            ? router.push(
+                `${ROUTE_PATHS.HISTORY}?project=${activeProject.id}&name=${encodeURIComponent(activeProject.name)}&category=${encodeURIComponent(activeProject.category)}`,
+              )
+            : router.push(ROUTE_PATHS.HISTORY),
+      },
+      {
+        id: "metrics",
+        label: "Analytics",
+        icon: "metrics",
+        onClick: () =>
+          activeProject
+            ? router.push(
+                `${ROUTE_PATHS.METRICS}?project=${activeProject.id}&name=${encodeURIComponent(activeProject.name)}&category=${encodeURIComponent(activeProject.category)}`,
+              )
+            : router.push(ROUTE_PATHS.METRICS),
+      },
+    ],
+    [activeProject, router],
+  );
+
+  const topNavbarBreadcrumbItems = useMemo(() => {
+    if (!activeProject || !activeWorkspace) {
+      return [
+        { label: "Home", href: ROUTE_PATHS.WORKSPACE_UPLOAD },
+        { label: "Projects" },
+      ];
+    }
+    const pid = activeProject.id;
+    const code = activeProject.projectCode || formatProjectCode(activeProject);
+    const projectLabel = `${code} · ${activeProject.name}`;
+    const base = [
+      { label: "Home", href: ROUTE_PATHS.WORKSPACE_UPLOAD },
+      { label: "Projects", href: ROUTE_PATHS.WORKSPACE_UPLOAD },
+      { label: projectLabel, href: workspaceUploadUrl(pid) },
+    ];
+    if (workspaceMode === "upload") {
+      return [...base, { label: "Upload" }];
+    }
+    return [
+      ...base,
+      { label: "Upload", href: workspaceUploadUrl(pid) },
+      { label: "Query" },
+    ];
+  }, [activeProject, activeWorkspace, workspaceMode]);
+
   if (!activeProject || !activeWorkspace) {
     return (
-      <>
-        <ProjectsPageView
-          projects={paginatedVisibleProjects}
+      <div className={styles.workspaceWithTopNav}>
+        <TopNavbar
           userProfile={userProfile}
-          searchValue={searchValue}
-          onSearchChange={setSearchValue}
-          projectFilter={projectFilter}
-          onFilterChange={setProjectFilter}
-          sortOption={sortOption}
-          onSortChange={setSortOption}
-          projectViewMode={projectViewMode}
-          onProjectViewModeChange={setProjectViewMode}
-          currentPage={projectPage}
-          totalPages={totalProjectPages}
-          onPageChange={setProjectPage}
-          availableProjectNames={availableProjectNames}
-          deletingProjectId={deletingProjectId}
-          onCreateProject={() => setIsCreateProjectOpen(true)}
-          onOpenProject={handleOpenProject}
-          onDeleteProject={(projectToDelete) => {
-            setProjectPendingDelete(projectToDelete);
-            setDeleteProjectInput("");
-          }}
+          actions={[]}
+          breadcrumbItems={topNavbarBreadcrumbItems}
         />
+        <div className={styles.workspaceShell}>
+          <AppWorkspaceRail
+            onProjects={handleRailProjects}
+            onSettings={handleRailSettings}
+            onLogout={handleRailLogout}
+          />
+          <div className={styles.workspaceProjectsMain}>
+            <ProjectsPageView
+              embedded
+              projects={paginatedVisibleProjects}
+              userProfile={userProfile}
+              searchValue={searchValue}
+              onSearchChange={setSearchValue}
+              projectFilter={projectFilter}
+              onFilterChange={setProjectFilter}
+              sortOption={sortOption}
+              onSortChange={setSortOption}
+              projectViewMode={projectViewMode}
+              onProjectViewModeChange={setProjectViewMode}
+              currentPage={projectPage}
+              totalPages={totalProjectPages}
+              onPageChange={setProjectPage}
+              availableProjectNames={availableProjectNames}
+              deletingProjectId={deletingProjectId}
+              onCreateProject={() => setIsCreateProjectOpen(true)}
+              onOpenProject={handleOpenProject}
+              onDeleteProject={(projectToDelete) => {
+                setProjectPendingDelete(projectToDelete);
+                setDeleteProjectInput("");
+              }}
+            />
+          </div>
+        </div>
 
         <div className={styles.projectsShell}>
           <AnimatePresence>
@@ -2190,7 +2360,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
             )}
           </AnimatePresence>
         </div>
-      </>
+      </div>
     );
   }
 
@@ -2198,67 +2368,26 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     <div className={styles.workspaceWithTopNav}>
       <TopNavbar
         userProfile={userProfile}
-        actions={[
-          {
-            id: "notifications",
-            label: "Notifications",
-            icon: "notifications",
-            onClick: () => window.alert("No new notifications"),
-          },
-          {
-            id: "history",
-            label: "History",
-            icon: "history",
-            onClick: () =>
-              router.push(
-                `${ROUTE_PATHS.HISTORY}?project=${activeProject.id}&name=${activeProject.name}&category=${activeProject.category}`,
-              ),
-          },
-          {
-            id: "metrics",
-            label: "Analytics",
-            icon: "metrics",
-            onClick: () =>
-              router.push(
-                `${ROUTE_PATHS.METRICS}?project=${activeProject.id}&name=${activeProject.name}&category=${activeProject.category}`,
-              ),
-          },
-        ]}
+        actions={topNavbarActions}
+        breadcrumbItems={topNavbarBreadcrumbItems}
       />
       <div className={styles.workspaceShell}>
-        <aside
-        className={classNames(styles.workspaceSidebar, {
-          [styles.workspaceSidebarExpanded]: isLeftSidebarExpanded,
-        })}
-        onMouseEnter={() => setIsLeftSidebarExpanded(true)}
-        onMouseLeave={() => setIsLeftSidebarExpanded(false)}
-      >
-        <div className={styles.workspaceSidebarInner}>
-          <div className={styles.sidebarTop}>
-            <button
-            type="button"
-            className={styles.backButton}
-            onClick={() => {
-              setActiveProjectId(null);
-              router.replace(ROUTE_PATHS.HOME);
-            }}
-            title="Back to projects"
-          >
-              <ArrowLeft size={18} />
-              {isLeftSidebarExpanded && <span>Projects</span>}
-            </button>
-          </div>
-
-          <section className={styles.sidebarPane}>
-            {isLeftSidebarExpanded && (
-              <div className={styles.sidebarGroupTitle}>Upload Techniques</div>
-            )}
-            <div className={styles.sidebarPaneScroll}>
+        <AppWorkspaceRail
+          onProjects={handleRailProjects}
+          onSettings={handleRailSettings}
+          onLogout={handleRailLogout}
+        />
+        {workspaceMode === "upload" && (
+        <aside className={styles.workspaceQuerySidebar}>
+          <div className={styles.workspaceContextSidebarInner}>
+            <section className={styles.sidebarPane}>
+              <div className={styles.sidebarGroupTitle}>Upload techniques</div>
+              <div className={styles.sidebarPaneScroll}>
                 <SidebarSection
                   icon={Blocks}
                   title="Chunk Length"
                   description="Same control pattern as current UI"
-                  expanded={isLeftSidebarExpanded}
+                  expanded
                 >
                   <div className={styles.chunkControl}>
                     <Input
@@ -2290,7 +2419,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                   icon={Database}
                   title="Data Extraction"
                   description="Select multiple extractors"
-                  expanded={isLeftSidebarExpanded}
+                  expanded
                 >
                   <MultiSelectChips
                     options={DATA_EXTRACTION_OPTIONS}
@@ -2303,7 +2432,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                   icon={FileText}
                   title="Text Processing"
                   description="Select multiple extractors"
-                  expanded={isLeftSidebarExpanded}
+                  expanded
                 >
                   <MultiSelectChips
                     options={TEXT_PROCESSING_OPTIONS}
@@ -2316,7 +2445,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                   icon={Sparkles}
                   title="Embedding Model"
                   description="Select multiple embedding models"
-                  expanded={isLeftSidebarExpanded}
+                  expanded
                 >
                   <MultiSelectChips
                     options={EMBEDDING_OPTIONS}
@@ -2329,7 +2458,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                   icon={FolderKanban}
                   title="Vector Store"
                   description="Select multiple vector stores"
-                  expanded={isLeftSidebarExpanded}
+                  expanded
                 >
                   <MultiSelectChips
                     options={VECTOR_STORE_OPTIONS}
@@ -2337,24 +2466,26 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                     onToggle={(value) => toggleWorkspaceValue("vectorStores", value)}
                   />
                 </SidebarSection>
-            </div>
-            <div className={styles.sidebarBottom}>
-              <Button
-                className={styles.processButton}
-                onClick={handleStartIngestion}
-                disabled={isPending || isProcessingFiles || !hasUploadedFiles}
-              >
-                {isProcessingFiles ? "Processing..." : "Process"}
-              </Button>
-            </div>
-          </section>
-        </div>
+              </div>
+              <div className={styles.sidebarBottom}>
+                <Button
+                  className={styles.processButton}
+                  onClick={handleStartIngestion}
+                  disabled={isPending || isProcessingFiles || !hasUploadedFiles}
+                >
+                  {isProcessingFiles ? "Processing..." : "Process"}
+                </Button>
+              </div>
+            </section>
+          </div>
         </aside>
+        )}
 
+        {workspaceMode === "query" && (
         <aside className={styles.workspaceQuerySidebar}>
-          <div className={styles.workspaceSidebarInner}>
+          <div className={styles.workspaceContextSidebarInner}>
             <section className={styles.sidebarPane}>
-              <div className={styles.sidebarGroupTitle}>Query Techniques</div>
+              <div className={styles.sidebarGroupTitle}>Query techniques</div>
               <div className={styles.sidebarPaneScroll}>
                 <SidebarSection
                   icon={Database}
@@ -2427,37 +2558,44 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
             </section>
           </div>
         </aside>
+        )}
 
         <main className={styles.workspaceMain}>
         <header className={styles.workspaceHeader}>
           <div className={styles.workspaceHeaderContent}>
-            <div className={styles.workspaceBreadcrumb}>Project workspace</div>
             <h1 className={styles.workspaceTitle}>
               {activeProject.name}
               <span className={styles.workspaceCategory}>{activeProject.category}</span>
             </h1>
           </div>
           <div className={styles.workspaceHeaderActions}>
-            <div className={styles.chatWelcomeBadge}>
-              <span>Insight Chat</span>
-              <span className={styles.chatWelcomeBadgeAccent}>Workspace</span>
-            </div>
-            <button
-              type="button"
-              className={styles.chatWelcomeMetricsButton}
-              onClick={() =>
-                router.push(
-                  `${ROUTE_PATHS.METRICS}?project=${activeProject.id}&name=${activeProject.name}&category=${activeProject.category}`,
-                )
-              }
-              title="Open metrics"
-            >
-              <BarChart3 size={15} />
-            </button>
+            {workspaceMode === "upload" && (
+              <Button
+                type="button"
+                variant="default"
+                className={styles.workspaceModeNavButton}
+                onClick={() => router.push(workspaceQueryUrl(activeProject.id))}
+              >
+                <MessageSquare size={16} />
+                Open chat
+              </Button>
+            )}
+            {workspaceMode === "query" && (
+              <Button
+                type="button"
+                variant="outline"
+                className={styles.workspaceModeNavButton}
+                onClick={() => router.push(workspaceUploadUrl(activeProject.id))}
+              >
+                <Upload size={16} />
+                Documents &amp; upload
+              </Button>
+            )}
           </div>
         </header>
 
         <section className={styles.workspaceCanvas}>
+          {workspaceMode === "upload" && (
           <input
             ref={fileInputRef}
             type="file"
@@ -2466,15 +2604,20 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
             hidden
             onChange={handleFileUpload}
           />
+          )}
 
           <div
             ref={workspaceContentRef}
-            className={styles.workspaceContentLayout}
+            className={classNames(styles.workspaceContentLayout, {
+              [styles.workspaceContentLayoutSingleColumn]:
+                workspaceMode === "upload" || workspaceMode === "query",
+            })}
             style={{
               "--chat-panel-offset":
                 chatPanelOffset > 0 ? `${chatPanelOffset}px` : "0px",
             }}
           >
+            {workspaceMode === "upload" && (
             <section className={styles.workspaceAssetPanel}>
               <div className={styles.workspaceAssetCard}>
                 <div className={styles.workspaceAssetHeader}>
@@ -2706,17 +2849,9 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                 )}
               </div>
             </section>
+            )}
 
-            <button
-              type="button"
-              className={styles.chatResizeHandle}
-              onPointerDown={handleChatResizeStart}
-              aria-label="Resize workspace split"
-              title="Drag to resize workspace split"
-            >
-              <span className={styles.chatResizeGrip} />
-            </button>
-
+            {workspaceMode === "query" && (
             <div className={styles.chatPanelShell}>
               {showChatWelcome && (
                 <div className={styles.chatWelcomeShell}>
@@ -2882,6 +3017,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
             )}
 
             </div>
+            )}
           </div>
         </section>
 
@@ -2920,6 +3056,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
         )}
         </main>
 
+        {workspaceMode === "query" && (
         <aside
         className={classNames(styles.workspaceRightSidebar, {
           [styles.workspaceRightSidebarExpanded]: isRightSidebarExpanded,
@@ -3082,6 +3219,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
           )}
         </div>
         </aside>
+        )}
       </div>
     </div>
   );

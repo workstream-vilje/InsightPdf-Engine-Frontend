@@ -4,11 +4,19 @@ import classNames from 'classnames';
 import { Check } from 'lucide-react';
 import styles from './styles.module.css';
 
-const Checkbox = ({ checked, onCheckedChange, disabled, className }) => {
+const Checkbox = ({ checked, onCheckedChange, disabled, className, asSpan }) => {
+  const mergedClass = classNames(styles.checkbox, { [styles.checked]: checked }, className);
+  if (asSpan) {
+    return (
+      <span className={mergedClass} aria-hidden="true">
+        {checked && <Check size={12} className={styles.icon} />}
+      </span>
+    );
+  }
   return (
     <button
       type="button"
-      className={classNames(styles.checkbox, { [styles.checked]: checked }, className)}
+      className={mergedClass}
       onClick={() => onCheckedChange && onCheckedChange(!checked)}
       disabled={disabled}
     >
@@ -22,12 +30,14 @@ Checkbox.propTypes = {
   onCheckedChange: PropTypes.func,
   disabled: PropTypes.bool,
   className: PropTypes.string,
+  asSpan: PropTypes.bool,
 };
 
 Checkbox.defaultProps = {
   checked: false,
   disabled: false,
   className: "",
+  asSpan: false,
 };
 
 export { Checkbox };

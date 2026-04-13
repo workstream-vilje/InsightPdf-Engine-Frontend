@@ -39,6 +39,7 @@ const getDisplayProjectCode = (project) => {
 };
 
 export default function ProjectsPageView({
+  embedded = false,
   projects,
   userProfile,
   searchValue,
@@ -59,9 +60,9 @@ export default function ProjectsPageView({
   onDeleteProject,
 }) {
   return (
-    <main className={styles.pageShell}>
-      <TopNavbar userProfile={userProfile} />
-      <section className={styles.pageContent}>
+    <main className={embedded ? styles.pageShellEmbedded : styles.pageShell}>
+      {!embedded && <TopNavbar userProfile={userProfile} />}
+      <section className={embedded ? styles.pageContentEmbedded : styles.pageContent}>
         <header className={styles.pageHeader}>
           <div className={styles.pageTitleRow}>
             <h1 className={styles.pageTitle}>Projects</h1>
