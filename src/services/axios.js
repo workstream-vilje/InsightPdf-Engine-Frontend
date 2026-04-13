@@ -1,7 +1,7 @@
 /**
- * API base for FastAPI (default uvicorn :8000, routes under /api/v1).
- * Override with NEXT_PUBLIC_API_BASE_URL, or host/port via NEXT_PUBLIC_API_HOST / NEXT_PUBLIC_API_PORT.
- * NEXT_PUBLIC_BACKEND_URL may be origin only (e.g. http://192.168.0.14:8000) — /api/v1 is appended if missing.
+ * API base must come from environment variables only.
+ * Set NEXT_PUBLIC_API_BASE_URL (preferred) or NEXT_PUBLIC_BACKEND_URL in .env.local.
+ * If the URL does not include /api/v1, it is appended automatically.
  */
 const normalizeApiBase = (url) => {
   const trimmed = url.trim().replace(/\/+$/, "");
@@ -12,16 +12,15 @@ const normalizeApiBase = (url) => {
   return `${trimmed}/api/v1`;
 };
 
-const defaultBaseFromHostPort = () => {
-  const host = process.env.NEXT_PUBLIC_API_HOST || "127.0.0.1";
-  const port = process.env.NEXT_PUBLIC_API_PORT || "8000";
-  return `http://${host}:${port}/api/v1`;
-};
-
 const getBaseUrl = () => {
   const explicit =
     process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
-  const raw = explicit ? normalizeApiBase(explicit) : defaultBaseFromHostPort();
+  const raw = explicit ? normalizeApiBase(explicit) : "";
+  if (!raw) {
+    throw new Error(
+      "Missing API base URL. Set NEXT_PUBLIC_API_BASE_URL or NEXT_PUBLIC_BACKEND_URL in .env.local",
+    );
+  }
   return raw.replace(/\/+$/, "");
 };
 

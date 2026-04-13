@@ -4,6 +4,8 @@
  */
 export const ROUTE_PATHS = {
   HOME: '/',
+  AUTH_LOGIN: '/auth/login',
+  AUTH_SIGNUP: '/auth/signup',
   DASHBOARD: '/dashboard',
   CHUNKING: '/chunking',
   COMPARE: '/compare',

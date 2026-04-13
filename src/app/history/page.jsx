@@ -1,4 +1,4 @@
-import HistoryScreen from "@/History/History";
+import HistoryScreen from "@/features/history/components/History/History";
 
 export const metadata = {
   title: "History | Vilje Rag Canvas",

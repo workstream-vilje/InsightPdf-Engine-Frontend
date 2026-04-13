@@ -1,4 +1,4 @@
-import MetricsScreen from "@/Analytics/Analytics";
+import MetricsScreen from "@/features/analytics/components/Analytics/Analytics";
 
 export default async function MetricsPage({ searchParams }) {
   const params = await searchParams;

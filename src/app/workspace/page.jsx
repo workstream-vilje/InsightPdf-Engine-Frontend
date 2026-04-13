@@ -1,4 +1,4 @@
-import ProjectCanvas from "@/Home/Projects";
+import ProjectCanvas from "@/features/workspace/components/Home/Projects";
 
 export default async function WorkspacePage({ searchParams }) {
   const params = await searchParams;

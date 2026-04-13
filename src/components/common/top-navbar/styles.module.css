@@ -1,0 +1,107 @@
+.topNav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: 54px;
+  border-bottom: 1px solid #ececec;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+}
+
+.leftArea {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.brandDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #35c29b;
+}
+
+.orgText {
+  font-size: 0.85rem;
+  color: #2d2d2d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rightArea {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.actionButton {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(var(--border), 0.78);
+  border-radius: 8px;
+  background: rgba(var(--surface-1), 0.9);
+  color: rgb(var(--projects-page-accent-text));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.actionButton:hover {
+  background: var(--projects-page-accent-soft);
+  border-color: rgba(var(--primary), 0.4);
+  color: rgb(var(--primary));
+}
+
+.userCard {
+  height: 36px;
+  border: 1px solid #e7e7e7;
+  border-radius: 999px;
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 4px;
+}
+
+.userAvatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #141414;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.08;
+  min-width: 0;
+}
+
+.userInfo strong {
+  font-size: 0.74rem;
+  color: #1f1f1f;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.userInfo span {
+  font-size: 0.68rem;
+  color: #8b8b8b;
+  max-width: 170px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
