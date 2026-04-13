@@ -30,6 +30,12 @@ export const RETRIEVAL_STRATEGY_OPTIONS = [
   { value: "keyword-search", label: "Keyword search" },
 ];
 
+export const QUERY_CONFIGURATION_OPTIONS = [
+  { value: "agent", label: "Agent" },
+  { value: "ragas", label: "Ragas" },
+  { value: "langsmith", label: "LangSmith" },
+];
+
 export const DEFAULT_QUALITY_METRICS = [
   { label: "Answer relevance", score: 0.91 },
   { label: "Groundedness", score: 0.89 },
@@ -86,6 +92,7 @@ export const createWorkspaceState = () => ({
   embeddingModels: ["text-embedding-3-small"],
   vectorStores: ["faiss"],
   retrievalStrategies: ["semantic-similarity"],
+  queryConfigurations: [],
   qualityMetrics: DEFAULT_QUALITY_METRICS,
   chunkLength: 1000,
   topK: 3,

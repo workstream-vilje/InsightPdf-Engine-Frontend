@@ -46,6 +46,7 @@ import {
   DEFAULT_QUALITY_METRICS,
   EMBEDDING_OPTIONS,
   INITIAL_PROJECTS,
+  QUERY_CONFIGURATION_OPTIONS,
   RETRIEVAL_STRATEGY_OPTIONS,
   TEXT_PROCESSING_OPTIONS,
   VECTOR_STORE_OPTIONS,
@@ -733,13 +734,46 @@ const buildSharedPipelineConfig = (workspace) => {
 
 const buildQueryPayload = ({ projectId, fileId, workspace, query }) => {
   const { queryConfig } = buildSharedPipelineConfig(workspace);
+  const queryConfigurations = workspace?.queryConfigurations || [];
+  const agentEnabled = queryConfigurations.includes("agent");
 
   return {
     project_id: Number(projectId),
     file_id: Number(fileId),
     query: query.trim(),
+    agent: agentEnabled,
+    regas_activation: queryConfigurations.includes("ragas"),
+    langsmith_activation: queryConfigurations.includes("langsmith"),
     config: queryConfig,
   };
+};
+
+const toPercentMetric = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return null;
+  return Math.max(0, Math.min(100, numericValue <= 1 ? numericValue * 100 : numericValue));
+};
+
+const buildRagasQualityMetrics = (result) => {
+  const ragas = result?.ragas || {};
+  const metrics = [
+    { label: "Faithfulness", value: toPercentMetric(result?.faithfulness ?? ragas?.faithfulness) },
+    {
+      label: "Context precision",
+      value: toPercentMetric(result?.context_precision ?? ragas?.context_precision),
+    },
+    {
+      label: "Context recall",
+      value: toPercentMetric(result?.context_recall ?? ragas?.context_recall),
+    },
+    {
+      label: "Answer relevance",
+      value: toPercentMetric(result?.answer_relevance ?? ragas?.answer_relevance),
+    },
+  ].filter((metric) => metric.value !== null);
+
+  return metrics.length > 0 ? metrics : DEFAULT_QUALITY_METRICS;
 };
 
 const buildUsedStrategiesSummary = (workspace) => {
@@ -1312,9 +1346,9 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     (key, value) => {
       updateActiveWorkspace((current) => ({
         ...current,
-        [key]: current[key].includes(value)
-          ? current[key].filter((item) => item !== value)
-          : [...current[key], value],
+        [key]: (current[key] || []).includes(value)
+          ? (current[key] || []).filter((item) => item !== value)
+          : [...(current[key] || []), value],
       }));
     },
     [updateActiveWorkspace],
@@ -1843,6 +1877,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
               db: result?.db || result?.retrieval || "Default",
               response: savedResponse?.response || result?.answer || "",
               chunks: savedResponse?.chunks || result?.chunks || [],
+              qualityMetrics: buildRagasQualityMetrics(result),
               usedStrategies: buildVariantStrategiesSummary(
                 activeWorkspace,
                 result,
@@ -1869,6 +1904,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
           responseVisible: true,
           usedStrategies: primaryVariant?.usedStrategies || [],
           responseVariants,
+          qualityMetrics: primaryVariant?.qualityMetrics || current?.qualityMetrics || DEFAULT_QUALITY_METRICS,
           queryActivity: {
             visible: true,
             status: "success",
@@ -2417,11 +2453,15 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
 
                 <SidebarSection
                   icon={MessageSquare}
-                  title="LLM Selection"
-                  description="Current model"
+                  title="Query Configuration"
+                  description="Toggle query services"
                   expanded
                 >
-                  <div className={styles.inlineInfoPill}>gpt-4o-mini</div>
+                  <MultiSelectChips
+                    options={QUERY_CONFIGURATION_OPTIONS}
+                    selectedValues={activeWorkspace.queryConfigurations || []}
+                    onToggle={(value) => toggleWorkspaceValue("queryConfigurations", value)}
+                  />
                 </SidebarSection>
               </div>
             </section>
@@ -3061,16 +3101,16 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                 <div className={styles.insightPanel}>
                   <h3>Quality Metrics</h3>
                   <div className={styles.qualityList}>
-                    {DEFAULT_QUALITY_METRICS.map((metric) => (
+                    {(activeWorkspace.qualityMetrics || DEFAULT_QUALITY_METRICS).map((metric) => (
                       <div key={metric.label} className={styles.qualityRow}>
                         <div className={styles.qualityHeader}>
                           <span>{metric.label}</span>
-                          <strong>{metric.value}%</strong>
+                          <strong>{Number(metric.value || 0).toFixed(1)}%</strong>
                         </div>
                         <div className={styles.qualityTrack}>
                           <div
                             className={styles.qualityBar}
-                            style={{ width: `${metric.value}%` }}
+                            style={{ width: `${Number(metric.value || 0)}%` }}
                           />
                         </div>
                       </div>
