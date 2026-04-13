@@ -1,3 +1,5 @@
+import { clearAuthSession, redirectToLogin } from "@/services/auth";
+
 /**
  * API base must come from environment variables only.
  * Set NEXT_PUBLIC_API_BASE_URL (preferred) or NEXT_PUBLIC_BACKEND_URL in .env.local.
@@ -50,6 +52,11 @@ const parseResponse = async (response) => {
   const payload = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      clearAuthSession();
+      redirectToLogin();
+    }
+
     const message =
       (isJson && (payload?.detail || payload?.message || payload?.error)) ||
       response.statusText ||
