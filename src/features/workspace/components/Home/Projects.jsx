@@ -974,6 +974,9 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const [chatGreeting, setChatGreeting] = useState("Hello");
   const [userProfile, setUserProfile] = useState({ name: "", email: "" });
   const [techniqueOverlay, setTechniqueOverlay] = useState(null);
+  const [historyEntries, setHistoryEntries] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
   const fileInputRef = useRef(null);
   const queryInputRef = useRef(null);
   const workspaceContentRef = useRef(null);
@@ -1353,6 +1356,33 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     },
     [updateActiveWorkspace],
   );
+
+  const handleProjectHistoryClick = useCallback(async () => {
+    if (!activeProject?.id) return;
+
+    setIsRightSidebarExpanded(true);
+    updateActiveWorkspace((current) => ({
+      ...current,
+      activeRightSection: "history",
+    }));
+    setHistoryLoading(true);
+    setHistoryError("");
+
+    try {
+      const response = await projectApi.fetchProjectHistory(activeProject.id);
+      setHistoryEntries(Array.isArray(response) ? response : []);
+    } catch (error) {
+      setHistoryEntries([]);
+      setHistoryError(
+        error?.message ||
+          error?.payload?.message ||
+          error?.payload?.detail ||
+          "Failed to load experiment history",
+      );
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [activeProject?.id, updateActiveWorkspace]);
 
   const handleCreateProject = async () => {
     if (!newProjectName.trim() || !newProjectCategory.trim()) return;
@@ -2245,10 +2275,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
             id: "history",
             label: "History",
             icon: "history",
-            onClick: () =>
-              router.push(
-                `${ROUTE_PATHS.HISTORY}?project=${activeProject.id}&name=${activeProject.name}&category=${activeProject.category}`,
-              ),
+            onClick: handleProjectHistoryClick,
           },
           {
             id: "metrics",
@@ -3092,6 +3119,33 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeWorkspace.activeRightSection === "history" && (
+                <div className={styles.insightPanel}>
+                  <h3>Experiment History</h3>
+                  {historyLoading && <div>Loading history...</div>}
+                  {historyError && <div>{historyError}</div>}
+                  {!historyLoading && !historyError && historyEntries.length === 0 && (
+                    <div>No history data available for this project.</div>
+                  )}
+                  {!historyLoading && !historyError && historyEntries.length > 0 && (
+                    <div className={styles.metricGrid}>
+                      {historyEntries.map((entry) => (
+                        <div key={entry.id} className={styles.metricCard}>
+                          <span>{entry.id}</span>
+                          <strong>{entry.metrics?.accuracy ?? 0}%</strong>
+                          <small>{entry.date}</small>
+                          <small>Latency: {entry.metrics?.latency || "-"}</small>
+                          <small>Cost: {entry.metrics?.cost || "-"}</small>
+                          <small>Relevance: {entry.metrics?.relevance ?? 0}%</small>
+                          <small>DB: {entry.config?.db || "-"}</small>
+                          <small>Retrieval: {entry.config?.retrieval || "-"}</small>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
