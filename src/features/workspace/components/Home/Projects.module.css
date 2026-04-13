@@ -591,6 +591,14 @@
   padding: 24px;
 }
 
+.modalOverlay.workspaceFileDeleteOverlay {
+  z-index: 110;
+}
+
+.modalOverlay.deleteAllFilesOverlay {
+  z-index: 115;
+}
+
 .createModal {
   width: min(620px, 100%);
   min-height: 420px;
@@ -823,13 +831,24 @@
 
 .workspaceMain {
   flex: 1;
-  height: 100vh;
-  min-width: 0;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0;
   background: rgba(var(--surface-1), 0.32);
+}
+
+.workspaceMainUpload {
+  overflow: hidden;
+}
+
+.workspaceMainUpload .workspaceCanvasUpload {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .workspaceHeader {
@@ -916,6 +935,89 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.executionCardHeaderRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+@media (min-width: 520px) {
+  .executionCardHeaderRight {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.executionBackToFilesButton {
+  font-weight: 700;
+}
+
+.executionCollapsedBar {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(var(--border), 0.84);
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.executionCollapsedBarSuccess {
+  border-color: rgba(var(--emerald), 0.28);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(var(--emerald), 0.05));
+}
+
+.executionCollapsedBarError {
+  border-color: rgba(239, 68, 68, 0.28);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(254, 226, 226, 0.45));
+}
+
+.executionCollapsedBarText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.executionCollapsedBarLabel {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: rgb(var(--muted-foreground));
+}
+
+.executionCollapsedBarStatus {
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.executionCollapsedBarStatusSuccess {
+  color: rgb(var(--emerald));
+}
+
+.executionCollapsedBarStatusError {
+  color: rgb(220, 38, 38);
+}
+
+.executionCollapsedBarMessage {
+  font-size: 0.8rem;
+  color: rgb(var(--muted-foreground));
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.executionShowOutputButton {
+  flex-shrink: 0;
+  font-weight: 700;
 }
 
 .executionEyebrow {
@@ -1394,6 +1496,7 @@
 /* Upload-only or query-only dashboard: one full-width column */
 .workspaceContentLayoutSingleColumn {
   grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .workspaceContentLayoutSingleColumn .chatPanelShell {
@@ -1405,6 +1508,1005 @@
   align-items: center;
   gap: 8px;
   white-space: nowrap;
+}
+
+.workspaceCanvasUpload {
+  padding: 4px 16px 12px;
+  background: linear-gradient(180deg, rgba(var(--surface-2), 0.35), rgba(var(--background), 0.6));
+}
+
+.uploadWorkspace {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  align-self: stretch;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+.uploadWorkspaceColumn {
+  width: 100%;
+  max-width: 920px;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Upload workspace: intro + dropzone fixed; only file list scrolls */
+.uploadWorkspaceFixedTop {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 0;
+}
+
+.uploadStepCardFilesGrow {
+  flex: 1;
+  min-height: 0;
+}
+
+
+.uploadStepBodyGrow {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  gap: 12px;
+}
+
+.uploadStepBodyGrow .headerFilesContainer {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.uploadFilesScrollRegion {
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  padding-bottom: 4px;
+  position: relative;
+  z-index: 0;
+  -webkit-overflow-scrolling: touch;
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
+  border: 1px solid rgba(var(--border), 0.45);
+}
+
+.uploadWorkspacePipelineSection {
+  flex-shrink: 0;
+  max-height: min(42vh, 420px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.uploadFileCardDelete {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  left: auto;
+  z-index: 3;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(var(--muted-foreground));
+  background: rgb(var(--background));
+  border: 1px solid rgba(var(--border), 0.75);
+  cursor: pointer;
+  box-sizing: border-box;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.uploadFileCardDelete:hover {
+  color: rgb(220, 38, 38);
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(254, 242, 242, 0.95);
+}
+
+.uploadFileStatusPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 5.75rem;
+  box-sizing: border-box;
+}
+
+.uploadFileRowDelete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--border), 0.75);
+  background: rgb(var(--background));
+  color: rgb(var(--muted-foreground));
+  cursor: pointer;
+  flex: 0 0 32px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.uploadFileRowDelete:hover {
+  color: rgb(220, 38, 38);
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(254, 242, 242, 0.9);
+}
+
+.topNavOpenChat {
+  border-radius: 10px;
+  font-weight: 650;
+  box-shadow: none;
+}
+
+.topNavOpenChatHighlight {
+  animation: topNavOpenChatPulse 2s ease-in-out infinite;
+  box-shadow:
+    0 0 0 2px rgba(var(--primary), 0.3),
+    0 6px 18px rgba(var(--primary), 0.18);
+}
+
+.topNavWorkspaceUpload {
+  border-radius: 10px;
+  font-weight: 650;
+}
+
+@keyframes topNavOpenChatPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px rgba(var(--primary), 0.3),
+      0 6px 18px rgba(var(--primary), 0.18);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(var(--primary), 0.42),
+      0 8px 22px rgba(var(--primary), 0.24);
+  }
+}
+
+.pipelineFooter {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(var(--border), 0.65);
+  background: linear-gradient(180deg, rgba(var(--surface-1), 0.92), rgba(255, 255, 255, 0.98));
+  margin: 0 -4px;
+  padding-left: 12px;
+  padding-right: 12px;
+  padding-bottom: 12px;
+}
+
+.pipelineCtaHintLatin {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-align: center;
+  font-style: italic;
+  font-family: Georgia, "Times New Roman", "Liberation Serif", serif;
+  color: rgb(var(--muted-foreground));
+  opacity: 0.62;
+}
+
+.pipelineCtaDescShort {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: rgb(var(--muted-foreground));
+}
+
+.uploadWorkspaceInner {
+  width: 100%;
+  max-width: 920px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.uploadWorkspaceIntroCompact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 2px 2px;
+  margin: 0;
+}
+
+.uploadWorkspaceHeadlineCompact {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: rgb(var(--foreground));
+}
+
+.uploadWorkspaceLeadCompact {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: rgb(var(--muted-foreground));
+  max-width: 48rem;
+}
+
+.uploadStepCardCompact {
+  padding: 10px 12px 12px;
+}
+
+.uploadStepCard.uploadStepCardNoBadge {
+  grid-template-columns: 1fr;
+}
+
+.uploadDropzoneProCompact {
+  width: 100%;
+  border: 1px dashed rgba(var(--primary), 0.35);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(var(--sky), 0.1), rgba(255, 255, 255, 0.96));
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.uploadDropzoneProCompact:hover:not(:disabled) {
+  border-color: rgba(var(--primary), 0.5);
+}
+
+.uploadDropzoneProCompact .uploadDropzoneProIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+.uploadTimelineDeterminate {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgb(var(--primary)), rgba(var(--sky-strong), 0.95));
+  transition: width 0.12s ease;
+}
+
+.uploadFilesToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.uploadFilesExpandButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(var(--border), 0.85);
+  background: rgba(var(--surface-1), 0.95);
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: rgb(var(--foreground));
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.uploadFilesExpandButton:hover {
+  border-color: rgba(var(--primary), 0.35);
+  background: rgba(var(--primary), 0.06);
+  color: rgb(var(--primary));
+}
+
+.uploadFilesDeleteAllButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  background: rgba(254, 242, 242, 0.85);
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: rgb(185, 28, 28);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  white-space: nowrap;
+}
+
+.uploadFilesDeleteAllButton:hover {
+  border-color: rgba(220, 38, 38, 0.55);
+  background: rgba(254, 226, 226, 0.95);
+  color: rgb(153, 27, 27);
+}
+
+.uploadViewSwitch {
+  display: inline-flex;
+  border: 1px solid rgba(var(--border), 0.85);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(var(--surface-1), 0.9);
+}
+
+.uploadViewButton {
+  border: 0;
+  background: transparent;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: rgb(var(--muted-foreground));
+  display: grid;
+  place-items: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.uploadViewButton:hover {
+  color: rgb(var(--foreground));
+  background: rgba(var(--muted), 0.2);
+}
+
+.uploadViewButtonActive {
+  color: rgb(var(--primary));
+  background: rgba(var(--primary), 0.1);
+}
+
+.uploadFileGridLayout {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 12px;
+  width: 100%;
+  align-content: start;
+  min-height: 0;
+}
+
+.uploadFileListLayout {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.uploadFileCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 38px 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--border), 0.72);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(var(--surface-1), 0.55));
+  cursor: pointer;
+  text-align: left;
+  min-height: 118px;
+  min-width: 0;
+  width: 100%;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.uploadFileCard:hover {
+  border-color: rgba(var(--primary), 0.28);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.07);
+  transform: translateY(-1px);
+}
+
+.uploadFileCardActive {
+  border-color: rgba(var(--primary), 0.45);
+  box-shadow:
+    0 0 0 1px rgba(var(--primary), 0.14),
+    0 10px 26px rgba(var(--primary), 0.1);
+}
+
+.uploadFileCardIcon {
+  color: rgb(var(--primary));
+}
+
+.uploadFileCardTitle {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.35;
+  color: rgb(var(--foreground));
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  width: 100%;
+  padding-right: 44px;
+  box-sizing: border-box;
+}
+
+.uploadFileCardMeta {
+  margin: 0;
+  font-size: 0.75rem;
+  color: rgb(var(--muted-foreground));
+}
+
+.uploadFileCardBadge {
+  margin-top: auto;
+}
+
+.uploadFileRowActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.uploadFileReportBtn {
+  border: 0;
+  background: rgba(var(--primary), 0.1);
+  color: rgb(var(--primary));
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.uploadFileReportBtn:hover {
+  background: rgba(var(--primary), 0.18);
+}
+
+.uploadFileReportLink {
+  margin-top: 4px;
+  border: 0;
+  background: transparent;
+  color: rgb(var(--primary));
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.uploadFileReportLink:hover {
+  text-decoration: underline;
+}
+
+.ingestionReportBanner {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 8px;
+}
+
+.ingestionReportOpenButton {
+  font-weight: 700;
+}
+
+.openChatCta {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.openChatCtaHighlight {
+  animation: openChatPulse 2s ease-in-out infinite;
+  box-shadow:
+    0 0 0 2px rgba(var(--primary), 0.35),
+    0 8px 22px rgba(var(--primary), 0.22);
+}
+
+@keyframes openChatPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px rgba(var(--primary), 0.35),
+      0 8px 22px rgba(var(--primary), 0.22);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(var(--primary), 0.45),
+      0 10px 28px rgba(var(--primary), 0.28);
+  }
+}
+
+/* Full-screen file list (covers app chrome; below ingestion modal, above main UI) */
+.uploadFilesExpandedFullPage {
+  position: fixed;
+  inset: 0;
+  z-index: 92;
+  display: flex;
+  flex-direction: column;
+  background: rgb(var(--background));
+  overflow: hidden;
+}
+
+.uploadFilesExpandedFullPageHeader {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  padding-top: max(10px, env(safe-area-inset-top, 0px));
+  border-bottom: 1px solid rgba(var(--border), 0.65);
+  background: rgba(var(--surface-1), 0.98);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+}
+
+.uploadFilesExpandedBack {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  margin-left: -6px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 0.88rem;
+  font-weight: 650;
+  color: rgb(var(--foreground));
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.uploadFilesExpandedBack:hover {
+  background: rgba(var(--muted), 0.14);
+}
+
+.uploadFilesExpandedHeaderTitles {
+  flex: 1;
+  min-width: 0;
+}
+
+.uploadFilesExpandedTitle {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 800;
+  color: rgb(var(--foreground));
+}
+
+.uploadFilesExpandedSubtitle {
+  margin: 2px 0 0;
+  font-size: 0.76rem;
+  color: rgb(var(--muted-foreground));
+}
+
+.uploadFilesExpandedHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.uploadFilesExpandedFullPageBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px 16px;
+  overflow: hidden;
+}
+
+.uploadFilesExpandedScroll {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: auto;
+  padding: 16px 0 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.uploadFilesExpandedScroll.uploadFileGridLayout {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  align-content: start;
+}
+
+.ingestionReportBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.ingestionReportModal {
+  width: min(560px, 100%);
+  max-height: min(88vh, 720px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(var(--border), 0.85);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
+}
+
+.ingestionReportModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(var(--border), 0.65);
+}
+
+.ingestionReportModalTitle {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.ingestionReportClose {
+  border: 0;
+  background: rgba(var(--muted), 0.2);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.ingestionReportClose:hover {
+  background: rgba(var(--muted), 0.35);
+}
+
+.ingestionReportTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(var(--border), 0.55);
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.ingestionReportTab {
+  border: 1px solid rgba(var(--border), 0.75);
+  background: rgba(var(--surface-1), 0.9);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ingestionReportTabActive {
+  border-color: rgba(var(--primary), 0.45);
+  background: rgba(var(--primary), 0.1);
+  color: rgb(var(--primary));
+}
+
+.ingestionReportBody {
+  padding: 16px 18px 20px;
+  overflow-y: auto;
+}
+
+.ingestionReportGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin: 0;
+}
+
+.ingestionReportGrid dt {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgb(var(--muted-foreground));
+  margin: 0 0 4px;
+}
+
+.ingestionReportGrid dd {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: rgb(var(--foreground));
+  word-break: break-word;
+}
+
+.ingestionReportSpanWide {
+  grid-column: 1 / -1;
+}
+
+.uploadWorkspaceIntro {
+  padding: 4px 2px 8px;
+}
+
+.uploadWorkspaceKicker {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(var(--primary));
+  margin: 0 0 6px;
+}
+
+.uploadWorkspaceHeadline {
+  margin: 0 0 8px;
+  font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: rgb(var(--foreground));
+}
+
+.uploadWorkspaceLead {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: rgb(var(--muted-foreground));
+  max-width: 52rem;
+}
+
+.uploadStepCard {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px 18px;
+  align-items: flex-start;
+  padding: 20px 20px 22px;
+  border-radius: 16px;
+  border: 1px solid rgba(var(--border), 0.85);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 12px 40px rgba(15, 23, 42, 0.06);
+}
+
+/* Stretch body column so the file list scroll region gets a bounded height (avoids overlap with footer). */
+.uploadStepCard.uploadStepCardFilesGrow {
+  align-items: stretch;
+  min-height: 0;
+  padding: 12px 14px 14px;
+}
+
+.uploadStepBadge {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: rgb(var(--primary));
+  background: rgba(var(--primary), 0.1);
+  border: 1px solid rgba(var(--primary), 0.18);
+  flex-shrink: 0;
+}
+
+.uploadStepBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.uploadStepTitleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.uploadStepTitle {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: rgb(var(--foreground));
+}
+
+.uploadStepHint {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgb(var(--muted-foreground));
+  font-family: var(--font-code, ui-monospace, monospace);
+}
+
+.uploadDropzonePro {
+  width: 100%;
+  border: 1px dashed rgba(var(--primary), 0.38);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(var(--sky), 0.12), rgba(255, 255, 255, 0.96));
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.uploadDropzonePro:hover:not(:disabled) {
+  border-color: rgba(var(--primary), 0.55);
+  box-shadow: 0 8px 28px rgba(var(--primary), 0.08);
+}
+
+.uploadDropzonePro:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+.uploadDropzoneProIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(var(--primary), 0.12);
+  color: rgb(var(--primary));
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.uploadDropzoneProText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.uploadDropzoneProTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: rgb(var(--foreground));
+}
+
+.uploadDropzoneProSub {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: rgb(var(--muted-foreground));
+}
+
+.uploadTimeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.uploadTimelineBar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(var(--muted-foreground), 0.12);
+  overflow: hidden;
+}
+
+.uploadTimelineIndeterminate {
+  height: 100%;
+  width: 40%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(var(--primary), 0.2), rgb(var(--primary)), rgba(var(--primary), 0.2));
+  animation: uploadIndeterminate 1.1s ease-in-out infinite;
+}
+
+@keyframes uploadIndeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.uploadTimelineCaption {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgb(var(--primary));
+}
+
+.uploadFileGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.uploadFileRow {
+  display: grid;
+  grid-template-columns: auto 1fr minmax(200px, 200px);
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--border), 0.75);
+  background: rgba(var(--surface-1), 0.85);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.uploadFileRow:hover {
+  border-color: rgba(var(--primary), 0.28);
+}
+
+.uploadFileRowActive {
+  border-color: rgba(var(--primary), 0.45);
+  box-shadow: 0 0 0 1px rgba(var(--primary), 0.12);
+  background: rgba(var(--primary), 0.04);
+}
+
+.uploadFileRowIcon {
+  color: rgb(var(--muted-foreground));
+  flex-shrink: 0;
+}
+
+.uploadFileRowMain {
+  min-width: 0;
+}
+
+.emptyFilesStatePro {
+  padding: 20px 16px;
+  border-radius: 12px;
+  border: 1px dashed rgba(var(--border), 0.9);
+  background: rgba(var(--surface-2), 0.35);
+  color: rgb(var(--muted-foreground));
+  font-size: 0.9rem;
+  text-align: center;
+  line-height: 1.55;
+}
+
+.pipelineRunButton {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 14px;
+  font-size: 1rem;
+  font-weight: 800;
+  gap: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pipelineCtaNote {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgb(var(--muted-foreground));
+  text-align: center;
+}
+
+.executionCardPro {
+  border-radius: 16px;
 }
 
 .workspaceAssetPanel {

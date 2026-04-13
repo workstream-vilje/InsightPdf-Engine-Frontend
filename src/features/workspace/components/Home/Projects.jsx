@@ -18,13 +18,18 @@ import {
   Database,
   FileText,
   FolderKanban,
+  Grid2x2,
+  List,
   LogOut,
   MessageSquare,
+  PlayCircle,
   Send,
   Settings,
   Sparkles,
+  Trash2,
   Upload,
   X,
+  Maximize2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ProjectsPageView from "@/pages/projects_page/ProjectsPageView";
@@ -55,6 +60,9 @@ import {
 } from "@/lib/projects/data";
 import { ROUTE_PATHS, workspaceQueryUrl, workspaceUploadUrl } from "@/utils/routepaths";
 import styles from "./Projects.module.css";
+
+/** Typed in the “delete all files” modal to confirm permanent removal. */
+const DELETE_ALL_FILES_CONFIRM_PHRASE = "DELETE ALL";
 
 const RIGHT_SIDEBAR_ITEMS = [
   { value: "response", label: "Response", icon: MessageSquare },
@@ -570,6 +578,33 @@ const buildBatchExecutionSummary = ({ responses, files, workspace }) => {
   };
 };
 
+/** Normalized metrics per file for ingestion report UI */
+const mapProcessResultToIngestionReport = (entry, index) => {
+  const data = entry?.result || {};
+  const comparisonResults = Array.isArray(data?.comparison_results) ? data.comparison_results : null;
+  const primaryData = comparisonResults?.[0] || data;
+  const chunkTotal = Number(primaryData?.chunks?.total || 0);
+  const vectorStores = primaryData?.vector_store?.stores || [];
+  const vectorsStored = vectorStores.reduce((t, s) => t + Number(s?.vectors_stored || 0), 0);
+  const processingTime = Number(primaryData?.performance?.processing_time_seconds || 0);
+  const emb = primaryData?.embedding;
+  const embeddingLabel = emb
+    ? [emb.provider, emb.model].filter(Boolean).join(" / ")
+    : "—";
+  const backends = Array.from(new Set(vectorStores.map((s) => s?.backend).filter(Boolean)));
+  return {
+    id: String(entry?.fileId ?? `idx-${index}`),
+    fileId: entry?.fileId ?? null,
+    fileName: entry?.fileName || `File ${index + 1}`,
+    fileCode: entry?.fileCode || null,
+    chunkCount: chunkTotal,
+    vectorsStored,
+    processingTimeSeconds: processingTime,
+    embeddingLabel,
+    backends,
+  };
+};
+
 const createActivityMessage = (id, text, tone = "info") => ({
   id,
   text,
@@ -952,6 +987,195 @@ const SidebarSection = ({ icon: Icon, title, description, expanded, children }) 
   </section>
 );
 
+/** Shared grid/list of project files for inline upload panel and expanded modal. */
+function UploadProjectFilesList({
+  files,
+  uploadFilesViewMode,
+  activeWorkspaceFileId,
+  ingestionFileReports,
+  executionState,
+  updateActiveWorkspace,
+  setIngestionReportSelectedId,
+  setIngestionReportOpen,
+  setWorkspaceFilePendingDelete,
+  setDeleteWorkspaceFileNameInput,
+  regionClassName,
+  emptyClassName,
+  emptyMessage,
+}) {
+  if (!files?.length) {
+    return <div className={emptyClassName}>{emptyMessage}</div>;
+  }
+  return (
+    <div
+      className={classNames(
+        regionClassName,
+        uploadFilesViewMode === "grid" ? styles.uploadFileGridLayout : styles.uploadFileListLayout,
+      )}
+    >
+      {files.map((file) => {
+        const fileReport = ingestionFileReports.find(
+          (r) => r.fileId != null && String(r.fileId) === String(file.fileId),
+        );
+        const showReportBtn = executionState?.status === "success" && fileReport;
+        return uploadFilesViewMode === "grid" ? (
+          <button
+            key={file.id}
+            type="button"
+            className={classNames(styles.uploadFileCard, {
+              [styles.uploadFileCardActive]: String(file.fileId) === activeWorkspaceFileId,
+            })}
+            onClick={() =>
+              updateActiveWorkspace((current) => ({
+                ...current,
+                selectedFileId:
+                  String(file.fileId) === String(current.selectedFileId)
+                    ? null
+                    : file.fileId != null
+                    ? Number(file.fileId)
+                    : null,
+              }))
+            }
+          >
+            {file.fileId != null && (
+              <span
+                role="button"
+                tabIndex={0}
+                className={styles.uploadFileCardDelete}
+                title="Delete file"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setWorkspaceFilePendingDelete(file);
+                  setDeleteWorkspaceFileNameInput("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setWorkspaceFilePendingDelete(file);
+                    setDeleteWorkspaceFileNameInput("");
+                  }
+                }}
+              >
+                <Trash2 size={14} strokeWidth={2} aria-hidden />
+              </span>
+            )}
+            <FileText size={20} className={styles.uploadFileCardIcon} />
+            <p className={styles.uploadFileCardTitle}>{file.name}</p>
+            <p className={styles.uploadFileCardMeta}>
+              {file.pages ?? file.pagesCount ?? file.pages_count ?? "—"} pg · {file.size}
+            </p>
+                <span
+                  className={classNames(styles.fileStatusBadge, styles.uploadFileStatusPill, styles.uploadFileCardBadge, {
+                    [styles.fileStatusBadgeActive]: String(file.fileId) === activeWorkspaceFileId,
+                  })}
+                >
+                  {String(file.fileId) === activeWorkspaceFileId ? "Selected" : "Ready"}
+                </span>
+            {showReportBtn && (
+              <span
+                role="button"
+                tabIndex={0}
+                className={styles.uploadFileReportLink}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIngestionReportSelectedId(String(fileReport.id));
+                  setIngestionReportOpen(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIngestionReportSelectedId(String(fileReport.id));
+                    setIngestionReportOpen(true);
+                  }
+                }}
+              >
+                Report
+              </span>
+            )}
+          </button>
+        ) : (
+          <button
+            key={file.id}
+            type="button"
+            className={classNames(styles.uploadFileRow, {
+              [styles.uploadFileRowActive]: String(file.fileId) === activeWorkspaceFileId,
+            })}
+            onClick={() =>
+              updateActiveWorkspace((current) => ({
+                ...current,
+                selectedFileId:
+                  String(file.fileId) === String(current.selectedFileId)
+                    ? null
+                    : file.fileId != null
+                    ? Number(file.fileId)
+                    : null,
+              }))
+            }
+            aria-pressed={String(file.fileId) === activeWorkspaceFileId}
+          >
+            <FileText size={18} className={styles.uploadFileRowIcon} />
+            <div className={styles.uploadFileRowMain}>
+              <p className={styles.fileItemTitle}>{file.name}</p>
+              <p className={styles.fileItemMeta}>
+                {(file.fileCode || `FILE-${file.id}`) +
+                  " · " +
+                  `${file.pages ?? file.pagesCount ?? file.pages_count ?? "-"} pages · ${file.size}`}
+              </p>
+            </div>
+            <div className={styles.uploadFileRowActions}>
+              {showReportBtn && (
+                <button
+                  type="button"
+                  className={styles.uploadFileReportBtn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIngestionReportSelectedId(String(fileReport.id));
+                    setIngestionReportOpen(true);
+                  }}
+                >
+                  Report
+                </button>
+              )}
+              <span
+                className={classNames(styles.fileStatusBadge, styles.uploadFileStatusPill, {
+                  [styles.fileStatusBadgeActive]: String(file.fileId) === activeWorkspaceFileId,
+                })}
+              >
+                {String(file.fileId) === activeWorkspaceFileId ? "Selected" : "Ready"}
+              </span>
+              {file.fileId != null && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className={styles.uploadFileRowDelete}
+                  title="Delete file"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setWorkspaceFilePendingDelete(file);
+                    setDeleteWorkspaceFileNameInput("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setWorkspaceFilePendingDelete(file);
+                      setDeleteWorkspaceFileNameInput("");
+                    }
+                  }}
+                >
+                  <Trash2 size={15} strokeWidth={2} aria-hidden />
+                </span>
+              )}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -959,7 +1183,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const [projectWorkspaces, setProjectWorkspaces] = useState(() =>
     Object.fromEntries(INITIAL_PROJECTS.map((project) => [project.id, createWorkspaceState()])),
   );
-  const [activeProjectId, setActiveProjectId] = useState(initialProjectId);
+  const [activeProjectId, setActiveProjectId] = useState(() =>
+    initialProjectId != null && initialProjectId !== "" ? String(initialProjectId) : null,
+  );
   const [searchValue, setSearchValue] = useState("");
   const deferredSearchValue = useDeferredValue(searchValue);
   const [projectFilter, setProjectFilter] = useState("all");
@@ -974,6 +1200,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const [projectPendingDelete, setProjectPendingDelete] = useState(null);
   const [deleteProjectInput, setDeleteProjectInput] = useState("");
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+  const [uploadFilesViewMode, setUploadFilesViewMode] = useState("grid");
+  const [uploadFilesExpandedOpen, setUploadFilesExpandedOpen] = useState(false);
+  const [workspaceFilePendingDelete, setWorkspaceFilePendingDelete] = useState(null);
+  const [deleteWorkspaceFileNameInput, setDeleteWorkspaceFileNameInput] = useState("");
+  const [deletingWorkspaceFileId, setDeletingWorkspaceFileId] = useState(null);
+  const [deleteAllFilesModalOpen, setDeleteAllFilesModalOpen] = useState(false);
+  const [deleteAllFilesConfirmInput, setDeleteAllFilesConfirmInput] = useState("");
+  const [isDeletingAllFiles, setIsDeletingAllFiles] = useState(false);
+  const [ingestionReportOpen, setIngestionReportOpen] = useState(false);
+  const [ingestionReportSelectedId, setIngestionReportSelectedId] = useState(null);
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
   const [isRightSidebarExpanded, setIsRightSidebarExpanded] = useState(false);
   const [chatPanelOffset, setChatPanelOffset] = useState(420);
@@ -987,6 +1223,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const hasHydratedRef = useRef(false);
   const projectFilesListSyncPromiseRef = useRef(null);
   const focusResyncTimeoutRef = useRef(null);
+  const prevActiveProjectIdRef = useRef(null);
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
@@ -1077,6 +1314,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   }, []);
 
   useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    if (!uploadFilesExpandedOpen) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [uploadFilesExpandedOpen]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const profile = getStoredUserProfile();
     setUserProfile({
@@ -1130,7 +1377,10 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       if (storedWorkspaces) {
         const parsedWorkspaces = JSON.parse(storedWorkspaces);
         if (parsedWorkspaces && typeof parsedWorkspaces === "object") {
-          setProjectWorkspaces(parsedWorkspaces);
+          const normalized = Object.fromEntries(
+            Object.entries(parsedWorkspaces).map(([key, value]) => [String(key), value]),
+          );
+          setProjectWorkspaces(normalized);
         }
       }
     } catch (error) {
@@ -1158,18 +1408,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           });
           return next;
         });
-        setActiveProjectId((current) => {
-          const requestedProjectId = initialProjectId ? String(initialProjectId) : null;
-          const currentProjectId = current ? String(current) : null;
+        setActiveProjectId(() => {
+          const requestedProjectId =
+            initialProjectId != null && initialProjectId !== ""
+              ? String(initialProjectId)
+              : null;
           const availableIds = new Set(backendProjects.map((project) => String(project.id)));
-
-          if (requestedProjectId && availableIds.has(requestedProjectId)) {
-            return requestedProjectId;
+          if (requestedProjectId == null) {
+            return null;
           }
-          if (currentProjectId && availableIds.has(currentProjectId)) {
-            return currentProjectId;
-          }
-          return null;
+          return availableIds.has(requestedProjectId) ? requestedProjectId : null;
         });
       } catch (error) {
         console.error("Failed to sync projects from backend", error);
@@ -1204,10 +1452,14 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   }, [projectWorkspaces]);
 
   useEffect(() => {
-    if (!initialProjectId) return;
-    const projectExists = projects.some((project) => project.id === initialProjectId);
+    if (initialProjectId == null || initialProjectId === "") {
+      setActiveProjectId(null);
+      return;
+    }
+    const requested = String(initialProjectId);
+    const projectExists = projects.some((project) => String(project.id) === requested);
     if (projectExists) {
-      setActiveProjectId(initialProjectId);
+      setActiveProjectId(requested);
     }
   }, [initialProjectId, projects]);
 
@@ -1221,6 +1473,33 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     },
     [activeProjectId],
   );
+
+  /** Collapse pipeline output when switching projects so each workspace opens files-first (unless a run is in progress). */
+  useEffect(() => {
+    if (!activeProjectId) {
+      prevActiveProjectIdRef.current = null;
+      return;
+    }
+    const pid = String(activeProjectId);
+    const prev = prevActiveProjectIdRef.current;
+    if (prev != null && String(prev) !== pid) {
+      setProjectWorkspaces((previous) => {
+        const ws = previous[pid];
+        if (!ws?.execution || ws.execution.status === "running") return previous;
+        return {
+          ...previous,
+          [pid]: {
+            ...ws,
+            execution: {
+              ...ws.execution,
+              visible: false,
+            },
+          },
+        };
+      });
+    }
+    prevActiveProjectIdRef.current = pid;
+  }, [activeProjectId]);
 
   // Sync files from backend so DB deletes don't linger in UI.
   // Coalesce concurrent calls (effects + focus + manual refresh) into one in-flight GET.
@@ -1452,9 +1731,24 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   };
 
   const handleOpenProject = (projectId) => {
+    const pid = String(projectId);
     startTransition(() => {
-      setActiveProjectId(projectId);
-      router.replace(workspaceUploadUrl(projectId));
+      setProjectWorkspaces((current) => {
+        const ws = current[pid];
+        if (!ws?.execution || ws.execution.status === "running") return current;
+        return {
+          ...current,
+          [pid]: {
+            ...ws,
+            execution: {
+              ...ws.execution,
+              visible: false,
+            },
+          },
+        };
+      });
+      setActiveProjectId(pid);
+      router.replace(workspaceUploadUrl(pid));
     });
   };
 
@@ -1614,6 +1908,98 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     } finally {
       setIsUploadingFiles(false);
       event.target.value = "";
+    }
+  };
+
+  const handleDeleteWorkspaceFile = async () => {
+    if (!activeProject?.id || !workspaceFilePendingDelete?.fileId) return;
+    const expectedName = String(workspaceFilePendingDelete.name || "").trim();
+    if (deleteWorkspaceFileNameInput.trim() !== expectedName) return;
+
+    setDeletingWorkspaceFileId(workspaceFilePendingDelete.fileId);
+    try {
+      await fileApi.deleteProjectFile(activeProject.id, workspaceFilePendingDelete.fileId);
+      const removedId = workspaceFilePendingDelete.fileId;
+      updateActiveWorkspace((current) => ({
+        ...current,
+        files: (current.files || []).filter((f) => String(f.fileId) !== String(removedId)),
+        selectedFileId:
+          String(current.selectedFileId) === String(removedId) ? null : current.selectedFileId,
+      }));
+      setWorkspaceFilePendingDelete(null);
+      setDeleteWorkspaceFileNameInput("");
+      await syncProjectFilesFromBackend();
+    } catch (error) {
+      const message =
+        error?.payload?.detail ||
+        error?.payload?.message ||
+        error?.message ||
+        "Failed to delete file";
+      if (typeof window !== "undefined") {
+        window.alert(message);
+      }
+    } finally {
+      setDeletingWorkspaceFileId(null);
+    }
+  };
+
+  const handleDeleteAllWorkspaceFiles = async () => {
+    if (!activeProject?.id || !activeWorkspace) return;
+    if (deleteAllFilesConfirmInput.trim() !== DELETE_ALL_FILES_CONFIRM_PHRASE) return;
+
+    const filesWithIds = (activeWorkspace.files || []).filter((f) => f?.fileId != null);
+    if (filesWithIds.length === 0) {
+      setDeleteAllFilesModalOpen(false);
+      setDeleteAllFilesConfirmInput("");
+      return;
+    }
+
+    setIsDeletingAllFiles(true);
+    try {
+      for (const file of filesWithIds) {
+        await fileApi.deleteProjectFile(activeProject.id, file.fileId);
+      }
+      updateActiveWorkspace((current) => ({
+        ...current,
+        files: [],
+        selectedFileId: null,
+        phase: "ingestion-setup",
+        execution: {
+          visible: false,
+          status: "idle",
+          stage: "idle",
+          message: "",
+          fileId: null,
+          fileCode: null,
+          fileName: "",
+          chunkCount: null,
+          previewCount: null,
+          embedding: null,
+          vectorBackends: [],
+          vectorsStored: null,
+          processingTime: null,
+          comparisonCount: 0,
+          detailsOpen: false,
+          details: null,
+          runs: [],
+        },
+      }));
+      setDeleteAllFilesModalOpen(false);
+      setDeleteAllFilesConfirmInput("");
+      setUploadFilesExpandedOpen(false);
+      await syncProjectFilesFromBackend();
+    } catch (error) {
+      const message =
+        error?.payload?.detail ||
+        error?.payload?.message ||
+        error?.message ||
+        "Failed to delete one or more files";
+      if (typeof window !== "undefined") {
+        window.alert(message);
+      }
+      await syncProjectFilesFromBackend();
+    } finally {
+      setIsDeletingAllFiles(false);
     }
   };
 
@@ -2030,6 +2416,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       : executionState.status === "success"
       ? "Completed"
       : "Idle";
+  const ingestionFileReports = useMemo(() => {
+    const entries = executionState.details?.files;
+    if (!Array.isArray(entries)) return [];
+    return entries.map((entry, index) => mapProcessResultToIngestionReport(entry, index));
+  }, [executionState.details]);
+
   const executionSummaryItems = [
     {
       label: "Runs",
@@ -2153,14 +2545,50 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     ];
   }, [activeProject, activeWorkspace, workspaceMode]);
 
+  const topNavbarEndSlot = useMemo(() => {
+    if (!activeProject) return null;
+    if (workspaceMode === "upload") {
+      return (
+        <Button
+          type="button"
+          variant="default"
+          size="sm"
+          className={classNames(styles.topNavOpenChat, {
+            [styles.topNavOpenChatHighlight]:
+              executionState.status === "success" && executionState.visible,
+          })}
+          onClick={() => router.push(workspaceQueryUrl(activeProject.id))}
+        >
+          <MessageSquare size={15} strokeWidth={2} />
+          Open chat
+        </Button>
+      );
+    }
+    if (workspaceMode === "query") {
+      return (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={styles.topNavWorkspaceUpload}
+          onClick={() => router.push(workspaceUploadUrl(activeProject.id))}
+        >
+          <Upload size={15} strokeWidth={2} />
+          Upload
+        </Button>
+      );
+    }
+    return null;
+  }, [workspaceMode, activeProject, router, executionState.status, executionState.visible]);
+
   if (!activeProject || !activeWorkspace) {
     return (
       <div className={styles.workspaceWithTopNav}>
-        <TopNavbar
-          userProfile={userProfile}
-          actions={[]}
-          breadcrumbItems={topNavbarBreadcrumbItems}
-        />
+      <TopNavbar
+        userProfile={userProfile}
+        actions={[]}
+        breadcrumbItems={topNavbarBreadcrumbItems}
+      />
         <div className={styles.workspaceShell}>
           <AppWorkspaceRail
             onProjects={handleRailProjects}
@@ -2370,6 +2798,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         userProfile={userProfile}
         actions={topNavbarActions}
         breadcrumbItems={topNavbarBreadcrumbItems}
+        endSlot={topNavbarEndSlot}
       />
       <div className={styles.workspaceShell}>
         <AppWorkspaceRail
@@ -2467,15 +2896,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   />
                 </SidebarSection>
               </div>
-              <div className={styles.sidebarBottom}>
-                <Button
-                  className={styles.processButton}
-                  onClick={handleStartIngestion}
-                  disabled={isPending || isProcessingFiles || !hasUploadedFiles}
-                >
-                  {isProcessingFiles ? "Processing..." : "Process"}
-                </Button>
-              </div>
             </section>
           </div>
         </aside>
@@ -2560,7 +2980,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         </aside>
         )}
 
-        <main className={styles.workspaceMain}>
+        <main
+          className={classNames(styles.workspaceMain, {
+            [styles.workspaceMainUpload]: workspaceMode === "upload",
+          })}
+        >
+        {workspaceMode === "query" && (
         <header className={styles.workspaceHeader}>
           <div className={styles.workspaceHeaderContent}>
             <h1 className={styles.workspaceTitle}>
@@ -2568,33 +2993,14 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
               <span className={styles.workspaceCategory}>{activeProject.category}</span>
             </h1>
           </div>
-          <div className={styles.workspaceHeaderActions}>
-            {workspaceMode === "upload" && (
-              <Button
-                type="button"
-                variant="default"
-                className={styles.workspaceModeNavButton}
-                onClick={() => router.push(workspaceQueryUrl(activeProject.id))}
-              >
-                <MessageSquare size={16} />
-                Open chat
-              </Button>
-            )}
-            {workspaceMode === "query" && (
-              <Button
-                type="button"
-                variant="outline"
-                className={styles.workspaceModeNavButton}
-                onClick={() => router.push(workspaceUploadUrl(activeProject.id))}
-              >
-                <Upload size={16} />
-                Documents &amp; upload
-              </Button>
-            )}
-          </div>
         </header>
+        )}
 
-        <section className={styles.workspaceCanvas}>
+        <section
+          className={classNames(styles.workspaceCanvas, {
+            [styles.workspaceCanvasUpload]: workspaceMode === "upload",
+          })}
+        >
           {workspaceMode === "upload" && (
           <input
             ref={fileInputRef}
@@ -2618,102 +3024,159 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
             }}
           >
             {workspaceMode === "upload" && (
-            <section className={styles.workspaceAssetPanel}>
-              <div className={styles.workspaceAssetCard}>
-                <div className={styles.workspaceAssetHeader}>
-                  <p className={styles.workspaceAssetEyebrow}>Workspace assets</p>
-                  <h2 className={styles.workspaceAssetTitle}>Upload and manage documents</h2>
-                </div>
+            <section className={styles.uploadWorkspace}>
+              <div className={styles.uploadWorkspaceColumn}>
+                <div className={styles.uploadWorkspaceFixedTop}>
+                <header className={styles.uploadWorkspaceIntroCompact}>
+                  <h2 className={styles.uploadWorkspaceHeadlineCompact}>Upload &amp; run pipeline</h2>
+                  <p className={styles.uploadWorkspaceLeadCompact}>
+                    Configure strategies in the sidebar → upload PDFs → run pipeline. Status and logs appear
+                    in <strong>Pipeline output</strong> below after each run.
+                  </p>
+                </header>
 
-                <button
-                  type="button"
-                  className={classNames(styles.uploadDropzone, styles.assetUploadDropzone)}
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploadingFiles}
-                >
-                  <Upload size={24} />
-                  <div>
-                    <p className={styles.uploadTitle}>
-                      {isUploadingFiles ? "Uploading PDF files..." : "Upload PDF files"}
-                    </p>
-                    <p className={styles.uploadSubtitle}>
-                      {isUploadingFiles
-                        ? "Please wait while files are sent to the backend."
-                        : "Click to choose PDF documents for this project."}
-                    </p>
-                  </div>
-                </button>
-
-                <div className={styles.headerFilesContainer}>
-                  <div className={styles.headerFilesHeader}>
-                    <div className={styles.headerFilesLabel}>Uploaded files</div>
-                    {hasSelectedFile && (
-                      <button
-                        type="button"
-                        className={styles.fileSelectionClearButton}
-                        onClick={() =>
-                          updateActiveWorkspace((current) => ({
-                            ...current,
-                            selectedFileId: null,
-                          }))
-                        }
-                      >
-                        Clear selection
-                      </button>
+                <div className={classNames(styles.uploadStepCard, styles.uploadStepCardCompact, styles.uploadStepCardNoBadge)}>
+                  <div className={styles.uploadStepBody}>
+                    <div className={styles.uploadStepTitleRow}>
+                      <h3 className={styles.uploadStepTitle}>Upload files</h3>
+                      <span className={styles.uploadStepHint}>Multipart API</span>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.uploadDropzoneProCompact}
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingFiles}
+                    >
+                      <div className={styles.uploadDropzoneProIcon}>
+                        <Upload size={20} strokeWidth={2} />
+                      </div>
+                      <div className={styles.uploadDropzoneProText}>
+                        <p className={styles.uploadDropzoneProTitle}>
+                          {isUploadingFiles ? "Uploading…" : "Browse PDFs or drop here"}
+                        </p>
+                        <p className={styles.uploadDropzoneProSub}>
+                          {isUploadingFiles
+                            ? "Do not close this tab."
+                            : "Multiple files supported."}
+                        </p>
+                      </div>
+                    </button>
+                    {isUploadingFiles && (
+                      <div className={styles.uploadTimeline}>
+                        <div className={styles.uploadTimelineBar}>
+                          <div className={styles.uploadTimelineIndeterminate} />
+                        </div>
+                        <p className={styles.uploadTimelineCaption}>Uploading…</p>
+                      </div>
                     )}
                   </div>
-                  {activeWorkspace.files.length > 0 ? (
-                    <div className={styles.headerFilesList}>
-                      {activeWorkspace.files.map((file) => (
-                        <button
-                          key={file.id}
-                          type="button"
-                          className={classNames(styles.headerFileItem, {
-                            [styles.headerFileItemActive]:
-                              String(file.fileId) === activeWorkspaceFileId,
-                          })}
-                          onClick={() =>
-                            updateActiveWorkspace((current) => ({
-                              ...current,
-                              selectedFileId:
-                                String(file.fileId) === String(current.selectedFileId)
-                                  ? null
-                                  : file.fileId != null
-                                  ? Number(file.fileId)
-                                  : null,
-                            }))
-                          }
-                          aria-pressed={String(file.fileId) === activeWorkspaceFileId}
-                        >
-                          <div className={styles.headerFileMain}>
-                            <p className={styles.fileItemTitle}>{file.name}</p>
-                            <p className={styles.fileItemMeta}>
-                              {(file.fileCode || `FILE-${file.id}`) +
-                                " · " +
-                                `${file.pages ?? file.pagesCount ?? file.pages_count ?? "-"} pages · ${file.size}`}
-                            </p>
-                          </div>
-                          <span
-                            className={classNames(styles.fileStatusBadge, {
-                              [styles.fileStatusBadgeActive]:
-                                String(file.fileId) === activeWorkspaceFileId,
-                            })}
-                          >
-                            {String(file.fileId) === activeWorkspaceFileId ? "Active" : "Ready"}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className={styles.emptyFilesState}>
-                      Uploaded documents will appear here after you add PDFs.
-                    </div>
-                  )}
+                </div>
                 </div>
 
+                <div className={classNames(styles.uploadStepCard, styles.uploadStepCardFilesGrow, styles.uploadStepCardNoBadge)}>
+                  <div className={classNames(styles.uploadStepBody, styles.uploadStepBodyGrow)}>
+                    <div className={styles.uploadStepTitleRow}>
+                      <h3 className={styles.uploadStepTitle}>Files in this project</h3>
+                      <div className={styles.uploadFilesToolbar}>
+                        <span className={styles.uploadStepHint}>
+                          {activeWorkspace.files.length > 0
+                            ? `${activeWorkspace.files.length} file${activeWorkspace.files.length === 1 ? "" : "s"}`
+                            : "None yet"}
+                        </span>
+                        {activeWorkspace.files.length > 0 && (
+                          <>
+                            <button
+                              type="button"
+                              className={styles.uploadFilesExpandButton}
+                              title="Expand file list"
+                              onClick={() => setUploadFilesExpandedOpen(true)}
+                            >
+                              <Maximize2 size={15} strokeWidth={2} aria-hidden />
+                              <span>Expand</span>
+                            </button>
+                            {activeWorkspace.files.some((f) => f?.fileId != null) && (
+                            <button
+                              type="button"
+                              className={styles.uploadFilesDeleteAllButton}
+                              title="Delete all files in this project"
+                              onClick={() => {
+                                setDeleteAllFilesConfirmInput("");
+                                setDeleteAllFilesModalOpen(true);
+                              }}
+                            >
+                              <Trash2 size={14} strokeWidth={2} aria-hidden />
+                              <span>
+                                Delete all (
+                                {activeWorkspace.files.filter((f) => f?.fileId != null).length})
+                              </span>
+                            </button>
+                            )}
+                            <div className={styles.uploadViewSwitch} role="group" aria-label="File layout">
+                            <button
+                              type="button"
+                              className={classNames(styles.uploadViewButton, {
+                                [styles.uploadViewButtonActive]: uploadFilesViewMode === "grid",
+                              })}
+                              onClick={() => setUploadFilesViewMode("grid")}
+                              title="Grid"
+                            >
+                              <Grid2x2 size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              className={classNames(styles.uploadViewButton, {
+                                [styles.uploadViewButtonActive]: uploadFilesViewMode === "list",
+                              })}
+                              onClick={() => setUploadFilesViewMode("list")}
+                              title="List"
+                            >
+                              <List size={16} />
+                            </button>
+                          </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className={styles.headerFilesContainer}>
+                      {hasSelectedFile && (
+                        <div className={styles.headerFilesHeader}>
+                          <button
+                            type="button"
+                            className={styles.fileSelectionClearButton}
+                            onClick={() =>
+                              updateActiveWorkspace((current) => ({
+                                ...current,
+                                selectedFileId: null,
+                              }))
+                            }
+                          >
+                            Clear selection
+                          </button>
+                        </div>
+                      )}
+                      <UploadProjectFilesList
+                        files={activeWorkspace.files}
+                        uploadFilesViewMode={uploadFilesViewMode}
+                        activeWorkspaceFileId={activeWorkspaceFileId}
+                        ingestionFileReports={ingestionFileReports}
+                        executionState={executionState}
+                        updateActiveWorkspace={updateActiveWorkspace}
+                        setIngestionReportSelectedId={setIngestionReportSelectedId}
+                        setIngestionReportOpen={setIngestionReportOpen}
+                        setWorkspaceFilePendingDelete={setWorkspaceFilePendingDelete}
+                        setDeleteWorkspaceFileNameInput={setDeleteWorkspaceFileNameInput}
+                        regionClassName={styles.uploadFilesScrollRegion}
+                        emptyClassName={styles.emptyFilesStatePro}
+                        emptyMessage="No files yet. Upload PDFs in the area above."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className={styles.uploadWorkspacePipelineSection}>
                 {executionState.visible && (
                   <div
-                    className={classNames(styles.executionCard, {
+                    className={classNames(styles.executionCard, styles.executionCardPro, {
                       [styles.executionCardRunning]: executionState.status === "running",
                       [styles.executionCardSuccess]: executionState.status === "success",
                       [styles.executionCardError]: executionState.status === "error",
@@ -2721,21 +3184,42 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   >
                     <div className={styles.executionCardHeader}>
                       <div>
-                        <p className={styles.executionEyebrow}>Live execution</p>
+                        <p className={styles.executionEyebrow}>Pipeline output</p>
                         <h3 className={styles.executionTitle}>{executionState.message}</h3>
                       </div>
-                      <span
-                        className={classNames(styles.executionStatusBadge, {
-                          [styles.executionStatusBadgeRunning]:
-                            executionState.status === "running",
-                          [styles.executionStatusBadgeSuccess]:
-                            executionState.status === "success",
-                          [styles.executionStatusBadgeError]:
-                            executionState.status === "error",
-                        })}
-                      >
-                        {executionStatusLabel}
-                      </span>
+                      <div className={styles.executionCardHeaderRight}>
+                        {executionState.status !== "running" && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className={styles.executionBackToFilesButton}
+                            onClick={() =>
+                              updateActiveWorkspace((current) => ({
+                                ...current,
+                                execution: {
+                                  ...current.execution,
+                                  visible: false,
+                                },
+                              }))
+                            }
+                          >
+                            Back to files
+                          </Button>
+                        )}
+                        <span
+                          className={classNames(styles.executionStatusBadge, {
+                            [styles.executionStatusBadgeRunning]:
+                              executionState.status === "running",
+                            [styles.executionStatusBadgeSuccess]:
+                              executionState.status === "success",
+                            [styles.executionStatusBadgeError]:
+                              executionState.status === "error",
+                          })}
+                        >
+                          {executionStatusLabel}
+                        </span>
+                      </div>
                     </div>
 
                     <div className={styles.executionFileMeta}>
@@ -2847,7 +3331,463 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                     )}
                   </div>
                 )}
+
+                {!executionState.visible &&
+                  (executionState.status === "success" || executionState.status === "error") && (
+                    <div
+                      className={classNames(styles.executionCollapsedBar, {
+                        [styles.executionCollapsedBarSuccess]: executionState.status === "success",
+                        [styles.executionCollapsedBarError]: executionState.status === "error",
+                      })}
+                    >
+                      <div className={styles.executionCollapsedBarText}>
+                        <span className={styles.executionCollapsedBarLabel}>Last pipeline run</span>
+                        <span
+                          className={classNames(styles.executionCollapsedBarStatus, {
+                            [styles.executionCollapsedBarStatusError]:
+                              executionState.status === "error",
+                            [styles.executionCollapsedBarStatusSuccess]:
+                              executionState.status === "success",
+                          })}
+                        >
+                          {executionStatusLabel}
+                        </span>
+                        {executionState.message ? (
+                          <span className={styles.executionCollapsedBarMessage}>
+                            {executionState.message}
+                          </span>
+                        ) : null}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className={styles.executionShowOutputButton}
+                        onClick={() =>
+                          updateActiveWorkspace((current) => ({
+                            ...current,
+                            execution: {
+                              ...current.execution,
+                              visible: true,
+                            },
+                          }))
+                        }
+                      >
+                        Show output
+                      </Button>
+                    </div>
+                  )}
+
+                {ingestionFileReports.length > 0 && executionState.status === "success" && (
+                  <div className={styles.ingestionReportBanner}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={styles.ingestionReportOpenButton}
+                      onClick={() => {
+                        setIngestionReportSelectedId(null);
+                        setIngestionReportOpen(true);
+                      }}
+                    >
+                      View full ingestion report ({ingestionFileReports.length}{" "}
+                      {ingestionFileReports.length === 1 ? "file" : "files"})
+                    </Button>
+                  </div>
+                )}
+                </div>
+
+                <div className={styles.pipelineFooter}>
+                  <Button
+                    type="button"
+                    size="lg"
+                    className={styles.pipelineRunButton}
+                    onClick={handleStartIngestion}
+                    disabled={isPending || isProcessingFiles || !hasUploadedFiles}
+                  >
+                    <PlayCircle size={20} />
+                    {isProcessingFiles ? "Pipeline running…" : "Run pipeline"}
+                  </Button>
+                  <p className={styles.pipelineCtaHintLatin}>
+                    (chunk → embed → vector store). Required before chat.
+                  </p>
+                  {!hasUploadedFiles && (
+                    <p className={styles.pipelineCtaNote}>Upload at least one PDF first.</p>
+                  )}
+                </div>
               </div>
+
+              {uploadFilesExpandedOpen && activeWorkspace.files.length > 0 && (
+                <div
+                  className={styles.uploadFilesExpandedFullPage}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="upload-files-expanded-title"
+                >
+                  <header className={styles.uploadFilesExpandedFullPageHeader}>
+                    <button
+                      type="button"
+                      className={styles.uploadFilesExpandedBack}
+                      onClick={() => setUploadFilesExpandedOpen(false)}
+                    >
+                      <ArrowLeft size={18} strokeWidth={2} aria-hidden />
+                      Back
+                    </button>
+                    <div className={styles.uploadFilesExpandedHeaderTitles}>
+                      <h2 id="upload-files-expanded-title" className={styles.uploadFilesExpandedTitle}>
+                        Files in this project
+                      </h2>
+                      <p className={styles.uploadFilesExpandedSubtitle}>
+                        {activeWorkspace.files.length} file
+                        {activeWorkspace.files.length === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <div className={styles.uploadFilesExpandedHeaderActions}>
+                      {activeWorkspace.files.some((f) => f?.fileId != null) && (
+                      <button
+                        type="button"
+                        className={styles.uploadFilesDeleteAllButton}
+                        title="Delete all files in this project"
+                        onClick={() => {
+                          setDeleteAllFilesConfirmInput("");
+                          setDeleteAllFilesModalOpen(true);
+                        }}
+                      >
+                        <Trash2 size={14} strokeWidth={2} aria-hidden />
+                        <span>
+                          Delete all (
+                          {activeWorkspace.files.filter((f) => f?.fileId != null).length})
+                        </span>
+                      </button>
+                      )}
+                      <div className={styles.uploadViewSwitch} role="group" aria-label="File layout">
+                        <button
+                          type="button"
+                          className={classNames(styles.uploadViewButton, {
+                            [styles.uploadViewButtonActive]: uploadFilesViewMode === "grid",
+                          })}
+                          onClick={() => setUploadFilesViewMode("grid")}
+                          title="Grid"
+                        >
+                          <Grid2x2 size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          className={classNames(styles.uploadViewButton, {
+                            [styles.uploadViewButtonActive]: uploadFilesViewMode === "list",
+                          })}
+                          onClick={() => setUploadFilesViewMode("list")}
+                          title="List"
+                        >
+                          <List size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </header>
+                  <div className={styles.uploadFilesExpandedFullPageBody}>
+                    <UploadProjectFilesList
+                      files={activeWorkspace.files}
+                      uploadFilesViewMode={uploadFilesViewMode}
+                      activeWorkspaceFileId={activeWorkspaceFileId}
+                      ingestionFileReports={ingestionFileReports}
+                      executionState={executionState}
+                      updateActiveWorkspace={updateActiveWorkspace}
+                      setIngestionReportSelectedId={setIngestionReportSelectedId}
+                      setIngestionReportOpen={setIngestionReportOpen}
+                      setWorkspaceFilePendingDelete={setWorkspaceFilePendingDelete}
+                      setDeleteWorkspaceFileNameInput={setDeleteWorkspaceFileNameInput}
+                      regionClassName={styles.uploadFilesExpandedScroll}
+                      emptyClassName={styles.emptyFilesStatePro}
+                      emptyMessage="No files."
+                    />
+                  </div>
+                </div>
+              )}
+
+              {ingestionReportOpen && (
+                <div
+                  className={styles.ingestionReportBackdrop}
+                  role="presentation"
+                  onClick={() => setIngestionReportOpen(false)}
+                >
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="ingestion-report-title"
+                    className={styles.ingestionReportModal}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className={styles.ingestionReportModalHeader}>
+                      <h2 id="ingestion-report-title" className={styles.ingestionReportModalTitle}>
+                        Ingestion report
+                      </h2>
+                      <button
+                        type="button"
+                        className={styles.ingestionReportClose}
+                        onClick={() => setIngestionReportOpen(false)}
+                        aria-label="Close"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                    <div className={styles.ingestionReportTabs}>
+                      {(() => {
+                        const activeReportId =
+                          ingestionReportSelectedId ?? String(ingestionFileReports[0]?.id ?? "");
+                        return ingestionFileReports.map((rep) => (
+                        <button
+                          key={rep.id}
+                          type="button"
+                          className={classNames(styles.ingestionReportTab, {
+                            [styles.ingestionReportTabActive]: String(rep.id) === String(activeReportId),
+                          })}
+                          onClick={() => setIngestionReportSelectedId(String(rep.id))}
+                        >
+                          {rep.fileName}
+                        </button>
+                        ));
+                      })()}
+                    </div>
+                    {(() => {
+                      const activeId =
+                        ingestionReportSelectedId ?? String(ingestionFileReports[0]?.id ?? "");
+                      const active =
+                        ingestionFileReports.find((r) => String(r.id) === String(activeId)) ||
+                        ingestionFileReports[0] ||
+                        null;
+                      if (!active) return null;
+                      return (
+                        <div className={styles.ingestionReportBody}>
+                          <dl className={styles.ingestionReportGrid}>
+                            <div>
+                              <dt>File</dt>
+                              <dd>{active.fileName}</dd>
+                            </div>
+                            <div>
+                              <dt>Code</dt>
+                              <dd>{active.fileCode || "—"}</dd>
+                            </div>
+                            <div>
+                              <dt>Total chunks</dt>
+                              <dd>{formatNumber(active.chunkCount)}</dd>
+                            </div>
+                            <div>
+                              <dt>Vectors stored</dt>
+                              <dd>{formatNumber(active.vectorsStored)}</dd>
+                            </div>
+                            <div>
+                              <dt>Processing time</dt>
+                              <dd>
+                                {active.processingTimeSeconds > 0
+                                  ? `${Number(active.processingTimeSeconds).toFixed(2)}s`
+                                  : "—"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Embedding</dt>
+                              <dd>{active.embeddingLabel}</dd>
+                            </div>
+                            <div className={styles.ingestionReportSpanWide}>
+                              <dt>Vector backends</dt>
+                              <dd>{active.backends?.length ? active.backends.join(", ") : "—"}</dd>
+                            </div>
+                          </dl>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              <AnimatePresence>
+                {workspaceFilePendingDelete && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className={classNames(styles.modalOverlay, styles.workspaceFileDeleteOverlay)}
+                    onClick={() => {
+                      if (deletingWorkspaceFileId) return;
+                      setWorkspaceFilePendingDelete(null);
+                      setDeleteWorkspaceFileNameInput("");
+                    }}
+                  >
+                    <motion.section
+                      initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                      className={styles.deleteModal}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className={styles.createModalHeader}>
+                        <div>
+                          <h2 className={styles.createModalTitle}>Delete file</h2>
+                          <p className={styles.createModalSubtitle}>
+                            This removes the file from the project. Type the exact file name to confirm.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className={styles.modalCloseButton}
+                          onClick={() => {
+                            if (deletingWorkspaceFileId) return;
+                            setWorkspaceFilePendingDelete(null);
+                            setDeleteWorkspaceFileNameInput("");
+                          }}
+                          aria-label="Close"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                      <div className={styles.createModalBody}>
+                        <div className={styles.deleteModalContent}>
+                          <p className={styles.deleteWarningText}>
+                            Type the full file name below to confirm deletion (example:{" "}
+                            <strong>{workspaceFilePendingDelete.name}</strong>).
+                          </p>
+                          <label className={styles.formField}>
+                            <span className={styles.modalFieldLabel}>File name confirmation</span>
+                            <Input
+                              value={deleteWorkspaceFileNameInput}
+                              onChange={(event) => setDeleteWorkspaceFileNameInput(event.target.value)}
+                              placeholder={workspaceFilePendingDelete.name}
+                              className={styles.modalInput}
+                              autoComplete="off"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                      <div className={styles.createModalActions}>
+                        <div className={styles.deleteModalActions}>
+                          <Button
+                            variant="outline"
+                            className={styles.deleteCancelButton}
+                            onClick={() => {
+                              if (deletingWorkspaceFileId) return;
+                              setWorkspaceFilePendingDelete(null);
+                              setDeleteWorkspaceFileNameInput("");
+                            }}
+                            disabled={Boolean(deletingWorkspaceFileId)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            className={styles.deleteProjectCta}
+                            onClick={handleDeleteWorkspaceFile}
+                            disabled={
+                              deletingWorkspaceFileId != null ||
+                              deleteWorkspaceFileNameInput.trim() !==
+                                String(workspaceFilePendingDelete.name || "").trim()
+                            }
+                          >
+                            {deletingWorkspaceFileId != null ? "Deleting…" : "Delete file"}
+                          </Button>
+                        </div>
+                      </div>
+                    </motion.section>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <AnimatePresence>
+                {deleteAllFilesModalOpen && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className={classNames(styles.modalOverlay, styles.deleteAllFilesOverlay)}
+                    onClick={() => {
+                      if (isDeletingAllFiles) return;
+                      setDeleteAllFilesModalOpen(false);
+                      setDeleteAllFilesConfirmInput("");
+                    }}
+                  >
+                    <motion.section
+                      initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                      className={styles.deleteModal}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className={styles.createModalHeader}>
+                        <div>
+                          <h2 className={styles.createModalTitle}>Delete all files</h2>
+                          <p className={styles.createModalSubtitle}>
+                            This permanently removes every file from this project. Chat and pipeline data
+                            tied to these files may be affected. This cannot be undone.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className={styles.modalCloseButton}
+                          onClick={() => {
+                            if (isDeletingAllFiles) return;
+                            setDeleteAllFilesModalOpen(false);
+                            setDeleteAllFilesConfirmInput("");
+                          }}
+                          aria-label="Close"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                      <div className={styles.createModalBody}>
+                        <div className={styles.deleteModalContent}>
+                          <p className={styles.deleteWarningText}>
+                            You are about to delete{" "}
+                            <strong>
+                              {activeWorkspace.files.filter((f) => f?.fileId != null).length ||
+                                activeWorkspace.files.length}{" "}
+                              file
+                              {(activeWorkspace.files.filter((f) => f?.fileId != null).length ||
+                                activeWorkspace.files.length) === 1
+                                ? ""
+                                : "s"}
+                            </strong>
+                            . Type <strong>{DELETE_ALL_FILES_CONFIRM_PHRASE}</strong> to confirm you want
+                            to remove all of them completely.
+                          </p>
+                          <label className={styles.formField}>
+                            <span className={styles.modalFieldLabel}>Confirmation</span>
+                            <Input
+                              value={deleteAllFilesConfirmInput}
+                              onChange={(event) => setDeleteAllFilesConfirmInput(event.target.value)}
+                              placeholder={DELETE_ALL_FILES_CONFIRM_PHRASE}
+                              className={styles.modalInput}
+                              autoComplete="off"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                      <div className={styles.createModalActions}>
+                        <div className={styles.deleteModalActions}>
+                          <Button
+                            variant="outline"
+                            className={styles.deleteCancelButton}
+                            onClick={() => {
+                              if (isDeletingAllFiles) return;
+                              setDeleteAllFilesModalOpen(false);
+                              setDeleteAllFilesConfirmInput("");
+                            }}
+                            disabled={isDeletingAllFiles}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            className={styles.deleteProjectCta}
+                            onClick={handleDeleteAllWorkspaceFiles}
+                            disabled={
+                              isDeletingAllFiles ||
+                              deleteAllFilesConfirmInput.trim() !== DELETE_ALL_FILES_CONFIRM_PHRASE ||
+                              activeWorkspace.files.filter((f) => f?.fileId != null).length === 0
+                            }
+                          >
+                            {isDeletingAllFiles ? "Deleting…" : "Delete all files"}
+                          </Button>
+                        </div>
+                      </div>
+                    </motion.section>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </section>
             )}
 
