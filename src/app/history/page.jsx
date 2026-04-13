@@ -1,3 +1,4 @@
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import HistoryScreen from "@/features/history/components/History/History";
 
 export const metadata = {
@@ -6,5 +7,9 @@ export const metadata = {
 };
 
 export default function HistoryPage() {
-  return <HistoryScreen />;
+  return (
+    <ProtectedRoute>
+      <HistoryScreen />
+    </ProtectedRoute>
+  );
 }

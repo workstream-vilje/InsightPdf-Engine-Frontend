@@ -6,12 +6,21 @@ import {
   getProjectFile,
   deleteProjectFile,
 } from "@/services/api/networking/endpoints";
+import { getCurrentUserId } from "@/services/auth";
+
+const withUserIdQuery = (path) => {
+  const userId = getCurrentUserId();
+  if (!userId) {
+    return path;
+  }
+
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}user_id=${encodeURIComponent(userId)}`;
+};
 
 export const fileApi = {
   fetchProjectFiles: (projectId) =>
-    httpClient.get(
-      withQuery(fetchProjectFiles(projectId), { user_id: getStoredUserId() }),
-    ),
+    httpClient.get(withUserIdQuery(fetchProjectFiles(projectId))),
   uploadProjectFiles: (projectId, formData) =>
     httpClient.post(uploadProjectFiles(projectId), formData),
   processProjectFile: (projectId, fileId, config) => {

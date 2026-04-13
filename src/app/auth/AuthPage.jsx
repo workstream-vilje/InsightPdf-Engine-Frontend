@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import styles from "./auth.module.css";
+import { hasAccessToken, setAuthSession } from "@/services/auth";
 import { ROUTE_PATHS } from "@/utils/routepaths";
 
 const initialSignupForm = {
@@ -72,10 +73,37 @@ const callAuthApi = async (path, payload) => {
 export default function AuthPage({ mode }) {
   const router = useRouter();
   const isSignup = mode === "signup";
+  const [switchingMode, setSwitchingMode] = useState("");
   const [signupForm, setSignupForm] = useState(initialSignupForm);
   const [loginForm, setLoginForm] = useState(initialLoginForm);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ type: "", message: "" });
+  const switchTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (hasAccessToken()) {
+      router.replace("/workspace");
+    }
+  }, [router]);
+
+  useEffect(() => {
+    return () => {
+      if (switchTimerRef.current) {
+        window.clearTimeout(switchTimerRef.current);
+      }
+    };
+  }, []);
+
+  const activeMode = switchingMode || mode;
+
+  const handleModeSwitch = (nextMode) => {
+    if (nextMode === mode || switchingMode) return;
+
+    setSwitchingMode(nextMode);
+    switchTimerRef.current = window.setTimeout(() => {
+      router.push(nextMode === "signup" ? ROUTE_PATHS.AUTH_SIGNUP : ROUTE_PATHS.AUTH_LOGIN);
+    }, 180);
+  };
 
   const handleSignupChange = (event) => {
     const { name, value } = event.target;
@@ -125,7 +153,7 @@ export default function AuthPage({ mode }) {
         message: response?.message || "Signup successful. Continue with login.",
       });
       setSignupForm(initialSignupForm);
-      setTimeout(() => {
+      switchTimerRef.current = window.setTimeout(() => {
         router.push(ROUTE_PATHS.AUTH_LOGIN);
       }, 500);
     } catch (error) {
@@ -162,30 +190,20 @@ export default function AuthPage({ mode }) {
 
       const response = await callAuthApi("/auth/login", payload);
 
-      if (typeof window !== "undefined") {
-        if (response?.access_token) {
-          window.localStorage.setItem("access_token", response.access_token);
-        }
-        if (response?.refresh_token) {
-          window.localStorage.setItem("refresh_token", response.refresh_token);
-        }
-        if (response?.user_id != null) {
-          window.localStorage.setItem("user_id", String(response.user_id));
-        }
-        if (response?.name) {
-          window.localStorage.setItem("user_name", response.name);
-        }
-        if (response?.mail_id) {
-          window.localStorage.setItem("user_mail_id", response.mail_id);
-        }
-      }
+      setAuthSession({
+        accessToken: response?.access_token,
+        refreshToken: response?.refresh_token,
+        userId: response?.user_id,
+        name: response?.name,
+        mailId: response?.mail_id,
+      });
 
       setStatus({
         type: "success",
         message: response?.message || "Login successful.",
       });
 
-      setTimeout(() => {
+      switchTimerRef.current = window.setTimeout(() => {
         router.push("/workspace");
       }, 500);
     } catch (error) {
@@ -213,20 +231,32 @@ export default function AuthPage({ mode }) {
             </Link>
           </div>
 
-          <div className={styles.formWrap}>
-            <div className={styles.modeRow}>
-              <Link
-                className={`${styles.modeLink} ${!isSignup ? styles.modeLinkActive : ""}`}
-                href={ROUTE_PATHS.AUTH_LOGIN}
+          <div
+            className={`${styles.formWrap} ${isSignup ? styles.formWrapSignup : ""}`}
+          >
+            <div
+              className={`${styles.modeRow} ${
+                activeMode === "signup" ? styles.modeRowSignup : styles.modeRowLogin
+              }`}
+            >
+              <button
+                className={`${styles.modeLink} ${
+                  activeMode === "login" ? styles.modeLinkActive : ""
+                }`}
+                type="button"
+                onClick={() => handleModeSwitch("login")}
               >
                 Login
-              </Link>
-              <Link
-                className={`${styles.modeLink} ${isSignup ? styles.modeLinkActive : ""}`}
-                href={ROUTE_PATHS.AUTH_SIGNUP}
+              </button>
+              <button
+                className={`${styles.modeLink} ${
+                  activeMode === "signup" ? styles.modeLinkActive : ""
+                }`}
+                type="button"
+                onClick={() => handleModeSwitch("signup")}
               >
                 Sign Up
-              </Link>
+              </button>
             </div>
 
             <div className={styles.header}>

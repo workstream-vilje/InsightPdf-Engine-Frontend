@@ -1,3 +1,5 @@
+import { clearAuthSession, redirectToLogin } from "@/services/auth";
+
 /**
  * API base defaults to the local FastAPI backend.
  * Set NEXT_PUBLIC_API_HOST or NEXT_PUBLIC_API_PORT only when overriding localhost:8000.
@@ -62,7 +64,11 @@ const parseResponse = async (response) => {
   const payload = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
-    const detail = isJson ? payload?.detail : null;
+    if (response.status === 401 && typeof window !== "undefined") {
+      clearAuthSession();
+      redirectToLogin();
+    }
+
     const message =
       (Array.isArray(detail) || (detail && typeof detail === "object")
         ? JSON.stringify(detail)

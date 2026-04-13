@@ -35,6 +35,11 @@ import { Slider } from "@/components/ui/slider";
 import fileApi from "@/services/api/networking/apis/file";
 import projectApi from "@/services/api/networking/apis/project";
 import queryApi from "@/services/api/networking/apis/query";
+import {
+  getCurrentUserId,
+  getScopedStorageKey,
+  getStoredUserProfile,
+} from "@/services/auth";
 import { getExperimentPerformanceById } from "@/lib/api";
 import {
   DATA_EXTRACTION_OPTIONS,
@@ -1030,9 +1035,10 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const profile = getStoredUserProfile();
     setUserProfile({
-      name: window.localStorage.getItem("user_name") || "",
-      email: window.localStorage.getItem("user_mail_id") || "",
+      name: profile.name,
+      email: profile.email,
     });
   }, []);
 
@@ -1058,8 +1064,18 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     if (typeof window === "undefined" || hasHydratedRef.current) return;
 
     try {
-      const storedProjects = window.localStorage.getItem("rag-canvas-projects");
-      const storedWorkspaces = window.localStorage.getItem("rag-canvas-workspaces");
+      const currentUserId = getCurrentUserId();
+      if (!currentUserId) {
+        hasHydratedRef.current = true;
+        return;
+      }
+
+      const storedProjects = window.localStorage.getItem(
+        getScopedStorageKey("rag-canvas-projects", currentUserId),
+      );
+      const storedWorkspaces = window.localStorage.getItem(
+        getScopedStorageKey("rag-canvas-workspaces", currentUserId),
+      );
 
       if (storedProjects) {
         const parsedProjects = JSON.parse(storedProjects);
@@ -1126,12 +1142,22 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
 
   useEffect(() => {
     if (typeof window === "undefined" || !hasHydratedRef.current) return;
-    window.localStorage.setItem("rag-canvas-projects", JSON.stringify(projects));
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId) return;
+    window.localStorage.setItem(
+      getScopedStorageKey("rag-canvas-projects", currentUserId),
+      JSON.stringify(projects),
+    );
   }, [projects]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !hasHydratedRef.current) return;
-    window.localStorage.setItem("rag-canvas-workspaces", JSON.stringify(projectWorkspaces));
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId) return;
+    window.localStorage.setItem(
+      getScopedStorageKey("rag-canvas-workspaces", currentUserId),
+      JSON.stringify(projectWorkspaces),
+    );
   }, [projectWorkspaces]);
 
   useEffect(() => {
