@@ -773,10 +773,17 @@ const buildSharedPipelineConfig = (workspace) => {
   return { processingConfig, queryConfig };
 };
 
-const buildQueryPayload = ({ projectId, fileId, workspace, query }) => {
+const buildQueryPayload = ({ projectId, fileId, fileName, workspace, query }) => {
   const { queryConfig } = buildSharedPipelineConfig(workspace);
   const queryConfigurations = workspace?.queryConfigurations || [];
   const agentEnabled = queryConfigurations.includes("agent");
+  const scopedQueryConfig = {
+    ...queryConfig,
+    retrieval_strategy: {
+      ...queryConfig.retrieval_strategy,
+      source_name: fileName || null,
+    },
+  };
 
   return {
     project_id: Number(projectId),
@@ -785,7 +792,7 @@ const buildQueryPayload = ({ projectId, fileId, workspace, query }) => {
     agent: agentEnabled,
     regas_activation: queryConfigurations.includes("ragas"),
     langsmith_activation: queryConfigurations.includes("langsmith"),
-    config: queryConfig,
+    config: scopedQueryConfig,
   };
 };
 
@@ -953,17 +960,25 @@ const MultiSelectChips = ({ options, selectedValues, onToggle }) => (
     {options.map((option) => {
       const checked = selectedValues.includes(option.value);
       return (
-        <button
+        <div
           key={option.value}
-          type="button"
+          role="button"
+          tabIndex={0}
           className={classNames(styles.choiceChip, {
             [styles.choiceChipActive]: checked,
           })}
           onClick={() => onToggle(option.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onToggle(option.value);
+            }
+          }}
+          aria-pressed={checked}
         >
           <Checkbox checked={checked} className={styles.choiceCheckbox} asSpan />
           <span>{option.label}</span>
-        </button>
+        </div>
       );
     })}
   </div>
@@ -1944,6 +1959,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         const payload = buildQueryPayload({
           projectId: activeProjectId,
           fileId: targetFile.fileId,
+          fileName: targetFile.name,
           workspace: activeWorkspace,
           query: submittedQuery,
         });
@@ -2434,34 +2450,8 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     <div className={styles.workspaceWithTopNav}>
       <TopNavbar
         userProfile={userProfile}
-<<<<<<< HEAD
-        actions={[
-          {
-            id: "notifications",
-            label: "Notifications",
-            icon: "notifications",
-            onClick: () => window.alert("No new notifications"),
-          },
-          {
-            id: "history",
-            label: "History",
-            icon: "history",
-            onClick: handleProjectHistoryClick,
-          },
-          {
-            id: "metrics",
-            label: "Analytics",
-            icon: "metrics",
-            onClick: () =>
-              router.push(
-                `${ROUTE_PATHS.METRICS}?project=${activeProject.id}&name=${activeProject.name}&category=${activeProject.category}`,
-              ),
-          },
-        ]}
-=======
         actions={topNavbarActions}
         breadcrumbItems={topNavbarBreadcrumbItems}
->>>>>>> 017e9ae67a96b040848e826bf5b3ddf1d6e523ce
       />
       <div className={styles.workspaceShell}>
         <AppWorkspaceRail
@@ -2721,11 +2711,23 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   <h2 className={styles.workspaceAssetTitle}>Upload and manage documents</h2>
                 </div>
 
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={isUploadingFiles ? -1 : 0}
                   className={classNames(styles.uploadDropzone, styles.assetUploadDropzone)}
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploadingFiles}
+                  onClick={() => {
+                    if (!isUploadingFiles) {
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (isUploadingFiles) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  aria-disabled={isUploadingFiles}
                 >
                   <Upload size={24} />
                   <div>
@@ -2738,7 +2740,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                         : "Click to choose PDF documents for this project."}
                     </p>
                   </div>
-                </button>
+                </div>
 
                 <div className={styles.headerFilesContainer}>
                   <div className={styles.headerFilesHeader}>
@@ -2761,9 +2763,10 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   {activeWorkspace.files.length > 0 ? (
                     <div className={styles.headerFilesList}>
                       {activeWorkspace.files.map((file) => (
-                        <button
+                        <div
                           key={file.id}
-                          type="button"
+                          role="button"
+                          tabIndex={0}
                           className={classNames(styles.headerFileItem, {
                             [styles.headerFileItemActive]:
                               String(file.fileId) === activeWorkspaceFileId,
@@ -2779,6 +2782,20 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                                   : null,
                             }))
                           }
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              updateActiveWorkspace((current) => ({
+                                ...current,
+                                selectedFileId:
+                                  String(file.fileId) === String(current.selectedFileId)
+                                    ? null
+                                    : file.fileId != null
+                                    ? Number(file.fileId)
+                                    : null,
+                              }));
+                            }
+                          }}
                           aria-pressed={String(file.fileId) === activeWorkspaceFileId}
                         >
                           <div className={styles.headerFileMain}>
@@ -2797,7 +2814,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                           >
                             {String(file.fileId) === activeWorkspaceFileId ? "Active" : "Ready"}
                           </span>
-                        </button>
+                        </div>
                       ))}
                     </div>
                   ) : (
@@ -2972,26 +2989,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
               {(activeWorkspace.conversation || []).map((entry) => (
                 <div key={entry.id} className={styles.conversationBlock}>
                   <div className={styles.queryLine}>{entry.query}</div>
-                  {entry.activityMessages?.length > 0 && (
-                    <div className={styles.queryActivityStack}>
-                      {entry.activityMessages.map((message) => (
-                        <div
-                          key={message.id}
-                          className={classNames(styles.queryActivityBubble, {
-                            [styles.queryActivityBubbleSuccess]:
-                              message.tone === "success",
-                            [styles.queryActivityBubbleWarning]:
-                              message.tone === "warning",
-                            [styles.queryActivityBubbleError]:
-                              message.tone === "error",
-                          })}
-                        >
-                          <span className={styles.queryActivityLabel}>Working</span>
-                          <p>{message.text}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                   {(entry.responseVariants || []).map((variant, index) => (
                     <motion.div
                       key={`${entry.id}-${variant.db}-${variant.experimentId || index}`}
@@ -3031,20 +3028,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
               {queryActivityState.visible && activeWorkspace.phase === "query-processing" && (
                 <div className={styles.queryActivityStack}>
                   {queryActivityState.messages.map((message) => (
-                    <div
+                    <p
                       key={message.id}
-                      className={classNames(styles.queryActivityBubble, {
-                        [styles.queryActivityBubbleSuccess]:
-                          message.tone === "success",
-                        [styles.queryActivityBubbleWarning]:
-                          message.tone === "warning",
-                        [styles.queryActivityBubbleError]:
-                          message.tone === "error",
+                      className={classNames(styles.queryActivityLine, {
+                        [styles.queryActivityLineSuccess]: message.tone === "success",
+                        [styles.queryActivityLineWarning]: message.tone === "warning",
+                        [styles.queryActivityLineError]: message.tone === "error",
                       })}
                     >
-                      <span className={styles.queryActivityLabel}>Working</span>
-                      <p>{message.text}</p>
-                    </div>
+                      {message.text}
+                    </p>
                   ))}
                 </div>
               )}

@@ -6,13 +6,8 @@ import {
   Cpu,
   Database,
   Zap,
-  Clock,
-  Download,
-  MoreVertical,
   CheckCircle2,
-  Activity,
   Trophy,
-  Filter,
   Search,
   ExternalLink
 } from 'lucide-react';
@@ -36,7 +31,7 @@ const HistoryView = () => {
         const projectRows = response?.data || [];
         if (!isMounted) return;
         setProjects(projectRows);
-        setSelectedProjectId(projectRows[0]?.id ? String(projectRows[0].id) : "");
+        setSelectedProjectId("");
       } catch (error) {
         if (!isMounted) return;
         setProjects([]);
@@ -59,15 +54,9 @@ const HistoryView = () => {
     let isMounted = true;
 
     const loadHistory = async () => {
-      if (!selectedProjectId) {
-        if (!isMounted) return;
-        setHistoryEntries([]);
-        return;
-      }
-
       setIsLoading(true);
       try {
-        const response = await projectApi.fetchProjectHistory(selectedProjectId);
+        const response = await projectApi.fetchUserHistory(selectedProjectId);
         if (!isMounted) return;
         setHistoryEntries(Array.isArray(response) ? response : []);
       } catch (error) {
@@ -124,7 +113,7 @@ const HistoryView = () => {
             value={selectedProjectId}
             onChange={(e) => setSelectedProjectId(e.target.value)}
           >
-            <option value="">Select project</option>
+            <option value="">All projects</option>
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
                 {project.project_name}
@@ -133,16 +122,6 @@ const HistoryView = () => {
           </select>
         </div>
 
-        <div className={styles.utilityRight}>
-          <Button variant="outline" size="sm" className={styles.filterBtn}>
-            <Filter size={14} />
-            <span>Filters</span>
-          </Button>
-          <Button className={styles.exportBtn}>
-            <Download size={14} />
-            <span>Export Log</span>
-          </Button>
-        </div>
       </div>
 
       {/* ── HISTORY LIST/TABLE ───────────────────────────────────── */}
@@ -242,7 +221,11 @@ const HistoryView = () => {
             ))}
             </AnimatePresence>
           ) : (
-            <div className={styles.row}>No history data available for the selected project.</div>
+            <div className={styles.row}>
+              {selectedProjectId
+                ? "No history data available for the selected project."
+                : "No history data available for this user."}
+            </div>
           )}
         </div>
       </div>

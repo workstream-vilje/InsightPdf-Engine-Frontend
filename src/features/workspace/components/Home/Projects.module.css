@@ -1861,51 +1861,43 @@
   max-width: 980px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-inline: 8px;
+  gap: 8px;
+  padding: 4px 10px;
   flex: 0 0 auto;
 }
 
-.queryActivityBubble {
-  width: 100%;
-  max-width: min(76%, 720px);
-  border-radius: 18px;
-  padding: 12px 14px;
-  background: rgba(148, 163, 184, 0.12);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  color: rgba(var(--foreground), 0.72);
-  backdrop-filter: blur(8px);
-}
-
-.queryActivityBubble p {
+.queryActivityLine {
   margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.6;
+  color: rgba(var(--foreground), 0.64);
+  font-size: 0.95rem;
+  line-height: 1.55;
 }
 
-.queryActivityBubbleSuccess {
-  background: rgba(var(--emerald), 0.1);
-  border-color: rgba(var(--emerald), 0.18);
-}
-
-.queryActivityBubbleWarning {
-  background: rgba(245, 158, 11, 0.1);
-  border-color: rgba(245, 158, 11, 0.18);
-}
-
-.queryActivityBubbleError {
-  background: rgba(239, 68, 68, 0.09);
-  border-color: rgba(239, 68, 68, 0.2);
-}
-
-.queryActivityLabel {
+.queryActivityLine::before {
+  content: "";
   display: inline-block;
-  margin-bottom: 6px;
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(var(--foreground), 0.46);
+  width: 7px;
+  height: 7px;
+  margin-right: 10px;
+  border-radius: 999px;
+  background: rgb(var(--primary));
+  box-shadow: 0 0 0 5px rgba(var(--primary), 0.1);
+  animation: executionPulse 1.4s ease infinite;
+}
+
+.queryActivityLineSuccess::before {
+  background: rgb(var(--emerald));
+  box-shadow: 0 0 0 5px rgba(var(--emerald), 0.1);
+}
+
+.queryActivityLineWarning::before {
+  background: rgb(245, 158, 11);
+  box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.1);
+}
+
+.queryActivityLineError::before {
+  background: rgb(220, 38, 38);
+  box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.1);
 }
 
 .responseTextBlock {
@@ -1916,10 +1908,11 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px 16px;
-  border-left: 3px solid rgba(var(--primary), 0.55);
-  background: linear-gradient(180deg, rgba(var(--sky), 0.08), rgba(255, 255, 255, 0.38));
-  border-radius: 0 18px 18px 0;
+  padding: 16px 18px;
+  border: 1px solid rgba(var(--border), 0.82);
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 18px;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
 }
 
 .techniqueButton {

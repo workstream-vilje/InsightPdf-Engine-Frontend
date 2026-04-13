@@ -9,6 +9,7 @@ export const deleteProject = (projectId) =>
   `/project/${projectId}`;
 export const fetchProjectHistory = (projectId) =>
   `/project/${projectId}/history`;
+export const fetchUserHistory = "/history";
 
 // File ENDPOINTS
 export const fetchProjectFiles = (projectId) =>

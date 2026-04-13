@@ -1,9 +1,10 @@
-import httpClient, { getStoredUserId, withQuery } from "@/services/axios";
+import httpClient, { withQuery } from "@/services/axios";
 import {
   createProject,
   deleteProject,
   fetchProjects,
   fetchProjectHistory,
+  fetchUserHistory,
 } from "@/services/api/networking/endpoints";
 import { getCurrentUserId } from "@/services/auth";
 
@@ -26,6 +27,13 @@ export const projectApi = {
   fetchAllProjects: () => httpClient.get(withUserIdQuery(fetchProjects)),
   deleteProject: (projectId) => httpClient.delete(deleteProject(projectId)),
   fetchProjectHistory: (projectId) => httpClient.get(fetchProjectHistory(projectId)),
+  fetchUserHistory: (projectId) =>
+    httpClient.get(
+      withQuery(fetchUserHistory, {
+        user_id: getCurrentUserId(),
+        project_id: projectId || undefined,
+      }),
+    ),
 };
 
 export default projectApi;
