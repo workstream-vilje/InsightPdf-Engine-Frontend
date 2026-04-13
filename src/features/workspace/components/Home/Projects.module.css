@@ -28,8 +28,108 @@
 .workspaceWithTopNav .workspaceSidebar,
 .workspaceWithTopNav .workspaceQuerySidebar,
 .workspaceWithTopNav .workspaceRightSidebar,
-.workspaceWithTopNav .workspaceMain {
+.workspaceWithTopNav .workspaceMain,
+.workspaceWithTopNav .appWorkspaceRail {
   height: calc(100vh - 54px);
+}
+
+/* Narrow account rail: fixed 52px layout column; flyout expands over the next panel (no content jump) */
+.appWorkspaceRail {
+  width: 52px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 14;
+  align-self: stretch;
+}
+
+.appWorkspaceRailFlyout {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 52px;
+  display: flex;
+  flex-direction: column;
+  background: var(--projects-page-bg);
+  border-right: 1px solid rgba(var(--border), 0.5);
+  transition: width 0.22s ease, box-shadow 0.22s ease;
+  overflow: hidden;
+}
+
+.appWorkspaceRail:hover .appWorkspaceRailFlyout,
+.appWorkspaceRail:focus-within .appWorkspaceRailFlyout {
+  width: 220px;
+  box-shadow: 8px 0 28px rgba(15, 23, 42, 0.08);
+}
+
+.appWorkspaceRailTop,
+.appWorkspaceRailBottom {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.appWorkspaceRailSpacer {
+  flex: 1;
+  min-height: 12px;
+}
+
+.appWorkspaceRailItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  padding: 10px 8px;
+  cursor: pointer;
+  color: rgb(var(--foreground));
+  font: inherit;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.appWorkspaceRailItem:hover {
+  background: rgba(var(--muted), 0.35);
+}
+
+.appWorkspaceRailItemDanger {
+  color: rgb(185, 28, 28);
+}
+
+.appWorkspaceRailItemDanger:hover {
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.appWorkspaceRailIcon {
+  flex-shrink: 0;
+}
+
+.appWorkspaceRailLabel {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  white-space: nowrap;
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  transition: opacity 0.15s ease, max-width 0.2s ease;
+}
+
+.appWorkspaceRail:hover .appWorkspaceRailLabel,
+.appWorkspaceRail:focus-within .appWorkspaceRailLabel {
+  opacity: 1;
+  max-width: 160px;
+}
+
+.workspaceProjectsMain {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .metricsIconButton,
@@ -667,6 +767,20 @@
   z-index: 2;
 }
 
+.workspaceContextSidebarInner {
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  align-items: stretch;
+  background: var(--projects-page-bg);
+  box-sizing: border-box;
+}
+
 .workspaceSidebarExpanded {
   width: 52px;
 }
@@ -1275,6 +1389,22 @@
   grid-template-columns: minmax(300px, var(--chat-panel-offset)) 10px minmax(0, 1fr);
   gap: 0;
   align-items: stretch;
+}
+
+/* Upload-only or query-only dashboard: one full-width column */
+.workspaceContentLayoutSingleColumn {
+  grid-template-columns: 1fr;
+}
+
+.workspaceContentLayoutSingleColumn .chatPanelShell {
+  margin-left: 0;
+}
+
+.workspaceModeNavButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 .workspaceAssetPanel {
@@ -2588,6 +2718,52 @@
   .workspaceShell {
     flex-direction: column;
     height: auto;
+  }
+
+  .appWorkspaceRail {
+    width: 100%;
+    height: auto;
+    min-height: 0;
+  }
+
+  .workspaceWithTopNav .appWorkspaceRail {
+    height: auto;
+  }
+
+  .appWorkspaceRailFlyout {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    box-shadow: none;
+    border-right: none;
+    border-bottom: 1px solid rgba(var(--border), 0.45);
+  }
+
+  .appWorkspaceRail:hover .appWorkspaceRailFlyout,
+  .appWorkspaceRail:focus-within .appWorkspaceRailFlyout {
+    width: 100%;
+  }
+
+  .appWorkspaceRailSpacer {
+    display: none;
+  }
+
+  .appWorkspaceRailTop,
+  .appWorkspaceRailBottom {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .appWorkspaceRailLabel {
+    opacity: 1;
+    max-width: none;
   }
 
   .workspaceSidebar,

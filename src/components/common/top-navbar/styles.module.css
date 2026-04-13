@@ -16,6 +16,60 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
+  flex: 1;
+  max-width: min(640px, calc(100vw - 280px));
+}
+
+.breadcrumbNav {
+  min-width: 0;
+  flex: 1;
+}
+
+.breadcrumbList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.breadcrumbItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.breadcrumbChevron {
+  flex-shrink: 0;
+  color: #a3a3a3;
+}
+
+.breadcrumbLink {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.breadcrumbLink:hover {
+  text-decoration: underline;
+}
+
+.breadcrumbCurrent {
+  color: #1f1f1f;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
 }
 
 .brandDot {

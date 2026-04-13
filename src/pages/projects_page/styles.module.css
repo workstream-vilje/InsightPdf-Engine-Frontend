@@ -26,10 +26,30 @@
   color: var(--projects-page-text);
 }
 
+/* Inside workspace shell + app rail: scroll the projects grid only */
+.pageShellEmbedded {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--projects-page-bg);
+  color: var(--projects-page-text);
+}
+
 .pageContent {
   width: min(1320px, calc(100vw - 160px));
   margin: 0 auto;
   padding: 36px 0 48px;
+}
+
+.pageContentEmbedded {
+  width: 100%;
+  max-width: min(1320px, 100%);
+  margin: 0 auto;
+  padding: 28px 24px 40px;
+  box-sizing: border-box;
 }
 
 .pageHeader {

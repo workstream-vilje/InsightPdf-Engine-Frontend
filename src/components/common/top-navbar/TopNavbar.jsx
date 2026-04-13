@@ -1,4 +1,7 @@
-import { Bell, BarChart3, History } from "lucide-react";
+"use client";
+
+import Link from "next/link";
+import { Bell, BarChart3, ChevronRight, History } from "lucide-react";
 import styles from "./styles.module.css";
 
 const getUserInitials = (userProfile) => {
@@ -21,16 +24,45 @@ const ACTION_ICONS = {
   metrics: BarChart3,
 };
 
-export default function TopNavbar({ userProfile, actions = [] }) {
+/**
+ * @param {{ label: string, href?: string }[]} [breadcrumbItems]
+ * Segments without `href` render as the current page (not clickable).
+ */
+export default function TopNavbar({ userProfile, actions = [], breadcrumbItems = null }) {
   const initial = getUserInitials(userProfile);
   const name = userProfile?.name || "User";
   const email = userProfile?.email || "user@company.com";
+
+  const crumbs = Array.isArray(breadcrumbItems) ? breadcrumbItems.filter(Boolean) : [];
 
   return (
     <header className={styles.topNav}>
       <div className={styles.leftArea}>
         <div className={styles.brandDot} />
-        <span className={styles.orgText}>{email}&apos;s Org</span>
+        {crumbs.length > 0 ? (
+          <nav className={styles.breadcrumbNav} aria-label="Breadcrumb">
+            <ol className={styles.breadcrumbList}>
+              {crumbs.map((item, index) => (
+                <li key={`${item.label}-${index}`} className={styles.breadcrumbItem}>
+                  {index > 0 && (
+                    <ChevronRight size={14} className={styles.breadcrumbChevron} aria-hidden />
+                  )}
+                  {item.href ? (
+                    <Link href={item.href} className={styles.breadcrumbLink}>
+                      {item.label}
+                    </Link>
+                  ) : (
+                    <span className={styles.breadcrumbCurrent} aria-current="page">
+                      {item.label}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </nav>
+        ) : (
+          <span className={styles.orgText}>{email}&apos;s Org</span>
+        )}
       </div>
 
       <div className={styles.rightArea}>
