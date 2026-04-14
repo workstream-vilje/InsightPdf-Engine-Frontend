@@ -28,6 +28,7 @@
 .workspaceWithTopNav .workspaceSidebar,
 .workspaceWithTopNav .workspaceQuerySidebar,
 .workspaceWithTopNav .workspaceRightSidebar,
+.workspaceWithTopNav .workspaceUploadRightSidebar,
 .workspaceWithTopNav .workspaceMain,
 .workspaceWithTopNav .appWorkspaceRail {
   height: calc(100vh - 54px);
@@ -761,10 +762,12 @@
   border: 0;
   background: var(--projects-page-bg);
   box-shadow: none;
+  flex-shrink: 0;
 }
 
 .workspaceQuerySidebar {
   width: 308px;
+  min-width: 260px;
   height: 100vh;
   border-radius: 0;
   overflow: hidden;
@@ -773,6 +776,15 @@
   box-shadow: none;
   position: relative;
   z-index: 2;
+  flex-shrink: 0;
+}
+
+/* Upload right rail: keep fully on-screen; allow footer menu / hover expand to paint outside narrow width */
+.workspaceUploadRightSidebar {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 12;
+  overflow: visible;
 }
 
 .workspaceContextSidebarInner {
@@ -1804,6 +1816,70 @@
   justify-content: flex-end;
 }
 
+.uploadFilesSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.uploadFilesSectionHeading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.uploadFilesSectionActions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.uploadFilesSectionActions .fileSelectionClearButton {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.uploadFilesExpandPrimaryButton {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  border: none;
+  background: rgb(var(--primary));
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(var(--primary), 0.28);
+  transition:
+    transform 0.15s ease,
+    filter 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.uploadFilesExpandPrimaryButton:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 12px 28px rgba(var(--primary), 0.34);
+  transform: translateY(-1px);
+}
+
 .uploadFilesExpandButton {
   display: inline-flex;
   align-items: center;
@@ -2016,6 +2092,15 @@
 
 .ingestionReportOpenButton {
   font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+  border-color: rgba(37, 99, 235, 0.75);
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.25);
+}
+
+.ingestionReportOpenButton:hover {
+  background: linear-gradient(135deg, #0284c7, #1d4ed8);
+  border-color: rgba(37, 99, 235, 0.9);
 }
 
 .openChatCta {
@@ -2118,6 +2203,183 @@
   flex-direction: column;
   padding: 0 16px 16px;
   overflow: hidden;
+}
+
+.uploadPipelineOutputModalBody {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.uploadExpandedPanelTabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
+}
+
+.uploadExpandedPanelTab {
+  border: 1px solid rgba(var(--border), 0.6);
+  border-radius: 999px;
+  background: rgba(var(--surface-1), 0.8);
+  color: rgb(var(--muted-foreground));
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.uploadExpandedPanelTab:hover {
+  color: rgb(var(--foreground));
+  border-color: rgba(var(--primary), 0.35);
+}
+
+.uploadExpandedPanelTabActive {
+  background: rgba(var(--primary), 0.12);
+  color: rgb(var(--primary));
+  border-color: rgba(var(--primary), 0.45);
+}
+
+.uploadExpandedPipelinePage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.uploadExpandedEmptyState {
+  border: 1px dashed rgba(var(--border), 0.55);
+  border-radius: 14px;
+  background: rgba(var(--surface-1), 0.7);
+  color: rgb(var(--muted-foreground));
+  font-size: 0.88rem;
+  padding: 16px;
+}
+
+.insightPanelMuted {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: rgb(var(--muted-foreground));
+  margin: 0 0 10px;
+}
+
+.uploadSidebarStatusRow {
+  margin-bottom: 10px;
+}
+
+.uploadSidebarKv {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.78rem;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(var(--border), 0.22);
+}
+
+.uploadSidebarKv span {
+  color: rgb(var(--muted-foreground));
+}
+
+.uploadSidebarTechniquesDl {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.uploadSidebarTechniquesDl dt {
+  font-weight: 700;
+  margin-top: 10px;
+  color: rgb(var(--muted-foreground));
+}
+
+.uploadSidebarTechniquesDl dd {
+  margin: 2px 0 0;
+  word-break: break-word;
+}
+
+.workspaceUploadRightSidebar .workspaceRightInner {
+  align-items: stretch;
+}
+
+.uploadRightSidebarFooter {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  width: 100%;
+  padding-top: 8px;
+  border-top: 1px solid rgba(var(--border), 0.34);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: var(--projects-page-bg);
+  z-index: 6;
+}
+
+.uploadSidebarFooterButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 6px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  color: rgb(var(--foreground));
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.uploadSidebarFooterButton:hover {
+  background: rgba(var(--muted), 0.22);
+}
+
+.workspaceUploadRightSidebar:not(.workspaceRightSidebarExpanded) .uploadSidebarFooterButton span {
+  display: none;
+}
+
+.uploadSidebarModeMenu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  top: auto;
+  min-width: 0;
+  z-index: 30;
+  background: rgb(var(--background));
+  border: 1px solid rgba(var(--border), 0.55);
+  border-radius: 10px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.14);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.uploadSidebarModeOption {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: rgb(var(--foreground));
+}
+
+.uploadSidebarModeOption:hover {
+  background: rgba(var(--muted), 0.2);
+}
+
+.uploadSidebarModeOptionActive {
+  background: rgba(var(--muted), 0.32);
+  font-weight: 700;
 }
 
 .uploadFilesExpandedScroll {
@@ -3547,6 +3809,35 @@
   width: 100%;
 }
 
+.rightSidebarCollapseButton {
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-top: 1px solid rgba(var(--border), 0.34);
+  background: transparent;
+  color: rgb(var(--muted-foreground));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 6px;
+  cursor: pointer;
+  margin-top: 6px;
+}
+
+.rightSidebarCollapseButton:hover {
+  background: rgba(var(--muted), 0.24);
+  color: rgb(var(--foreground));
+}
+
+.rightSidebarCollapseIcon {
+  transition: transform 0.2s ease;
+}
+
+.rightSidebarCollapseIconOpen {
+  transform: rotate(180deg);
+}
+
 .workspaceSidebarExpanded .workspaceSidebarInner,
 .workspaceRightSidebarExpanded .workspaceRightInner {
   align-items: stretch;
@@ -3578,6 +3869,17 @@
   min-height: 36px;
   justify-content: center;
   padding: 0;
+  border-radius: 6px;
+}
+
+.workspaceRightSidebar:not(.workspaceRightSidebarExpanded) .rightSidebarCollapseButton {
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  justify-content: center;
+  padding: 0;
+  margin: 8px auto 0;
+  border-top: 0;
   border-radius: 6px;
 }
 

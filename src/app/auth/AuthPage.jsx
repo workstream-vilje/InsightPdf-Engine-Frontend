@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { useAuth } from "@/components/auth/AuthProvider";
 import styles from "./auth.module.css";
-import { hasAccessToken, setAuthSession } from "@/services/auth";
+import { setAuthSession } from "@/services/auth";
 import { ROUTE_PATHS } from "@/utils/routepaths";
 
 const initialSignupForm = {
@@ -72,6 +73,7 @@ const callAuthApi = async (path, payload) => {
 
 export default function AuthPage({ mode }) {
   const router = useRouter();
+  const { isAuthenticated, isAuthInitialized } = useAuth();
   const isSignup = mode === "signup";
   const [switchingMode, setSwitchingMode] = useState("");
   const [signupForm, setSignupForm] = useState(initialSignupForm);
@@ -81,10 +83,10 @@ export default function AuthPage({ mode }) {
   const switchTimerRef = useRef(null);
 
   useEffect(() => {
-    if (hasAccessToken()) {
-      router.replace("/workspace");
+    if (isAuthInitialized && isAuthenticated) {
+      router.replace(ROUTE_PATHS.WORKSPACE_UPLOAD);
     }
-  }, [router]);
+  }, [isAuthInitialized, isAuthenticated, router]);
 
   useEffect(() => {
     return () => {

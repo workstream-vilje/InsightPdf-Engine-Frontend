@@ -80,6 +80,12 @@ export default function TopNavbar({ userProfile, actions = [], breadcrumbItems =
               aria-label={action.label}
             >
               <Icon size={15} />
+              {action.pulse ? (
+                <>
+                  <span className={styles.actionPulseDot} aria-hidden />
+                  <span className={styles.actionPulseRing} aria-hidden />
+                </>
+              ) : null}
             </button>
           );
         })}

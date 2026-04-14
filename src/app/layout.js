@@ -1,6 +1,7 @@
 import localFont from "next/font/local";
 import { JetBrains_Mono, Manrope } from "next/font/google";
 import NextTopLoader from 'nextjs-toploader';
+import AppProviders from "./providers";
 import "./globals.css";
 
 const urbanistSans = localFont({
@@ -44,7 +45,7 @@ export default function RootLayout({ children }) {
           speed={200}
           shadow="0 0 10px rgb(var(--primary)),0 0 5px rgb(var(--primary))"
         />
-        {children}
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );
