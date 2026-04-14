@@ -27,8 +27,9 @@ const ACTION_ICONS = {
 /**
  * @param {{ label: string, href?: string }[]} [breadcrumbItems]
  * Segments without `href` render as the current page (not clickable).
+ * @param {import("react").ReactNode} [endSlot] — Renders in the right cluster before icon actions (e.g. Open chat).
  */
-export default function TopNavbar({ userProfile, actions = [], breadcrumbItems = null }) {
+export default function TopNavbar({ userProfile, actions = [], breadcrumbItems = null, endSlot = null }) {
   const initial = getUserInitials(userProfile);
   const name = userProfile?.name || "User";
   const email = userProfile?.email || "user@company.com";
@@ -66,6 +67,7 @@ export default function TopNavbar({ userProfile, actions = [], breadcrumbItems =
       </div>
 
       <div className={styles.rightArea}>
+        {endSlot ? <div className={styles.endSlot}>{endSlot}</div> : null}
         {actions.map((action) => {
           const Icon = ACTION_ICONS[action.icon] || Bell;
           return (

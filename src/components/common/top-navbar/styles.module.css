@@ -91,6 +91,22 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
+}
+
+.endSlot {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.endSlot :global(button) {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 650;
+  gap: 6px;
 }
 
 .actionButton {
