@@ -2172,6 +2172,8 @@
 }
 
 .uploadFileReportTag {
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
   margin: 0;
   padding: 5px 8px;
@@ -2194,6 +2196,11 @@
 .uploadFileReportTag:hover {
   background: rgba(var(--primary), 0.08);
   border-color: rgba(var(--primary), 0.35);
+}
+
+.uploadFileReportTag:focus-visible {
+  outline: 2px solid rgba(var(--primary), 0.45);
+  outline-offset: 2px;
 }
 
 .uploadFileCardBadge {
@@ -3487,6 +3494,40 @@
   box-shadow: none;
 }
 
+.queryAgentModeBadge {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(var(--border), 0.88);
+  background: rgba(var(--surface-1), 0.92);
+  color: rgb(var(--muted-foreground));
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.queryAgentModeBadge:hover {
+  transform: translateY(-1px);
+  border-color: rgba(var(--primary), 0.35);
+  color: rgb(var(--foreground));
+}
+
+.queryAgentModeBadgeActive {
+  border-color: rgba(var(--primary), 0.5);
+  background: rgba(var(--primary), 0.12);
+  color: rgb(var(--primary));
+}
+
 .queryInputHero {
   height: 62px;
   flex: 1;
@@ -4116,6 +4157,15 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.choiceGridDisabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.choiceGridDisabled .choiceChip {
+  cursor: not-allowed;
 }
 
 .choiceChip {

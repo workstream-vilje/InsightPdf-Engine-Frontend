@@ -64,6 +64,11 @@ import {
   VECTOR_STORE_OPTIONS,
   createWorkspaceState,
 } from "@/lib/projects/data";
+
+/** Agent is toggled from the query bar, not the sidebar chips. */
+const QUERY_CONFIGURATION_SIDEBAR_OPTIONS = QUERY_CONFIGURATION_OPTIONS.filter(
+  (option) => option.value !== "agent",
+);
 import {
   ROUTE_PATHS,
   workspaceQueryUrl,
@@ -1134,11 +1139,8 @@ const buildSharedPipelineConfig = (workspace) => {
   const embeddingProvider = workspace.embeddingModels.includes("ollama-nomic-embed")
     ? "ollama"
     : "openai";
-  const embeddingModel = embeddingProvider === "ollama"
-    ? "nomic-embed-text"
-    : workspace.embeddingModels.includes("text-embedding-3-large")
-    ? "text-embedding-3-large"
-    : "text-embedding-3-small";
+  const embeddingModel =
+    embeddingProvider === "ollama" ? "nomic-embed-text" : "text-embedding-3-large";
   const normalizedExtractionMethods = (workspace.dataExtraction || []).filter((value) =>
     ["pymupdf", "unstructured", "pdfplumber"].includes(value),
   );
@@ -1352,9 +1354,6 @@ const getAllowedEmbeddingOptions = (allowedTechniques) => {
     if (model === "text-embedding-3-large") {
       allowedValues.add("text-embedding-3-large");
     }
-    if (model === "text-embedding-3-small") {
-      allowedValues.add("text-embedding-3-small");
-    }
   });
 
   return EMBEDDING_OPTIONS.filter((option) => allowedValues.has(option.value));
@@ -1383,26 +1382,35 @@ const TypedLine = ({ text }) => {
   return <p className={styles.statusLine}>{visibleText}</p>;
 };
 
-const MultiSelectChips = ({ options, selectedValues, onToggle }) => (
-  <div className={styles.choiceGrid}>
+const MultiSelectChips = ({ options, selectedValues, onToggle, disabled = false }) => (
+  <div
+    className={classNames(styles.choiceGrid, {
+      [styles.choiceGridDisabled]: disabled,
+    })}
+  >
     {options.map((option) => {
       const checked = selectedValues.includes(option.value);
       return (
         <div
           key={option.value}
           role="button"
-          tabIndex={0}
+          tabIndex={disabled ? -1 : 0}
           className={classNames(styles.choiceChip, {
             [styles.choiceChipActive]: checked,
           })}
-          onClick={() => onToggle(option.value)}
+          aria-disabled={disabled}
+          aria-pressed={checked}
+          onClick={() => {
+            if (disabled) return;
+            onToggle(option.value);
+          }}
           onKeyDown={(event) => {
+            if (disabled) return;
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
               onToggle(option.value);
             }
           }}
-          aria-pressed={checked}
         >
           <Checkbox checked={checked} className={styles.choiceCheckbox} asSpan />
           <span>{option.label}</span>
@@ -1535,17 +1543,25 @@ function UploadProjectFilesList({
                 {statusLabel}
               </span>
               {showReportBtn && (
-                <button
-                  type="button"
+                <span
+                  role="button"
+                  tabIndex={0}
                   className={styles.uploadFileReportTag}
                   title="View ingestion report"
                   onClick={(e) => {
                     e.stopPropagation();
                     onOpenFileReport(fileReport);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onOpenFileReport(fileReport);
+                    }
+                  }}
                 >
                   Report
-                </button>
+                </span>
               )}
             </div>
           </button>
@@ -1580,17 +1596,25 @@ function UploadProjectFilesList({
             </div>
             <div className={styles.uploadFileRowActions}>
               {showReportBtn && (
-                <button
-                  type="button"
+                <span
+                  role="button"
+                  tabIndex={0}
                   className={styles.uploadFileReportTag}
                   title="View ingestion report"
                   onClick={(e) => {
                     e.stopPropagation();
                     onOpenFileReport(fileReport);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onOpenFileReport(fileReport);
+                    }
+                  }}
                 >
                   Report
-                </button>
+                </span>
               )}
               <span
                 className={classNames(styles.fileStatusBadge, styles.uploadFileStatusPill, {
@@ -2805,9 +2829,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const handleStartQuery = () => {
     if (!activeWorkspace?.query.trim() || !activeProjectId) return;
     const submittedQuery = activeWorkspace.query.trim();
-    const hasConfigurationSelected =
+    const agentModeOn = (activeWorkspace?.queryConfigurations || []).includes("agent");
+    const hasRetrievalSelection =
       Array.isArray(activeWorkspace?.retrievalStrategies) &&
-      activeWorkspace.retrievalStrategies.length > 0 &&
+      activeWorkspace.retrievalStrategies.length > 0;
+    const hasConfigurationSelected =
+      (agentModeOn || hasRetrievalSelection) &&
       Array.isArray(activeWorkspace?.vectorStores) &&
       activeWorkspace.vectorStores.length > 0 &&
       Array.isArray(activeWorkspace?.embeddingModels) &&
@@ -3051,6 +3078,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   );
   const hasSelectedProcessedFile = Boolean(
     selectedWorkspaceFile?.processed || selectedWorkspaceFile?.allowedTechniques,
+  );
+  const queryAgentModeEnabled = Boolean(
+    (activeWorkspace?.queryConfigurations || []).includes("agent"),
   );
   const executionState = activeWorkspace?.execution || {};
   const executionStatusLabel =
@@ -3641,13 +3671,18 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                 <SidebarSection
                   icon={Database}
                   title="Retrieved Strategy"
-                  description="Select multiple retrieval strategies"
+                  description={
+                    queryAgentModeEnabled
+                      ? "Shown for reference while Agent mode is on (use Agent mode in the chat bar)"
+                      : "Select multiple retrieval strategies"
+                  }
                   expanded
                 >
                   <MultiSelectChips
                     options={RETRIEVAL_STRATEGY_OPTIONS}
                     selectedValues={activeWorkspace.retrievalStrategies}
                     onToggle={(value) => toggleWorkspaceValue("retrievalStrategies", value)}
+                    disabled={queryAgentModeEnabled}
                   />
                 </SidebarSection>
 
@@ -3700,11 +3735,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                 <SidebarSection
                   icon={MessageSquare}
                   title="Query Configuration"
-                  description="Toggle query services"
+                  description="Ragas and LangSmith (Agent mode is in the chat bar)"
                   expanded
                 >
                   <MultiSelectChips
-                    options={QUERY_CONFIGURATION_OPTIONS}
+                    options={QUERY_CONFIGURATION_SIDEBAR_OPTIONS}
                     selectedValues={activeWorkspace.queryConfigurations || []}
                     onToggle={(value) => toggleWorkspaceValue("queryConfigurations", value)}
                   />
@@ -3973,7 +4008,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                     <p className={styles.pipelineCtaNote}>Select one file to process.</p>
                   )}
                   {hasSelectedProcessedFile && (
-                    <p className={styles.pipelineCtaNote}>Selected file is already processed Start Your Chat.</p>
+                    <p className={styles.pipelineCtaNote}>Selected file is already processed. Start Your Chat.</p>
                   )}
                 </div>
               </div>
@@ -4362,15 +4397,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                           </div>
                         );
                       })()}
-                      <div className={styles.ingestionReportModalFooter}>
-                        <button
-                          type="button"
-                          className={styles.devModalBtnSecondary}
-                          onClick={() => setIngestionReportOpen(false)}
-                        >
-                          Close
-                        </button>
-                      </div>
                     </div>
                   </div>
                 )}
@@ -4653,6 +4679,21 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
               </div>
               <div className={classNames(styles.queryInputShell, styles.queryInputShellHero)}>
+                <button
+                  type="button"
+                  className={classNames(styles.queryAgentModeBadge, {
+                    [styles.queryAgentModeBadgeActive]: queryAgentModeEnabled,
+                  })}
+                  onClick={() => toggleWorkspaceValue("queryConfigurations", "agent")}
+                  aria-pressed={queryAgentModeEnabled}
+                  title={
+                    queryAgentModeEnabled
+                      ? "Turn off Agent mode (retrieval strategy picks re-enabled)"
+                      : "Turn on Agent mode (meta-retriever; retrieval strategy picks disabled)"
+                  }
+                >
+                  Agent mode
+                </button>
                 <Input
                   ref={queryInputRef}
                   value={activeWorkspace.query}

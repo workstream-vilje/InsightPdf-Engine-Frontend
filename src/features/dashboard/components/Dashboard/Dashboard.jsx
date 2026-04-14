@@ -121,7 +121,7 @@ const Dashboard = () => {
             },
             embedding: {
               provider: "openai",
-              model: "text-embedding-3-small",
+              model: "text-embedding-3-large",
             },
             llm: {
               provider: "openai",
@@ -186,7 +186,7 @@ const Dashboard = () => {
               resultPayload.experiment_code ||
               `EXP-${resultPayload.experiment_id || "000"}`,
             llm: resultPayload.llm || "gpt-4o-mini",
-            embedding: resultPayload.embedding || "text-embedding-3-small",
+            embedding: resultPayload.embedding || "text-embedding-3-large",
             db: resultPayload.db || "faiss",
             retrieval: resultPayload.retrieval || "similarity",
             accuracy: Math.round(Number(resultPayload.accuracy || 0) * 100),

@@ -89,7 +89,7 @@ export const createWorkspaceState = () => ({
   },
   dataExtraction: ["pymupdf"],
   textProcessing: ["recursive"],
-  embeddingModels: ["text-embedding-3-small"],
+  embeddingModels: ["text-embedding-3-large"],
   vectorStores: ["faiss"],
   retrievalStrategies: ["semantic-similarity"],
   queryConfigurations: [],
