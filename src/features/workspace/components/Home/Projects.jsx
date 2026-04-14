@@ -22,6 +22,7 @@ import {
   List,
   LogOut,
   MessageSquare,
+  PanelRight,
   PlayCircle,
   Send,
   Settings,
@@ -59,7 +60,11 @@ import {
   VECTOR_STORE_OPTIONS,
   createWorkspaceState,
 } from "@/lib/projects/data";
-import { ROUTE_PATHS, workspaceQueryUrl, workspaceUploadUrl } from "@/utils/routepaths";
+import {
+  ROUTE_PATHS,
+  workspaceQueryUrl,
+  workspaceUploadUrl,
+} from "@/utils/routepaths";
 import styles from "./Projects.module.css";
 
 /** Typed in the “delete all files” modal to confirm permanent removal. */
@@ -71,6 +76,177 @@ const RIGHT_SIDEBAR_ITEMS = [
   { value: "performance", label: "Execution Performance", icon: Sparkles },
   { value: "quality", label: "Quality Metrics", icon: Database },
 ];
+
+const UPLOAD_RIGHT_SIDEBAR_ITEMS = [
+  { value: "pipeline", label: "Pipeline", icon: PlayCircle },
+  { value: "techniques", label: "Techniques", icon: Sparkles },
+  { value: "files", label: "Files", icon: FolderKanban },
+];
+
+/** Same pipeline output card as the main upload column; reused in expanded files view. */
+function UploadPipelineOutputCard({
+  executionState,
+  executionStatusLabel,
+  executionSummaryItems,
+  selectedWorkspaceFile,
+  updateActiveWorkspace,
+  variant = "inline",
+  onExpand = null,
+}) {
+  const hideBackToFiles = variant === "inline";
+  const scrollClass =
+    variant === "modal" ? styles.uploadPipelineOutputModalBody : undefined;
+
+  return (
+    <div
+      className={classNames(styles.executionCard, styles.executionCardPro, scrollClass, {
+        [styles.executionCardRunning]: executionState.status === "running",
+        [styles.executionCardSuccess]: executionState.status === "success",
+        [styles.executionCardError]: executionState.status === "error",
+      })}
+    >
+      <div className={styles.executionCardHeader}>
+        <div>
+          <p className={styles.executionEyebrow}>Pipeline output</p>
+          <h3 className={styles.executionTitle}>{executionState.message}</h3>
+        </div>
+        <div className={styles.executionCardHeaderRight}>
+          {onExpand && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={styles.executionShowOutputButton}
+              onClick={onExpand}
+            >
+              Expand
+            </Button>
+          )}
+          {hideBackToFiles && executionState.status !== "running" && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={styles.executionBackToFilesButton}
+              onClick={() =>
+                updateActiveWorkspace((current) => ({
+                  ...current,
+                  execution: {
+                    ...current.execution,
+                    visible: false,
+                  },
+                }))
+              }
+            >
+              Back to files
+            </Button>
+          )}
+          <span
+            className={classNames(styles.executionStatusBadge, {
+              [styles.executionStatusBadgeRunning]: executionState.status === "running",
+              [styles.executionStatusBadgeSuccess]: executionState.status === "success",
+              [styles.executionStatusBadgeError]: executionState.status === "error",
+            })}
+          >
+            {executionStatusLabel}
+          </span>
+        </div>
+      </div>
+
+      <div className={styles.executionFileMeta}>
+        <span>{executionState.fileCode || "FILE"}</span>
+        <span>{executionState.fileName || selectedWorkspaceFile?.name || "Document"}</span>
+      </div>
+
+      <div className={styles.executionRuns}>
+        {(executionState.runs || []).map((run) => (
+          <div key={run.id} className={styles.executionRunCard}>
+            <div className={styles.executionRunHeader}>
+              <div className={styles.executionRunHeading}>
+                <strong>{run.label}</strong>
+                <span>{run.meta}</span>
+              </div>
+              {run.note && <span className={styles.executionRunNote}>Fallback</span>}
+            </div>
+
+            {run.note && <p className={styles.executionRunNotice}>{run.note}</p>}
+
+            <div className={styles.executionEventList}>
+              {(run.events || []).map((event) => (
+                <div
+                  key={event.id}
+                  className={classNames(styles.executionEventRow, {
+                    [styles.executionEventRowActive]: event.status === "active",
+                    [styles.executionEventRowComplete]: event.status === "completed",
+                    [styles.executionEventRowFailed]: event.status === "failed",
+                    [styles.executionEventRowPending]: event.status === "pending",
+                  })}
+                >
+                  <span
+                    className={classNames(styles.executionEventDot, {
+                      [styles.executionEventDotActive]: event.status === "active",
+                      [styles.executionEventDotComplete]: event.status === "completed",
+                      [styles.executionEventDotFailed]: event.status === "failed",
+                      [styles.executionEventDotPending]: event.status === "pending",
+                    })}
+                  />
+                  <p className={styles.executionEventMessage}>{event.message}</p>
+                  {event.countLabel && (
+                    <span className={styles.executionEventCount}>{event.countLabel}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {executionSummaryItems.length > 0 && (
+        <div className={styles.executionSummaryGrid}>
+          {executionSummaryItems.map((item) => (
+            <div key={item.label} className={styles.executionSummaryItem}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {executionState.details && (
+        <div className={styles.executionDetailsSection}>
+          <button
+            type="button"
+            className={styles.executionDetailsToggle}
+            onClick={() =>
+              updateActiveWorkspace((current) => ({
+                ...current,
+                execution: {
+                  ...current.execution,
+                  detailsOpen: !current.execution?.detailsOpen,
+                },
+              }))
+            }
+          >
+            {executionState.detailsOpen ? "Hide details" : "View details"}
+          </button>
+
+          <AnimatePresence initial={false}>
+            {executionState.detailsOpen && (
+              <motion.pre
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className={styles.executionDetails}
+              >
+                {JSON.stringify(executionState.details, null, 2)}
+              </motion.pre>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const AppWorkspaceRail = ({ onProjects, onSettings, onLogout }) => (
   <aside className={styles.appWorkspaceRail} aria-label="Account and navigation">
@@ -193,6 +369,21 @@ const mapUploadedFileToWorkspaceFile = (file, category) => ({
   pages: file?.pages_count ?? file?.pagesCount ?? file?.pages ?? null,
   allowedTechniques: file?.allowed_techniques || null,
 });
+
+/** One row per backend file id; first occurrence wins (order-stable). */
+const dedupeWorkspaceFilesByFileId = (files) => {
+  const seen = new Set();
+  const out = [];
+  for (const f of files || []) {
+    const id = f?.fileId != null ? String(f.fileId) : null;
+    if (id) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+    }
+    out.push(f);
+  }
+  return out;
+};
 
 const EXECUTION_STAGE_ORDER = ["chunking", "embedding", "vector-store"];
 
@@ -1251,6 +1442,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [uploadFilesViewMode, setUploadFilesViewMode] = useState("grid");
   const [uploadFilesExpandedOpen, setUploadFilesExpandedOpen] = useState(false);
+  const [uploadExpandedPanel, setUploadExpandedPanel] = useState("files");
   const [workspaceFilePendingDelete, setWorkspaceFilePendingDelete] = useState(null);
   const [deleteWorkspaceFileNameInput, setDeleteWorkspaceFileNameInput] = useState("");
   const [deletingWorkspaceFileId, setDeletingWorkspaceFileId] = useState(null);
@@ -1260,7 +1452,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const [ingestionReportOpen, setIngestionReportOpen] = useState(false);
   const [ingestionReportSelectedId, setIngestionReportSelectedId] = useState(null);
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
-  const [isRightSidebarExpanded, setIsRightSidebarExpanded] = useState(false);
+  const [isQueryRightSidebarExpanded, setIsQueryRightSidebarExpanded] = useState(false);
+  const [isQueryRightSidebarPinned, setIsQueryRightSidebarPinned] = useState(false);
+  /** Upload workspace right rail: hover (default) | expanded (pinned open) | collapsed (icons only). */
+  const [uploadRightSidebarMode, setUploadRightSidebarMode] = useState("hover");
+  const [isUploadRightSidebarHovered, setIsUploadRightSidebarHovered] = useState(false);
+  const [uploadRightActiveSection, setUploadRightActiveSection] = useState("pipeline");
+  const [uploadSidebarControlOpen, setUploadSidebarControlOpen] = useState(false);
+  const [hasUnreadPipelineSuccess, setHasUnreadPipelineSuccess] = useState(false);
+  const uploadSidebarControlRef = useRef(null);
+  const previousExecutionStatusRef = useRef("idle");
   const [chatPanelOffset, setChatPanelOffset] = useState(420);
   const [chatGreeting, setChatGreeting] = useState("Hello");
   const [userProfile, setUserProfile] = useState({ name: "", email: "" });
@@ -1360,6 +1561,20 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   }, []);
 
   useEffect(() => () => clearTimers(), [clearTimers]);
+
+  useEffect(() => {
+    if (!uploadSidebarControlOpen) return undefined;
+    const onPointerDown = (event) => {
+      if (
+        uploadSidebarControlRef.current &&
+        !uploadSidebarControlRef.current.contains(event.target)
+      ) {
+        setUploadSidebarControlOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [uploadSidebarControlOpen]);
 
   useEffect(() => {
     setChatGreeting(getGreeting());
@@ -1515,6 +1730,21 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     }
   }, [initialProjectId, projects]);
 
+  /** Keep `?project=` in the URL so refresh stays on the same project workspace. */
+  useEffect(() => {
+    if (typeof window === "undefined" || !activeProjectId) return;
+    const desired =
+      workspaceMode === "query"
+        ? workspaceQueryUrl(activeProjectId)
+        : workspaceUploadUrl(activeProjectId);
+    const url = new URL(desired, window.location.origin);
+    const pathOk = window.location.pathname === url.pathname;
+    const currentProject = new URLSearchParams(window.location.search).get("project");
+    if (!pathOk || currentProject !== String(activeProjectId)) {
+      router.replace(desired);
+    }
+  }, [activeProjectId, workspaceMode, router]);
+
   const updateActiveWorkspace = useCallback(
     (recipe) => {
       if (!activeProjectId) return;
@@ -1564,8 +1794,8 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       try {
         const response = await fileApi.fetchProjectFiles(activeProjectId);
         const backendFiles = response?.data || [];
-        const mapped = backendFiles.map((file) =>
-          mapUploadedFileToWorkspaceFile(file, activeProjectCategory),
+        const mapped = dedupeWorkspaceFilesByFileId(
+          backendFiles.map((file) => mapUploadedFileToWorkspaceFile(file, activeProjectCategory)),
         );
 
         updateActiveWorkspace((current) => {
@@ -1726,7 +1956,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const handleProjectHistoryClick = useCallback(async () => {
     if (!activeProject?.id) return;
 
-    setIsRightSidebarExpanded(true);
+    setIsQueryRightSidebarExpanded(true);
     updateActiveWorkspace((current) => ({
       ...current,
       activeRightSection: "history",
@@ -1791,6 +2021,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           [projectId]: current[projectId] || createWorkspaceState(),
         }));
         setActiveProjectId(projectId);
+        router.replace(workspaceUploadUrl(projectId));
         setIsCreateProjectOpen(false);
         setNewProjectName("");
         setNewProjectCategory("");
@@ -1937,13 +2168,15 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       }
 
       const response = await fileApi.uploadProjectFiles(activeProject.id, formData);
-      const uploadedFiles = (response?.data || []).map((file) =>
-        mapUploadedFileToWorkspaceFile(file, activeProject?.category),
+      const uploadedFiles = dedupeWorkspaceFilesByFileId(
+        (response?.data || []).map((file) =>
+          mapUploadedFileToWorkspaceFile(file, activeProject?.category),
+        ),
       );
 
       updateActiveWorkspace((current) => ({
         ...current,
-        files: [...current.files, ...uploadedFiles],
+        files: dedupeWorkspaceFilesByFileId([...(current.files || []), ...uploadedFiles]),
         selectedFileId: current.selectedFileId != null ? current.selectedFileId : null,
         phase: "ingestion-setup",
         query: "",
@@ -1969,7 +2202,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           runs: [],
         },
       }));
-      // Ensure UI matches backend (and prunes deleted DB files)
+      // Ensure UI matches backend (and prunes deleted DB files). Do not reuse an older in-flight GET
+      // from focus/effects — that can return stale rows and interact badly with the merge above.
+      projectFilesListSyncPromiseRef.current = null;
       await syncProjectFilesFromBackend();
     } catch (error) {
       const message =
@@ -2548,12 +2783,33 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           : null,
     },
   ].filter((item) => item.value);
+  const uploadSidebarTechniquesConfig = useMemo(() => {
+    if (!activeWorkspace) return null;
+    return buildSharedPipelineConfig(activeWorkspace).processingConfig;
+  }, [activeWorkspace]);
+  const queryRightSidebarWide = isQueryRightSidebarPinned || isQueryRightSidebarExpanded;
+  const uploadRightSidebarWide =
+    uploadRightSidebarMode === "expanded" ||
+    (uploadRightSidebarMode === "hover" && isUploadRightSidebarHovered);
+  const hasUploadPipelineOutput =
+    executionState.status !== "idle" ||
+    Boolean((executionState.runs || []).length) ||
+    Boolean(executionState.message);
   const queryActivityState = activeWorkspace?.queryActivity || {
     visible: false,
     status: "idle",
     messages: [],
   };
   const isChatInputDisabled = !hasSelectedFile;
+
+  useEffect(() => {
+    const prevStatus = previousExecutionStatusRef.current;
+    const nextStatus = executionState.status || "idle";
+    if (prevStatus !== "success" && nextStatus === "success") {
+      setHasUnreadPipelineSuccess(true);
+    }
+    previousExecutionStatusRef.current = nextStatus;
+  }, [executionState.status]);
 
   const handleRailProjects = useCallback(() => {
     setActiveProjectId(null);
@@ -2577,7 +2833,15 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         id: "notifications",
         label: "Notifications",
         icon: "notifications",
-        onClick: () => window.alert("No new notifications"),
+        pulse: hasUnreadPipelineSuccess,
+        onClick: () => {
+          setHasUnreadPipelineSuccess(false);
+          if (hasUnreadPipelineSuccess) {
+            window.alert("Pipeline completed successfully.");
+            return;
+          }
+          window.alert("No new notifications");
+        },
       },
       {
         id: "history",
@@ -2602,7 +2866,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
             : router.push(ROUTE_PATHS.METRICS),
       },
     ],
-    [activeProject, router],
+    [activeProject, hasUnreadPipelineSuccess, router],
   );
 
   const topNavbarBreadcrumbItems = useMemo(() => {
@@ -3164,71 +3428,17 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
                 <div className={classNames(styles.uploadStepCard, styles.uploadStepCardFilesGrow, styles.uploadStepCardNoBadge)}>
                   <div className={classNames(styles.uploadStepBody, styles.uploadStepBodyGrow)}>
-                    <div className={styles.uploadStepTitleRow}>
-                      <h3 className={styles.uploadStepTitle}>Files in this project</h3>
-                      <div className={styles.uploadFilesToolbar}>
+                    <div className={styles.uploadFilesSectionHeader}>
+                      <div className={styles.uploadFilesSectionHeading}>
+                        <h3 className={styles.uploadStepTitle}>Files in this project</h3>
                         <span className={styles.uploadStepHint}>
                           {activeWorkspace.files.length > 0
                             ? `${activeWorkspace.files.length} file${activeWorkspace.files.length === 1 ? "" : "s"}`
                             : "None yet"}
                         </span>
-                        {activeWorkspace.files.length > 0 && (
-                          <>
-                            <button
-                              type="button"
-                              className={styles.uploadFilesExpandButton}
-                              title="Expand file list"
-                              onClick={() => setUploadFilesExpandedOpen(true)}
-                            >
-                              <Maximize2 size={15} strokeWidth={2} aria-hidden />
-                              <span>Expand</span>
-                            </button>
-                            {activeWorkspace.files.some((f) => f?.fileId != null) && (
-                            <button
-                              type="button"
-                              className={styles.uploadFilesDeleteAllButton}
-                              title="Delete all files in this project"
-                              onClick={() => {
-                                setDeleteAllFilesConfirmInput("");
-                                setDeleteAllFilesModalOpen(true);
-                              }}
-                            >
-                              <Trash2 size={14} strokeWidth={2} aria-hidden />
-                              <span>
-                                Delete all (
-                                {activeWorkspace.files.filter((f) => f?.fileId != null).length})
-                              </span>
-                            </button>
-                            )}
-                            <div className={styles.uploadViewSwitch} role="group" aria-label="File layout">
-                            <button
-                              type="button"
-                              className={classNames(styles.uploadViewButton, {
-                                [styles.uploadViewButtonActive]: uploadFilesViewMode === "grid",
-                              })}
-                              onClick={() => setUploadFilesViewMode("grid")}
-                              title="Grid"
-                            >
-                              <Grid2x2 size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              className={classNames(styles.uploadViewButton, {
-                                [styles.uploadViewButtonActive]: uploadFilesViewMode === "list",
-                              })}
-                              onClick={() => setUploadFilesViewMode("list")}
-                              title="List"
-                            >
-                              <List size={16} />
-                            </button>
-                          </div>
-                          </>
-                        )}
                       </div>
-                    </div>
-                    <div className={styles.headerFilesContainer}>
-                      {hasSelectedFile && (
-                        <div className={styles.headerFilesHeader}>
+                      <div className={styles.uploadFilesSectionActions}>
+                        {hasSelectedFile && (
                           <button
                             type="button"
                             className={styles.fileSelectionClearButton}
@@ -3241,8 +3451,65 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                           >
                             Clear selection
                           </button>
-                        </div>
-                      )}
+                        )}
+                        {activeWorkspace.files.length > 0 && (
+                          <>
+                            {activeWorkspace.files.some((f) => f?.fileId != null) && (
+                              <button
+                                type="button"
+                                className={styles.uploadFilesDeleteAllButton}
+                                title="Delete all files in this project"
+                                onClick={() => {
+                                  setDeleteAllFilesConfirmInput("");
+                                  setDeleteAllFilesModalOpen(true);
+                                }}
+                              >
+                                <Trash2 size={14} strokeWidth={2} aria-hidden />
+                                <span>
+                                  Delete all (
+                                  {activeWorkspace.files.filter((f) => f?.fileId != null).length})
+                                </span>
+                              </button>
+                            )}
+                            <div className={styles.uploadViewSwitch} role="group" aria-label="File layout">
+                              <button
+                                type="button"
+                                className={classNames(styles.uploadViewButton, {
+                                  [styles.uploadViewButtonActive]: uploadFilesViewMode === "grid",
+                                })}
+                                onClick={() => setUploadFilesViewMode("grid")}
+                                title="Grid"
+                              >
+                                <Grid2x2 size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className={classNames(styles.uploadViewButton, {
+                                  [styles.uploadViewButtonActive]: uploadFilesViewMode === "list",
+                                })}
+                                onClick={() => setUploadFilesViewMode("list")}
+                                title="List"
+                              >
+                                <List size={16} />
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              className={styles.uploadFilesExpandPrimaryButton}
+                              title="Open full-page files and pipeline views"
+                              onClick={() => {
+                                setUploadExpandedPanel("files");
+                                setUploadFilesExpandedOpen(true);
+                              }}
+                            >
+                              <Maximize2 size={16} strokeWidth={2} aria-hidden />
+                              Expand
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className={styles.headerFilesContainer}>
                       <UploadProjectFilesList
                         files={activeWorkspace.files}
                         uploadFilesViewMode={uploadFilesViewMode}
@@ -3264,223 +3531,23 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
                 <div className={styles.uploadWorkspacePipelineSection}>
                 {executionState.visible && (
-                  <div
-                    className={classNames(styles.executionCard, styles.executionCardPro, {
-                      [styles.executionCardRunning]: executionState.status === "running",
-                      [styles.executionCardSuccess]: executionState.status === "success",
-                      [styles.executionCardError]: executionState.status === "error",
-                    })}
-                  >
-                    <div className={styles.executionCardHeader}>
-                      <div>
-                        <p className={styles.executionEyebrow}>Pipeline output</p>
-                        <h3 className={styles.executionTitle}>{executionState.message}</h3>
-                      </div>
-                      <div className={styles.executionCardHeaderRight}>
-                        {executionState.status !== "running" && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className={styles.executionBackToFilesButton}
-                            onClick={() =>
-                              updateActiveWorkspace((current) => ({
-                                ...current,
-                                execution: {
-                                  ...current.execution,
-                                  visible: false,
-                                },
-                              }))
-                            }
-                          >
-                            Back to files
-                          </Button>
-                        )}
-                        <span
-                          className={classNames(styles.executionStatusBadge, {
-                            [styles.executionStatusBadgeRunning]:
-                              executionState.status === "running",
-                            [styles.executionStatusBadgeSuccess]:
-                              executionState.status === "success",
-                            [styles.executionStatusBadgeError]:
-                              executionState.status === "error",
-                          })}
-                        >
-                          {executionStatusLabel}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className={styles.executionFileMeta}>
-                      <span>{executionState.fileCode || "FILE"}</span>
-                      <span>{executionState.fileName || selectedWorkspaceFile?.name || "Document"}</span>
-                    </div>
-
-                    <div className={styles.executionRuns}>
-                      {(executionState.runs || []).map((run) => (
-                        <div key={run.id} className={styles.executionRunCard}>
-                          <div className={styles.executionRunHeader}>
-                            <div className={styles.executionRunHeading}>
-                              <strong>{run.label}</strong>
-                              <span>{run.meta}</span>
-                            </div>
-                            {run.note && (
-                              <span className={styles.executionRunNote}>Fallback</span>
-                            )}
-                          </div>
-
-                          {run.note && (
-                            <p className={styles.executionRunNotice}>{run.note}</p>
-                          )}
-
-                          <div className={styles.executionEventList}>
-                            {(run.events || []).map((event) => (
-                              <div
-                                key={event.id}
-                                className={classNames(styles.executionEventRow, {
-                                  [styles.executionEventRowActive]:
-                                    event.status === "active",
-                                  [styles.executionEventRowComplete]:
-                                    event.status === "completed",
-                                  [styles.executionEventRowFailed]:
-                                    event.status === "failed",
-                                  [styles.executionEventRowPending]:
-                                    event.status === "pending",
-                                })}
-                              >
-                                <span
-                                  className={classNames(styles.executionEventDot, {
-                                    [styles.executionEventDotActive]:
-                                      event.status === "active",
-                                    [styles.executionEventDotComplete]:
-                                      event.status === "completed",
-                                    [styles.executionEventDotFailed]:
-                                      event.status === "failed",
-                                    [styles.executionEventDotPending]:
-                                      event.status === "pending",
-                                  })}
-                                />
-                                <p className={styles.executionEventMessage}>
-                                  {event.message}
-                                </p>
-                                {event.countLabel && (
-                                  <span className={styles.executionEventCount}>
-                                    {event.countLabel}
-                                  </span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {executionSummaryItems.length > 0 && (
-                      <div className={styles.executionSummaryGrid}>
-                        {executionSummaryItems.map((item) => (
-                          <div key={item.label} className={styles.executionSummaryItem}>
-                            <span>{item.label}</span>
-                            <strong>{item.value}</strong>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {executionState.details && (
-                      <div className={styles.executionDetailsSection}>
-                        <button
-                          type="button"
-                          className={styles.executionDetailsToggle}
-                          onClick={() =>
-                            updateActiveWorkspace((current) => ({
-                              ...current,
-                              execution: {
-                                ...current.execution,
-                                detailsOpen: !current.execution?.detailsOpen,
-                              },
-                            }))
-                          }
-                        >
-                          {executionState.detailsOpen ? "Hide details" : "View details"}
-                        </button>
-
-                        <AnimatePresence initial={false}>
-                          {executionState.detailsOpen && (
-                            <motion.pre
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: "auto" }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className={styles.executionDetails}
-                            >
-                              {JSON.stringify(executionState.details, null, 2)}
-                            </motion.pre>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    )}
-                  </div>
+                  <UploadPipelineOutputCard
+                    executionState={executionState}
+                    executionStatusLabel={executionStatusLabel}
+                    executionSummaryItems={executionSummaryItems}
+                    selectedWorkspaceFile={selectedWorkspaceFile}
+                    updateActiveWorkspace={updateActiveWorkspace}
+                    variant="inline"
+                    onExpand={() => {
+                      setUploadExpandedPanel("pipeline");
+                      setUploadFilesExpandedOpen(true);
+                    }}
+                  />
                 )}
-
-                {!executionState.visible &&
-                  (executionState.status === "success" || executionState.status === "error") && (
-                    <div
-                      className={classNames(styles.executionCollapsedBar, {
-                        [styles.executionCollapsedBarSuccess]: executionState.status === "success",
-                        [styles.executionCollapsedBarError]: executionState.status === "error",
-                      })}
-                    >
-                      <div className={styles.executionCollapsedBarText}>
-                        <span className={styles.executionCollapsedBarLabel}>Last pipeline run</span>
-                        <span
-                          className={classNames(styles.executionCollapsedBarStatus, {
-                            [styles.executionCollapsedBarStatusError]:
-                              executionState.status === "error",
-                            [styles.executionCollapsedBarStatusSuccess]:
-                              executionState.status === "success",
-                          })}
-                        >
-                          {executionStatusLabel}
-                        </span>
-                        {executionState.message ? (
-                          <span className={styles.executionCollapsedBarMessage}>
-                            {executionState.message}
-                          </span>
-                        ) : null}
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className={styles.executionShowOutputButton}
-                        onClick={() =>
-                          updateActiveWorkspace((current) => ({
-                            ...current,
-                            execution: {
-                              ...current.execution,
-                              visible: true,
-                            },
-                          }))
-                        }
-                      >
-                        Show output
-                      </Button>
-                    </div>
-                  )}
 
                 {ingestionFileReports.length > 0 && executionState.status === "success" && (
                   <div className={styles.ingestionReportBanner}>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={styles.ingestionReportOpenButton}
-                      onClick={() => {
-                        setIngestionReportSelectedId(null);
-                        setIngestionReportOpen(true);
-                      }}
-                    >
-                      View full ingestion report ({ingestionFileReports.length}{" "}
-                      {ingestionFileReports.length === 1 ? "file" : "files"})
-                    </Button>
+
                   </div>
                 )}
                 </div>
@@ -3531,6 +3598,30 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                       </p>
                     </div>
                     <div className={styles.uploadFilesExpandedHeaderActions}>
+                      <div className={styles.uploadExpandedPanelTabs} role="tablist" aria-label="Expanded sections">
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={uploadExpandedPanel === "files"}
+                          className={classNames(styles.uploadExpandedPanelTab, {
+                            [styles.uploadExpandedPanelTabActive]: uploadExpandedPanel === "files",
+                          })}
+                          onClick={() => setUploadExpandedPanel("files")}
+                        >
+                          Files
+                        </button>
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={uploadExpandedPanel === "pipeline"}
+                          className={classNames(styles.uploadExpandedPanelTab, {
+                            [styles.uploadExpandedPanelTabActive]: uploadExpandedPanel === "pipeline",
+                          })}
+                          onClick={() => setUploadExpandedPanel("pipeline")}
+                        >
+                          Pipeline execution
+                        </button>
+                      </div>
                       {activeWorkspace.files.some((f) => f?.fileId != null) && (
                       <button
                         type="button"
@@ -3548,6 +3639,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                         </span>
                       </button>
                       )}
+                      {uploadExpandedPanel === "files" && (
                       <div className={styles.uploadViewSwitch} role="group" aria-label="File layout">
                         <button
                           type="button"
@@ -3570,24 +3662,107 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                           <List size={16} />
                         </button>
                       </div>
+                      )}
                     </div>
                   </header>
                   <div className={styles.uploadFilesExpandedFullPageBody}>
-                    <UploadProjectFilesList
-                      files={activeWorkspace.files}
-                      uploadFilesViewMode={uploadFilesViewMode}
-                      activeWorkspaceFileId={activeWorkspaceFileId}
-                      ingestionFileReports={ingestionFileReports}
-                      executionState={executionState}
-                      updateActiveWorkspace={updateActiveWorkspace}
-                      setIngestionReportSelectedId={setIngestionReportSelectedId}
-                      setIngestionReportOpen={setIngestionReportOpen}
-                      setWorkspaceFilePendingDelete={setWorkspaceFilePendingDelete}
-                      setDeleteWorkspaceFileNameInput={setDeleteWorkspaceFileNameInput}
-                      regionClassName={styles.uploadFilesExpandedScroll}
-                      emptyClassName={styles.emptyFilesStatePro}
-                      emptyMessage="No files."
-                    />
+                    {uploadExpandedPanel === "files" ? (
+                      <UploadProjectFilesList
+                        files={activeWorkspace.files}
+                        uploadFilesViewMode={uploadFilesViewMode}
+                        activeWorkspaceFileId={activeWorkspaceFileId}
+                        ingestionFileReports={ingestionFileReports}
+                        executionState={executionState}
+                        updateActiveWorkspace={updateActiveWorkspace}
+                        setIngestionReportSelectedId={setIngestionReportSelectedId}
+                        setIngestionReportOpen={setIngestionReportOpen}
+                        setWorkspaceFilePendingDelete={setWorkspaceFilePendingDelete}
+                        setDeleteWorkspaceFileNameInput={setDeleteWorkspaceFileNameInput}
+                        regionClassName={styles.uploadFilesExpandedScroll}
+                        emptyClassName={styles.emptyFilesStatePro}
+                        emptyMessage="No files."
+                      />
+                    ) : (
+                      <div className={styles.uploadExpandedPipelinePage}>
+                        {!executionState.visible &&
+                          (executionState.status === "success" || executionState.status === "error") && (
+                            <div
+                              className={classNames(styles.executionCollapsedBar, {
+                                [styles.executionCollapsedBarSuccess]: executionState.status === "success",
+                                [styles.executionCollapsedBarError]: executionState.status === "error",
+                              })}
+                            >
+                              <div className={styles.executionCollapsedBarText}>
+                                <span className={styles.executionCollapsedBarLabel}>Last pipeline run</span>
+                                <span
+                                  className={classNames(styles.executionCollapsedBarStatus, {
+                                    [styles.executionCollapsedBarStatusError]:
+                                      executionState.status === "error",
+                                    [styles.executionCollapsedBarStatusSuccess]:
+                                      executionState.status === "success",
+                                  })}
+                                >
+                                  {executionStatusLabel}
+                                </span>
+                                {executionState.message ? (
+                                  <span className={styles.executionCollapsedBarMessage}>
+                                    {executionState.message}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className={styles.executionShowOutputButton}
+                                onClick={() =>
+                                  updateActiveWorkspace((current) => ({
+                                    ...current,
+                                    execution: {
+                                      ...current.execution,
+                                      visible: true,
+                                    },
+                                  }))
+                                }
+                              >
+                                Show output
+                              </Button>
+                            </div>
+                          )}
+
+                        {ingestionFileReports.length > 0 && executionState.status === "success" && (
+                          <div className={styles.ingestionReportBanner}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className={styles.ingestionReportOpenButton}
+                              onClick={() => {
+                                setIngestionReportSelectedId(null);
+                                setIngestionReportOpen(true);
+                              }}
+                            >
+                              View full ingestion report ({ingestionFileReports.length}{" "}
+                              {ingestionFileReports.length === 1 ? "file" : "files"})
+                            </Button>
+                          </div>
+                        )}
+
+                        {hasUploadPipelineOutput ? (
+                          <UploadPipelineOutputCard
+                            executionState={executionState}
+                            executionStatusLabel={executionStatusLabel}
+                            executionSummaryItems={executionSummaryItems}
+                            selectedWorkspaceFile={selectedWorkspaceFile}
+                            updateActiveWorkspace={updateActiveWorkspace}
+                            variant="modal"
+                          />
+                        ) : (
+                          <div className={styles.uploadExpandedEmptyState}>
+                            Run pipeline to view execution progress and reports.
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -4064,10 +4239,14 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         {workspaceMode === "query" && (
         <aside
         className={classNames(styles.workspaceRightSidebar, {
-          [styles.workspaceRightSidebarExpanded]: isRightSidebarExpanded,
+          [styles.workspaceRightSidebarExpanded]: queryRightSidebarWide,
         })}
-        onMouseEnter={() => setIsRightSidebarExpanded(true)}
-        onMouseLeave={() => setIsRightSidebarExpanded(false)}
+        onMouseEnter={() => setIsQueryRightSidebarExpanded(true)}
+        onMouseLeave={() => {
+          if (!isQueryRightSidebarPinned) {
+            setIsQueryRightSidebarExpanded(false);
+          }
+        }}
       >
         <div className={styles.workspaceRightInner}>
           <div className={styles.rightSidebarNav}>
@@ -4089,13 +4268,13 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   }
                 >
                   <Icon size={16} />
-                  {isRightSidebarExpanded && <span>{item.label}</span>}
+                  {queryRightSidebarWide && <span>{item.label}</span>}
                 </button>
               );
             })}
           </div>
 
-          {isRightSidebarExpanded && (
+          {queryRightSidebarWide && (
             <div className={styles.rightSidebarPanels}>
               {activeWorkspace.activeRightSection === "response" && (
                 <div className={styles.insightPanel}>
@@ -4249,8 +4428,195 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
               )}
             </div>
           )}
+          <button
+            type="button"
+            className={styles.rightSidebarCollapseButton}
+            onClick={() => {
+              const nextPinned = !isQueryRightSidebarPinned;
+              setIsQueryRightSidebarPinned(nextPinned);
+              setIsQueryRightSidebarExpanded(nextPinned);
+            }}
+            title={isQueryRightSidebarPinned ? "Collapse sidebar" : "Keep expanded"}
+          >
+            <ChevronRight
+              size={15}
+              className={classNames(styles.rightSidebarCollapseIcon, {
+                [styles.rightSidebarCollapseIconOpen]: queryRightSidebarWide,
+              })}
+            />
+            {queryRightSidebarWide && (
+              <span>{isQueryRightSidebarPinned ? "Collapse" : "Pin open"}</span>
+            )}
+          </button>
         </div>
         </aside>
+        )}
+
+        {workspaceMode === "upload" && (
+          <aside
+            className={classNames(styles.workspaceRightSidebar, styles.workspaceUploadRightSidebar, {
+              [styles.workspaceRightSidebarExpanded]: uploadRightSidebarWide,
+            })}
+            onMouseEnter={() => {
+              if (uploadRightSidebarMode === "hover") {
+                setIsUploadRightSidebarHovered(true);
+              }
+            }}
+            onMouseLeave={() => {
+              if (uploadRightSidebarMode === "hover") {
+                setIsUploadRightSidebarHovered(false);
+              }
+            }}
+          >
+            <div className={styles.workspaceRightInner}>
+              <div className={styles.rightSidebarNav}>
+                {UPLOAD_RIGHT_SIDEBAR_ITEMS.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      className={classNames(styles.rightSidebarButton, {
+                        [styles.rightSidebarButtonActive]: uploadRightActiveSection === item.value,
+                      })}
+                      onClick={() => setUploadRightActiveSection(item.value)}
+                    >
+                      <Icon size={16} />
+                      {uploadRightSidebarWide && <span>{item.label}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {uploadRightSidebarWide && (
+                <div className={styles.rightSidebarPanels}>
+                  {uploadRightActiveSection === "pipeline" && (
+                    <div className={styles.insightPanel}>
+                      <h3>Pipeline</h3>
+                      {hasUploadPipelineOutput ? (
+                        <>
+                          <p className={styles.insightPanelMuted}>
+                            {executionState.message || "Latest run status."}
+                          </p>
+                          <div className={styles.uploadSidebarStatusRow}>
+                            <span
+                              className={classNames(styles.executionStatusBadge, {
+                                [styles.executionStatusBadgeRunning]:
+                                  executionState.status === "running",
+                                [styles.executionStatusBadgeSuccess]:
+                                  executionState.status === "success",
+                                [styles.executionStatusBadgeError]:
+                                  executionState.status === "error",
+                              })}
+                            >
+                              {executionStatusLabel}
+                            </span>
+                          </div>
+                          {executionSummaryItems.slice(0, 6).map((item) => (
+                            <div key={item.label} className={styles.uploadSidebarKv}>
+                              <span>{item.label}</span>
+                              <strong>{item.value}</strong>
+                            </div>
+                          ))}
+                        </>
+                      ) : (
+                        <p className={styles.insightPanelMuted}>
+                          Run the pipeline to see status, chunk counts, and embeddings here.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {uploadRightActiveSection === "techniques" && uploadSidebarTechniquesConfig && (
+                    <div className={styles.insightPanel}>
+                      <h3>Techniques</h3>
+                      <dl className={styles.uploadSidebarTechniquesDl}>
+                        <dt>Chunk</dt>
+                        <dd>
+                          {uploadSidebarTechniquesConfig.text_processing?.chunk_size} / overlap{" "}
+                          {uploadSidebarTechniquesConfig.text_processing?.chunk_overlap}
+                        </dd>
+                        <dt>Splitter</dt>
+                        <dd>
+                          {JSON.stringify(uploadSidebarTechniquesConfig.text_processing?.splitter)}
+                        </dd>
+                        <dt>Extraction</dt>
+                        <dd>
+                          {JSON.stringify(uploadSidebarTechniquesConfig.data_extraction?.method)}
+                        </dd>
+                        <dt>Embeddings</dt>
+                        <dd>
+                          {uploadSidebarTechniquesConfig.embeddings?.provider} /{" "}
+                          {uploadSidebarTechniquesConfig.embeddings?.model}
+                        </dd>
+                        <dt>Vector store</dt>
+                        <dd>
+                          {(uploadSidebarTechniquesConfig.vector_store?.backends || []).join(", ") ||
+                            "—"}
+                        </dd>
+                      </dl>
+                    </div>
+                  )}
+
+                  {uploadRightActiveSection === "files" && (
+                    <div className={styles.insightPanel}>
+                      <h3>Files</h3>
+                      <p className={styles.insightPanelMuted}>
+                        {activeWorkspace.files.length} file
+                        {activeWorkspace.files.length === 1 ? "" : "s"} in this project
+                      </p>
+                      {selectedWorkspaceFile && (
+                        <p className={styles.insightPanelMuted}>
+                          Selected: <strong>{selectedWorkspaceFile.name}</strong>
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className={styles.uploadRightSidebarFooter} ref={uploadSidebarControlRef}>
+                <button
+                  type="button"
+                  className={styles.uploadSidebarFooterButton}
+                  title="Sidebar layout"
+                  aria-expanded={uploadSidebarControlOpen}
+                  aria-haspopup="menu"
+                  onClick={() => setUploadSidebarControlOpen((o) => !o)}
+                >
+                  <PanelRight size={16} strokeWidth={2} aria-hidden />
+                  {uploadRightSidebarWide && <span>Layout</span>}
+                </button>
+                {uploadSidebarControlOpen && (
+                  <div className={styles.uploadSidebarModeMenu} role="menu">
+                    {[
+                      { id: "hover", label: "Expand on hover" },
+                      { id: "expanded", label: "Always expanded" },
+                      { id: "collapsed", label: "Collapsed" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        role="menuitem"
+                        className={classNames(styles.uploadSidebarModeOption, {
+                          [styles.uploadSidebarModeOptionActive]:
+                            uploadRightSidebarMode === opt.id,
+                        })}
+                        onClick={() => {
+                          setUploadRightSidebarMode(opt.id);
+                          setUploadSidebarControlOpen(false);
+                          if (opt.id === "collapsed") {
+                            setIsUploadRightSidebarHovered(false);
+                          }
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </aside>
         )}
       </div>
     </div>

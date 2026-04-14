@@ -1,35 +1,32 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
-import { hasAccessToken } from "@/services/auth";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { ROUTE_PATHS } from "@/utils/routepaths";
 
-const subscribe = (callback) => {
-  if (typeof window === "undefined") {
-    return () => {};
-  }
-
-  window.addEventListener("storage", callback);
-  return () => window.removeEventListener("storage", callback);
-};
-
-const getSnapshot = () => (typeof window === "undefined" ? false : hasAccessToken());
-
-export default function ProtectedRoute({ children }) {
+export default function ProtectedRoute({
+  children,
+  redirectTo = ROUTE_PATHS.AUTH_LOGIN,
+  loadingFallback = null,
+}) {
   const router = useRouter();
-  const pathname = usePathname();
-  const isAuthorized = useSyncExternalStore(subscribe, getSnapshot, () => false);
+  const { isAuthenticated, isAuthInitialized } = useAuth();
 
   useEffect(() => {
-    if (!isAuthorized) {
-      router.replace(ROUTE_PATHS.AUTH_LOGIN);
+    if (isAuthInitialized && !isAuthenticated) {
+      router.replace(redirectTo);
     }
-  }, [isAuthorized, pathname, router]);
+  }, [isAuthenticated, isAuthInitialized, redirectTo, router]);
 
-  if (!isAuthorized) {
-    return null;
+  // Avoid redirects while auth is restoring after a hard refresh.
+  if (!isAuthInitialized) {
+    return loadingFallback;
+  }
+
+  if (!isAuthenticated) {
+    return loadingFallback;
   }
 
   return children;
