@@ -2198,6 +2198,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
             file.fileId,
             processingConfig,
           );
+          if (processResponse?.data?.resumed && typeof window !== "undefined") {
+            window.alert(`Processing resumed for ${file.name || "the selected file"}.`);
+          }
           processResponses.push(processResponse);
         }
 
