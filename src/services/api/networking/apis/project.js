@@ -24,7 +24,7 @@ export const projectApi = {
       ...payload,
       ...(getCurrentUserId() ? { user_id: Number(getCurrentUserId()) } : {}),
     }),
-  fetchAllProjects: () => httpClient.get(withUserIdQuery(fetchProjects)),
+  fetchAllProjects: (options = {}) => httpClient.get(withUserIdQuery(fetchProjects), options),
   deleteProject: (projectId) => httpClient.delete(deleteProject(projectId)),
   fetchProjectHistory: (projectId) => httpClient.get(fetchProjectHistory(projectId)),
   fetchUserHistory: (projectId) =>

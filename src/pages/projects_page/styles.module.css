@@ -268,11 +268,14 @@
   background: var(--projects-page-accent-hover);
 }
 
+/* auto-fit collapses empty tracks so a single card spans the row; auto-fill leaves ghost columns */
 .projectGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   gap: 20px;
-  align-items: start;
+  align-items: stretch;
+  justify-items: stretch;
+  width: 100%;
 }
 
 .projectList {
@@ -414,7 +417,11 @@
 
 .projectCard {
   min-height: 150px;
-  max-width: 474px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 100%;
+  box-sizing: border-box;
   border: 1px solid var(--projects-page-border);
   border-radius: 14px;
   background: var(--projects-page-surface);
@@ -523,6 +530,19 @@
   font-weight: 600;
   color: var(--projects-page-text-strong);
   font-family: var(--projects-font-body);
+}
+
+.projectDataReveal {
+  animation: projectsDataReveal 0.32s ease forwards;
+}
+
+@keyframes projectsDataReveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .emptyState {

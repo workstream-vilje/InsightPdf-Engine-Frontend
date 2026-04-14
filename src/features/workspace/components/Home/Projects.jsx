@@ -34,7 +34,11 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ProjectsPageView from "@/pages/projects_page/ProjectsPageView";
+import ProjectsPageSkeleton from "@/components/skeletons/ProjectsPageSkeleton";
+import UploadFilesSkeleton from "@/components/skeletons/UploadFilesSkeleton";
 import TopNavbar from "@/components/common/top-navbar/TopNavbar";
+import { useFileListSkeletonCount } from "@/hooks/useFileListSkeletonCount";
+import { dedupeByKey } from "@/lib/collectionUtils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -798,6 +802,199 @@ const mapProcessResultToIngestionReport = (entry, index) => {
   };
 };
 
+/** When API sync has processed files but no client-side pipeline snapshot yet, show partial report data. */
+const buildFallbackIngestionReportFromFile = (file) => {
+  if (file?.fileId == null) return null;
+  const hasProcessed = Boolean(file.processed || file.allowedTechniques);
+  if (!hasProcessed) return null;
+  const emb = file.allowedTechniques?.embeddings?.[0];
+  const embeddingLabel = emb
+    ? [emb.provider, emb.model].filter(Boolean).join(" / ")
+    : "—";
+  const backends = Array.isArray(file.allowedTechniques?.vector_stores)
+    ? file.allowedTechniques.vector_stores.filter(Boolean)
+    : [];
+  return {
+    id: String(file.fileId),
+    fileId: file.fileId,
+    fileName: file.name || "File",
+    fileCode: file.fileCode || null,
+    chunkCount: 0,
+    vectorsStored: 0,
+    processingTimeSeconds: 0,
+    embeddingLabel,
+    backends,
+    metricsIncomplete: true,
+  };
+};
+
+/**
+ * Merge reports from the latest execution run with per-file snapshots on workspace files.
+ * Each pipeline run only includes files in that batch in `execution.details.files`; snapshots
+ * keep metrics for earlier processed files so every file can show a Report control.
+ */
+const mergeIngestionFileReports = (executionDetails, workspaceFiles) => {
+  const fromExecution = Array.isArray(executionDetails?.files)
+    ? executionDetails.files.map((entry, index) => mapProcessResultToIngestionReport(entry, index))
+    : [];
+  const byFileId = new Map();
+  for (const file of workspaceFiles || []) {
+    if (file?.fileId != null && file?.ingestionReportSnapshot) {
+      byFileId.set(String(file.fileId), file.ingestionReportSnapshot);
+    }
+  }
+  for (const rep of fromExecution) {
+    if (rep?.fileId != null) {
+      byFileId.set(String(rep.fileId), rep);
+    }
+  }
+  for (const file of workspaceFiles || []) {
+    if (file?.fileId == null) continue;
+    const id = String(file.fileId);
+    if (!byFileId.has(id)) {
+      const fallback = buildFallbackIngestionReportFromFile(file);
+      if (fallback) {
+        byFileId.set(id, fallback);
+      }
+    }
+  }
+  const ordered = [];
+  const seen = new Set();
+  for (const file of workspaceFiles || []) {
+    if (file?.fileId == null) continue;
+    const rep = byFileId.get(String(file.fileId));
+    if (rep) {
+      ordered.push(rep);
+      seen.add(String(file.fileId));
+    }
+  }
+  for (const [id, rep] of byFileId) {
+    if (!seen.has(id)) {
+      ordered.push(rep);
+    }
+  }
+  return ordered;
+};
+
+const getWorkspaceFileForReport = (rep, files) =>
+  files?.find((f) => f?.fileId != null && String(f.fileId) === String(rep?.fileId)) ?? null;
+
+const escapeCsvCell = (value) => {
+  const s = value == null ? "" : String(value);
+  if (/[",\n\r]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+};
+
+const buildIngestionReportCsv = (reports, workspaceFiles) => {
+  const headers = [
+    "file_name",
+    "file_code",
+    "pages",
+    "size",
+    "category",
+    "total_chunks",
+    "vectors_stored",
+    "processing_time_s",
+    "embedding",
+    "vector_backends",
+    "metrics_status",
+  ];
+  const lines = [headers.join(",")];
+  for (const rep of reports) {
+    const wf = getWorkspaceFileForReport(rep, workspaceFiles);
+    const pages = wf ? wf.pages ?? wf.pagesCount ?? wf.pages_count ?? "" : "";
+    const row = [
+      rep.fileName,
+      rep.fileCode ?? "",
+      pages,
+      wf?.size ?? "",
+      wf?.category ?? "",
+      rep.metricsIncomplete ? "" : rep.chunkCount,
+      rep.metricsIncomplete ? "" : rep.vectorsStored,
+      rep.metricsIncomplete ? "" : rep.processingTimeSeconds,
+      rep.embeddingLabel ?? "",
+      rep.backends?.length ? rep.backends.join("; ") : "",
+      rep.metricsIncomplete ? "partial" : "full",
+    ].map(escapeCsvCell);
+    lines.push(row.join(","));
+  }
+  return lines.join("\r\n");
+};
+
+function IngestionReportMetricsDl({ active }) {
+  if (!active) return null;
+  return (
+    <dl className={styles.ingestionReportGrid}>
+      <div>
+        <dt>File</dt>
+        <dd>{active.fileName}</dd>
+      </div>
+      <div>
+        <dt>Code</dt>
+        <dd>{active.fileCode || "—"}</dd>
+      </div>
+      <div>
+        <dt>Total chunks</dt>
+        <dd>{active.metricsIncomplete ? "—" : formatNumber(active.chunkCount)}</dd>
+      </div>
+      <div>
+        <dt>Vectors stored</dt>
+        <dd>{active.metricsIncomplete ? "—" : formatNumber(active.vectorsStored)}</dd>
+      </div>
+      <div>
+        <dt>Processing time</dt>
+        <dd>
+          {active.metricsIncomplete
+            ? "—"
+            : active.processingTimeSeconds > 0
+            ? `${Number(active.processingTimeSeconds).toFixed(2)}s`
+            : "—"}
+        </dd>
+      </div>
+      <div>
+        <dt>Embedding</dt>
+        <dd>{active.embeddingLabel}</dd>
+      </div>
+      <div className={styles.ingestionReportSpanWide}>
+        <dt>Vector backends</dt>
+        <dd>{active.backends?.length ? active.backends.join(", ") : "—"}</dd>
+      </div>
+    </dl>
+  );
+}
+
+function IngestionFileDetailsSection({ workspaceFile, variant }) {
+  if (!workspaceFile) return null;
+  const isLogs = variant === "logs";
+  const pages =
+    workspaceFile.pages ?? workspaceFile.pagesCount ?? workspaceFile.pages_count ?? "—";
+  return (
+    <div className={!isLogs ? styles.ingestionReportFileDetails : undefined}>
+      {!isLogs && <h4 className={styles.ingestionReportFileDetailsTitle}>File details</h4>}
+      <dl className={isLogs ? styles.ingestionReportLogsMeta : styles.ingestionReportFileDetailsDl}>
+        <div>
+          <dt>File code</dt>
+          <dd>{workspaceFile.fileCode || "—"}</dd>
+        </div>
+        <div>
+          <dt>Pages</dt>
+          <dd>{pages}</dd>
+        </div>
+        <div>
+          <dt>Size</dt>
+          <dd>{workspaceFile.size || "—"}</dd>
+        </div>
+        <div>
+          <dt>Category</dt>
+          <dd>{workspaceFile.category || "—"}</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
 const createActivityMessage = (id, text, tone = "info") => ({
   id,
   text,
@@ -1238,22 +1435,32 @@ function UploadProjectFilesList({
   uploadFilesViewMode,
   activeWorkspaceFileId,
   ingestionFileReports,
-  executionState,
   updateActiveWorkspace,
-  setIngestionReportSelectedId,
-  setIngestionReportOpen,
+  onOpenFileReport,
   setWorkspaceFilePendingDelete,
   setDeleteWorkspaceFileNameInput,
   regionClassName,
   emptyClassName,
   emptyMessage,
+  isLoadingFiles,
+  fileSkeletonCount,
 }) {
+  if (isLoadingFiles) {
+    return (
+      <UploadFilesSkeleton
+        viewMode={uploadFilesViewMode}
+        count={fileSkeletonCount}
+        regionClassName={regionClassName}
+      />
+    );
+  }
   if (!files?.length) {
     return <div className={emptyClassName}>{emptyMessage}</div>;
   }
   return (
     <div
       className={classNames(
+        styles.uploadFilesContentReveal,
         regionClassName,
         uploadFilesViewMode === "grid" ? styles.uploadFileGridLayout : styles.uploadFileListLayout,
       )}
@@ -1262,7 +1469,7 @@ function UploadProjectFilesList({
         const fileReport = ingestionFileReports.find(
           (r) => r.fileId != null && String(r.fileId) === String(file.fileId),
         );
-        const showReportBtn = executionState?.status === "success" && fileReport;
+        const showReportBtn = Boolean(fileReport);
         const isSelected = String(file.fileId) === activeWorkspaceFileId;
         const isProcessed = Boolean(file.processed || file.allowedTechniques || fileReport);
         const statusLabel = isSelected
@@ -1319,35 +1526,28 @@ function UploadProjectFilesList({
             <p className={styles.uploadFileCardMeta}>
               {file.pages ?? file.pagesCount ?? file.pages_count ?? "—"} pg · {file.size}
             </p>
-                <span
-                  className={classNames(styles.fileStatusBadge, styles.uploadFileStatusPill, styles.uploadFileCardBadge, {
-                    [styles.fileStatusBadgeActive]: isSelected,
-                  })}
-                >
-                  {statusLabel}
-                </span>
-            {showReportBtn && (
+            <div className={styles.uploadFileCardFooter}>
               <span
-                role="button"
-                tabIndex={0}
-                className={styles.uploadFileReportLink}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIngestionReportSelectedId(String(fileReport.id));
-                  setIngestionReportOpen(true);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setIngestionReportSelectedId(String(fileReport.id));
-                    setIngestionReportOpen(true);
-                  }
-                }}
+                className={classNames(styles.fileStatusBadge, styles.uploadFileStatusPill, {
+                  [styles.fileStatusBadgeActive]: isSelected,
+                })}
               >
-                Report
+                {statusLabel}
               </span>
-            )}
+              {showReportBtn && (
+                <button
+                  type="button"
+                  className={styles.uploadFileReportTag}
+                  title="View ingestion report"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenFileReport(fileReport);
+                  }}
+                >
+                  Report
+                </button>
+              )}
+            </div>
           </button>
         ) : (
           <button
@@ -1382,11 +1582,11 @@ function UploadProjectFilesList({
               {showReportBtn && (
                 <button
                   type="button"
-                  className={styles.uploadFileReportBtn}
+                  className={styles.uploadFileReportTag}
+                  title="View ingestion report"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIngestionReportSelectedId(String(fileReport.id));
-                    setIngestionReportOpen(true);
+                    onOpenFileReport(fileReport);
                   }}
                 >
                   Report
@@ -1455,6 +1655,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const [deleteProjectInput, setDeleteProjectInput] = useState("");
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [uploadFilesViewMode, setUploadFilesViewMode] = useState("grid");
+  const fileSkeletonCount = useFileListSkeletonCount(uploadFilesViewMode);
+  const [projectsListLoading, setProjectsListLoading] = useState(true);
+  const [isProjectFilesSyncing, setIsProjectFilesSyncing] = useState(false);
   const [uploadFilesExpandedOpen, setUploadFilesExpandedOpen] = useState(false);
   const [uploadExpandedPanel, setUploadExpandedPanel] = useState("files");
   const [workspaceFilePendingDelete, setWorkspaceFilePendingDelete] = useState(null);
@@ -1464,7 +1667,10 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const [deleteAllFilesConfirmInput, setDeleteAllFilesConfirmInput] = useState("");
   const [isDeletingAllFiles, setIsDeletingAllFiles] = useState(false);
   const [ingestionReportOpen, setIngestionReportOpen] = useState(false);
+  /** `single` = one file from row Report; `logs` = all files on one page (monochrome). */
+  const [ingestionReportMode, setIngestionReportMode] = useState("single");
   const [ingestionReportSelectedId, setIngestionReportSelectedId] = useState(null);
+  const [ingestionReportViewLoading, setIngestionReportViewLoading] = useState(false);
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
   const [isQueryRightSidebarExpanded, setIsQueryRightSidebarExpanded] = useState(false);
   const [isQueryRightSidebarPinned, setIsQueryRightSidebarPinned] = useState(false);
@@ -1491,12 +1697,27 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const projectFilesListSyncPromiseRef = useRef(null);
   const focusResyncTimeoutRef = useRef(null);
   const prevActiveProjectIdRef = useRef(null);
+  const initialProjectIdRef = useRef(initialProjectId);
+  const activeProjectIdRef = useRef(activeProjectId);
+
+  useEffect(() => {
+    initialProjectIdRef.current = initialProjectId;
+  }, [initialProjectId]);
+
+  useEffect(() => {
+    activeProjectIdRef.current = activeProjectId;
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setIsProjectFilesSyncing(false);
+    }
+  }, [activeProjectId]);
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
     [activeProjectId, projects],
   );
-  const activeProjectCategory = activeProject?.category ?? null;
   const activeWorkspace = activeProjectId ? projectWorkspaces[activeProjectId] : null;
 
   // Execution Performance (dynamic from backend by experiment_id)
@@ -1672,15 +1893,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
+    const controller = new AbortController();
+    let cancelled = false;
 
     const syncProjectsFromBackend = async () => {
+      setProjectsListLoading(true);
       try {
-        const response = await projectApi.fetchAllProjects();
-        const backendProjects = (response?.data || []).map(mapBackendProjectToCanvasProject);
-
-        if (!isMounted) return;
-
+        const response = await projectApi.fetchAllProjects({ signal: controller.signal });
+        if (cancelled) return;
+        const raw = (response?.data || []).map(mapBackendProjectToCanvasProject);
+        const backendProjects = dedupeByKey(raw, (p) => String(p.id));
         setProjects(backendProjects);
         setProjectWorkspaces((current) => {
           const next = {};
@@ -1691,8 +1913,8 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         });
         setActiveProjectId(() => {
           const requestedProjectId =
-            initialProjectId != null && initialProjectId !== ""
-              ? String(initialProjectId)
+            initialProjectIdRef.current != null && initialProjectIdRef.current !== ""
+              ? String(initialProjectIdRef.current)
               : null;
           const availableIds = new Set(backendProjects.map((project) => String(project.id)));
           if (requestedProjectId == null) {
@@ -1701,16 +1923,22 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           return availableIds.has(requestedProjectId) ? requestedProjectId : null;
         });
       } catch (error) {
+        if (error?.name === "AbortError") return;
         console.error("Failed to sync projects from backend", error);
+      } finally {
+        if (!cancelled) {
+          setProjectsListLoading(false);
+        }
       }
     };
 
     syncProjectsFromBackend();
 
     return () => {
-      isMounted = false;
+      cancelled = true;
+      controller.abort();
     };
-  }, [initialProjectId]);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || !hasHydratedRef.current) return;
@@ -1799,21 +2027,42 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
   // Sync files from backend so DB deletes don't linger in UI.
   // Coalesce concurrent calls (effects + focus + manual refresh) into one in-flight GET.
+  // Updates are keyed by project id so fast project switches cannot write files onto the wrong workspace.
   const syncProjectFilesFromBackend = useCallback(async () => {
-    if (!activeProjectId) return undefined;
+    if (!activeProjectId) {
+      setIsProjectFilesSyncing(false);
+      return undefined;
+    }
     if (projectFilesListSyncPromiseRef.current) {
       return projectFilesListSyncPromiseRef.current;
     }
+    const projectIdForSync = activeProjectId;
+    setIsProjectFilesSyncing(true);
     const run = (async () => {
       try {
-        const response = await fileApi.fetchProjectFiles(activeProjectId);
+        const response = await fileApi.fetchProjectFiles(projectIdForSync);
+        if (String(activeProjectIdRef.current) !== String(projectIdForSync)) {
+          return;
+        }
+        const projectCategory =
+          projects.find((p) => String(p.id) === String(projectIdForSync))?.category ?? "General";
         const backendFiles = response?.data || [];
         const mapped = dedupeWorkspaceFilesByFileId(
-          backendFiles.map((file) => mapUploadedFileToWorkspaceFile(file, activeProjectCategory)),
+          backendFiles.map((file) => mapUploadedFileToWorkspaceFile(file, projectCategory)),
         );
 
-        updateActiveWorkspace((current) => {
-          const backendIds = new Set(mapped.map((f) => String(f.fileId)));
+        setProjectWorkspaces((previous) => {
+          if (String(activeProjectIdRef.current) !== String(projectIdForSync)) {
+            return previous;
+          }
+          const current = previous[projectIdForSync] || createWorkspaceState();
+          const mergedFiles = mapped.map((mf) => {
+            const prev = (current.files || []).find((f) => String(f.fileId) === String(mf.fileId));
+            return prev?.ingestionReportSnapshot
+              ? { ...mf, ingestionReportSnapshot: prev.ingestionReportSnapshot }
+              : mf;
+          });
+          const backendIds = new Set(mergedFiles.map((f) => String(f.fileId)));
           const nextSelected =
             current.selectedFileId != null && backendIds.has(String(current.selectedFileId))
               ? current.selectedFileId
@@ -1827,28 +2076,34 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           );
 
           return {
-            ...current,
-            files: mapped,
-            selectedFileId: nextSelected,
-            ...prunedData,
+            ...previous,
+            [projectIdForSync]: {
+              ...current,
+              files: mergedFiles,
+              selectedFileId: nextSelected,
+              ...prunedData,
+            },
           };
         });
       } catch (e) {
         // keep existing UI state if fetch fails
       } finally {
+        if (String(activeProjectIdRef.current) === String(projectIdForSync)) {
+          setIsProjectFilesSyncing(false);
+        }
         projectFilesListSyncPromiseRef.current = null;
       }
       return undefined;
     })();
     projectFilesListSyncPromiseRef.current = run;
     return run;
-  }, [activeProjectCategory, activeProjectId, updateActiveWorkspace]);
+  }, [activeProjectId, projects]);
 
   useEffect(() => {
     if (!activeProjectId) return undefined;
     syncProjectFilesFromBackend();
     return undefined;
-  }, [activeProjectId, activeProjectCategory, syncProjectFilesFromBackend]);
+  }, [activeProjectId, syncProjectFilesFromBackend]);
 
   useEffect(() => {
     if (!activeWorkspace?.files?.length) return;
@@ -2464,17 +2719,25 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           workspace: activeWorkspace,
         });
 
+        const detailFiles = resultSummary.details?.files || [];
+
         updateActiveWorkspace((current) => ({
           ...current,
-          files: (current.files || []).map((file) =>
-            String(file.fileId) === String(executionTargetFile.fileId)
-              ? {
-                  ...file,
-                  processed: true,
-                  allowedTechniques: processingConfig,
-                }
-              : file,
-          ),
+          files: (current.files || []).map((file) => {
+            const detailIdx = detailFiles.findIndex(
+              (e) => e != null && String(e.fileId) === String(file?.fileId),
+            );
+            if (detailIdx < 0) {
+              return file;
+            }
+            const snapshot = mapProcessResultToIngestionReport(detailFiles[detailIdx], detailIdx);
+            return {
+              ...file,
+              processed: true,
+              allowedTechniques: processingConfig,
+              ingestionReportSnapshot: snapshot,
+            };
+          }),
           phase: "query-ready",
           visibleLines: [],
           retrievalStrategies:
@@ -2798,11 +3061,57 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       : executionState.status === "success"
       ? "Completed"
       : "Idle";
-  const ingestionFileReports = useMemo(() => {
-    const entries = executionState.details?.files;
-    if (!Array.isArray(entries)) return [];
-    return entries.map((entry, index) => mapProcessResultToIngestionReport(entry, index));
-  }, [executionState.details]);
+  const ingestionFileReports = useMemo(
+    () => mergeIngestionFileReports(executionState.details, activeWorkspace?.files),
+    [executionState.details, activeWorkspace?.files],
+  );
+
+  const ingestionReportTableRows = useMemo(() => {
+    if (!ingestionFileReports.length) return [];
+    if (ingestionReportMode === "logs") return ingestionFileReports;
+    const sid = ingestionReportSelectedId ?? String(ingestionFileReports[0]?.id ?? "");
+    const one = ingestionFileReports.find((r) => String(r.id) === String(sid));
+    return one ? [one] : [ingestionFileReports[0]];
+  }, [ingestionFileReports, ingestionReportMode, ingestionReportSelectedId]);
+
+  useEffect(() => {
+    if (!ingestionReportOpen) {
+      setIngestionReportViewLoading(false);
+      return;
+    }
+    if (ingestionReportMode !== "logs") {
+      setIngestionReportViewLoading(false);
+      return;
+    }
+    setIngestionReportViewLoading(true);
+    const t = window.setTimeout(() => setIngestionReportViewLoading(false), 300);
+    return () => window.clearTimeout(t);
+  }, [ingestionReportOpen, ingestionReportMode, ingestionReportSelectedId]);
+
+  const handleExportIngestionReportCsv = useCallback(() => {
+    if (!ingestionReportTableRows.length) return;
+    const csv = buildIngestionReportCsv(ingestionReportTableRows, activeWorkspace?.files);
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `ingestion-report-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }, [ingestionReportTableRows, activeWorkspace?.files]);
+
+  const openIngestionReportForFile = useCallback((fileReport) => {
+    if (!fileReport) return;
+    setIngestionReportMode("single");
+    setIngestionReportSelectedId(String(fileReport.id));
+    setIngestionReportOpen(true);
+  }, []);
+
+  const openIngestionReportLogsPage = useCallback(() => {
+    setIngestionReportMode("logs");
+    setIngestionReportSelectedId(null);
+    setIngestionReportOpen(true);
+  }, []);
 
   const executionSummaryItems = [
     {
@@ -3030,6 +3339,8 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                 setProjectPendingDelete(projectToDelete);
                 setDeleteProjectInput("");
               }}
+              isProjectsLoading={projectsListLoading}
+              projectsSkeletonCount={PROJECTS_PER_PAGE}
             />
           </div>
         </div>
@@ -3093,6 +3404,15 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
                   <div className={styles.createModalActions}>
                     <div className={styles.createModalActionsInner}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={styles.devModalBtnSecondary}
+                        onClick={() => setIsCreateProjectOpen(false)}
+                        disabled={isCreatingProject}
+                      >
+                        Cancel
+                      </Button>
                       <Button
                         className={styles.createProjectCta}
                         onClick={handleCreateProject}
@@ -3500,6 +3820,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                         </span>
                       </div>
                       <div className={styles.uploadFilesSectionActions}>
+                        {ingestionFileReports.length > 0 && (
+                          <button
+                            type="button"
+                            className={styles.reportLogsHeaderButton}
+                            title="View report logs for all files with metrics"
+                            onClick={openIngestionReportLogsPage}
+                          >
+                            Report logs
+                          </button>
+                        )}
                         {hasSelectedFile && (
                           <button
                             type="button"
@@ -3577,15 +3907,15 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                         uploadFilesViewMode={uploadFilesViewMode}
                         activeWorkspaceFileId={activeWorkspaceFileId}
                         ingestionFileReports={ingestionFileReports}
-                        executionState={executionState}
                         updateActiveWorkspace={updateActiveWorkspace}
-                        setIngestionReportSelectedId={setIngestionReportSelectedId}
-                        setIngestionReportOpen={setIngestionReportOpen}
+                        onOpenFileReport={openIngestionReportForFile}
                         setWorkspaceFilePendingDelete={setWorkspaceFilePendingDelete}
                         setDeleteWorkspaceFileNameInput={setDeleteWorkspaceFileNameInput}
                         regionClassName={styles.uploadFilesScrollRegion}
                         emptyClassName={styles.emptyFilesStatePro}
                         emptyMessage="No files yet. Upload PDFs in the area above."
+                        isLoadingFiles={workspaceMode === "upload" && isProjectFilesSyncing}
+                        fileSkeletonCount={fileSkeletonCount}
                       />
                     </div>
                   </div>
@@ -3607,11 +3937,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   />
                 )}
 
-                {ingestionFileReports.length > 0 && executionState.status === "success" && (
-                  <div className={styles.ingestionReportBanner}>
-
-                  </div>
-                )}
                 </div>
 
                 <div className={styles.pipelineFooter}>
@@ -3696,6 +4021,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                           Pipeline execution
                         </button>
                       </div>
+                      {uploadExpandedPanel === "files" && ingestionFileReports.length > 0 && (
+                        <button
+                          type="button"
+                          className={styles.reportLogsHeaderButton}
+                          title="View report logs for all files with metrics"
+                          onClick={openIngestionReportLogsPage}
+                        >
+                          Report logs
+                        </button>
+                      )}
                       {activeWorkspace.files.some((f) => f?.fileId != null) && (
                       <button
                         type="button"
@@ -3746,15 +4081,15 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                         uploadFilesViewMode={uploadFilesViewMode}
                         activeWorkspaceFileId={activeWorkspaceFileId}
                         ingestionFileReports={ingestionFileReports}
-                        executionState={executionState}
                         updateActiveWorkspace={updateActiveWorkspace}
-                        setIngestionReportSelectedId={setIngestionReportSelectedId}
-                        setIngestionReportOpen={setIngestionReportOpen}
+                        onOpenFileReport={openIngestionReportForFile}
                         setWorkspaceFilePendingDelete={setWorkspaceFilePendingDelete}
                         setDeleteWorkspaceFileNameInput={setDeleteWorkspaceFileNameInput}
                         regionClassName={styles.uploadFilesExpandedScroll}
                         emptyClassName={styles.emptyFilesStatePro}
                         emptyMessage="No files."
+                        isLoadingFiles={workspaceMode === "upload" && isProjectFilesSyncing}
+                        fileSkeletonCount={fileSkeletonCount}
                       />
                     ) : (
                       <div className={styles.uploadExpandedPipelinePage}>
@@ -3804,23 +4139,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                             </div>
                           )}
 
-                        {ingestionFileReports.length > 0 && executionState.status === "success" && (
-                          <div className={styles.ingestionReportBanner}>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className={styles.ingestionReportOpenButton}
-                              onClick={() => {
-                                setIngestionReportSelectedId(null);
-                                setIngestionReportOpen(true);
-                              }}
-                            >
-                              View full ingestion report ({ingestionFileReports.length}{" "}
-                              {ingestionFileReports.length === 1 ? "file" : "files"})
-                            </Button>
-                          </div>
-                        )}
-
                         {hasUploadPipelineOutput ? (
                           <UploadPipelineOutputCard
                             executionState={executionState}
@@ -3841,100 +4159,192 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                 </div>
               )}
 
-              {ingestionReportOpen && (
+              {ingestionReportOpen && ingestionReportMode === "logs" && (
                 <div
-                  className={styles.ingestionReportBackdrop}
-                  role="presentation"
-                  onClick={() => setIngestionReportOpen(false)}
+                  className={styles.reportFullPage}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="report-full-page-title"
                 >
-                  <div
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="ingestion-report-title"
-                    className={styles.ingestionReportModal}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className={styles.ingestionReportModalHeader}>
-                      <h2 id="ingestion-report-title" className={styles.ingestionReportModalTitle}>
-                        Ingestion report
-                      </h2>
-                      <button
-                        type="button"
-                        className={styles.ingestionReportClose}
-                        onClick={() => setIngestionReportOpen(false)}
-                        aria-label="Close"
-                      >
-                        <X size={18} />
-                      </button>
+                  <header className={styles.reportFullPageHeader}>
+                    <button
+                      type="button"
+                      className={styles.reportFullPageBack}
+                      onClick={() => setIngestionReportOpen(false)}
+                    >
+                      <ArrowLeft size={18} strokeWidth={2} aria-hidden />
+                      Back
+                    </button>
+                    <div className={styles.reportFullPageHeaderCenter}>
+                      <h1 id="report-full-page-title" className={styles.reportFullPageTitle}>
+                        Report logs
+                      </h1>
+                      <p className={styles.reportFullPageSubtitle}>
+                        {ingestionReportTableRows.length} file
+                        {ingestionReportTableRows.length === 1 ? "" : "s"}
+                      </p>
                     </div>
-                    <div className={styles.ingestionReportTabs}>
-                      {(() => {
-                        const activeReportId =
-                          ingestionReportSelectedId ?? String(ingestionFileReports[0]?.id ?? "");
-                        return ingestionFileReports.map((rep) => (
-                        <button
-                          key={rep.id}
-                          type="button"
-                          className={classNames(styles.ingestionReportTab, {
-                            [styles.ingestionReportTabActive]: String(rep.id) === String(activeReportId),
-                          })}
-                          onClick={() => setIngestionReportSelectedId(String(rep.id))}
-                        >
-                          {rep.fileName}
-                        </button>
-                        ));
-                      })()}
-                    </div>
-                    {(() => {
-                      const activeId =
-                        ingestionReportSelectedId ?? String(ingestionFileReports[0]?.id ?? "");
-                      const active =
-                        ingestionFileReports.find((r) => String(r.id) === String(activeId)) ||
-                        ingestionFileReports[0] ||
-                        null;
-                      if (!active) return null;
-                      return (
-                        <div className={styles.ingestionReportBody}>
-                          <dl className={styles.ingestionReportGrid}>
-                            <div>
-                              <dt>File</dt>
-                              <dd>{active.fileName}</dd>
-                            </div>
-                            <div>
-                              <dt>Code</dt>
-                              <dd>{active.fileCode || "—"}</dd>
-                            </div>
-                            <div>
-                              <dt>Total chunks</dt>
-                              <dd>{formatNumber(active.chunkCount)}</dd>
-                            </div>
-                            <div>
-                              <dt>Vectors stored</dt>
-                              <dd>{formatNumber(active.vectorsStored)}</dd>
-                            </div>
-                            <div>
-                              <dt>Processing time</dt>
-                              <dd>
-                                {active.processingTimeSeconds > 0
-                                  ? `${Number(active.processingTimeSeconds).toFixed(2)}s`
-                                  : "—"}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt>Embedding</dt>
-                              <dd>{active.embeddingLabel}</dd>
-                            </div>
-                            <div className={styles.ingestionReportSpanWide}>
-                              <dt>Vector backends</dt>
-                              <dd>{active.backends?.length ? active.backends.join(", ") : "—"}</dd>
-                            </div>
-                          </dl>
-                        </div>
-                      );
-                    })()}
-                  </div>
+                    <button
+                      type="button"
+                      className={styles.reportFullPageExport}
+                      onClick={handleExportIngestionReportCsv}
+                      disabled={
+                        ingestionReportTableRows.length === 0 || ingestionReportViewLoading
+                      }
+                    >
+                      Export CSV
+                    </button>
+                  </header>
+                  <main className={styles.reportFullPageMain}>
+                    {ingestionReportViewLoading ? (
+                      <div className={styles.reportFullPageSkeleton} aria-hidden>
+                        {Array.from({ length: 8 }).map((_, rowIdx) => (
+                          <div key={rowIdx} className={styles.reportFullPageSkeletonRow}>
+                            {Array.from({ length: 10 }).map((__, colIdx) => (
+                              <div key={colIdx} className={styles.reportFullPageSkeletonCell} />
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    ) : ingestionReportTableRows.length === 0 ? (
+                      <div className={styles.reportFullPageEmpty}>
+                        <p className={styles.reportFullPageEmptyTitle}>No report data</p>
+                        <p className={styles.reportFullPageEmptyHint}>
+                          Run the pipeline on a file to generate ingestion metrics, then open this view
+                          again.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className={styles.reportFullPageTableWrap}>
+                        <table className={styles.reportFullPageTable}>
+                          <thead>
+                            <tr>
+                              <th>File name</th>
+                              <th>File code</th>
+                              <th>Pages</th>
+                              <th>Size</th>
+                              <th>Category</th>
+                              <th>Total chunks</th>
+                              <th>Vectors stored</th>
+                              <th>Processing time</th>
+                              <th>Embedding</th>
+                              <th>Vector backends</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {ingestionReportTableRows.map((rep) => {
+                              const wf = getWorkspaceFileForReport(rep, activeWorkspace?.files);
+                              const pages = wf
+                                ? wf.pages ?? wf.pagesCount ?? wf.pages_count ?? "—"
+                                : "—";
+                              return (
+                                <tr key={rep.id}>
+                                  <td>{rep.fileName}</td>
+                                  <td>{rep.fileCode || "—"}</td>
+                                  <td>{pages}</td>
+                                  <td>{wf?.size ?? "—"}</td>
+                                  <td>{wf?.category ?? "—"}</td>
+                                  <td>
+                                    {rep.metricsIncomplete ? "—" : formatNumber(rep.chunkCount)}
+                                  </td>
+                                  <td>
+                                    {rep.metricsIncomplete ? "—" : formatNumber(rep.vectorsStored)}
+                                  </td>
+                                  <td>
+                                    {rep.metricsIncomplete
+                                      ? "—"
+                                      : rep.processingTimeSeconds > 0
+                                      ? `${Number(rep.processingTimeSeconds).toFixed(2)}s`
+                                      : "—"}
+                                  </td>
+                                  <td>{rep.embeddingLabel}</td>
+                                  <td>
+                                    {rep.backends?.length ? rep.backends.join(", ") : "—"}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </main>
                 </div>
               )}
+
+              {ingestionReportOpen &&
+                ingestionReportMode === "single" &&
+                ingestionFileReports.length > 0 && (
+                  <div
+                    className={styles.ingestionReportBackdrop}
+                    role="presentation"
+                    onClick={() => setIngestionReportOpen(false)}
+                  >
+                    <div
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="ingestion-report-single-title"
+                      className={styles.ingestionReportModal}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className={styles.ingestionReportModalHeader}>
+                        <h2
+                          id="ingestion-report-single-title"
+                          className={styles.ingestionReportModalTitle}
+                        >
+                          Ingestion report
+                        </h2>
+                        <button
+                          type="button"
+                          className={styles.ingestionReportClose}
+                          onClick={() => setIngestionReportOpen(false)}
+                          aria-label="Close"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+                      <p className={styles.ingestionReportModalIntro}>
+                        File details and ingestion metrics for this file only.
+                      </p>
+                      {(() => {
+                        const activeId =
+                          ingestionReportSelectedId ?? String(ingestionFileReports[0]?.id ?? "");
+                        const active =
+                          ingestionFileReports.find((r) => String(r.id) === String(activeId)) ||
+                          ingestionFileReports[0] ||
+                          null;
+                        if (!active) return null;
+                        const workspaceFile = getWorkspaceFileForReport(
+                          active,
+                          activeWorkspace?.files,
+                        );
+                        return (
+                          <div className={styles.ingestionReportBody}>
+                            <IngestionFileDetailsSection
+                              workspaceFile={workspaceFile}
+                              variant="single"
+                            />
+                            <div className={styles.ingestionReportCard}>
+                              <h4 className={styles.ingestionReportFileDetailsTitle}>
+                                Ingestion metrics
+                              </h4>
+                              <IngestionReportMetricsDl active={active} />
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      <div className={styles.ingestionReportModalFooter}>
+                        <button
+                          type="button"
+                          className={styles.devModalBtnSecondary}
+                          onClick={() => setIngestionReportOpen(false)}
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
               <AnimatePresence>
                 {workspaceFilePendingDelete && (

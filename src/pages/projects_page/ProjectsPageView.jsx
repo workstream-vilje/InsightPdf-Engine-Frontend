@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import TopNavbar from "@/components/common/top-navbar/TopNavbar";
+import ProjectsPageSkeleton from "@/components/skeletons/ProjectsPageSkeleton";
 import ProjectCard from "@/pages/projects_page/ProjectCard";
 import styles from "./styles.module.css";
 
@@ -58,6 +59,8 @@ export default function ProjectsPageView({
   onCreateProject,
   onOpenProject,
   onDeleteProject,
+  isProjectsLoading = false,
+  projectsSkeletonCount = 5,
 }) {
   return (
     <main className={embedded ? styles.pageShellEmbedded : styles.pageShell}>
@@ -88,7 +91,7 @@ export default function ProjectsPageView({
                 onChange={(event) => onFilterChange(event.target.value)}
                 className={styles.filterSelect}
               >
-                <option value="all">Status</option>
+                <option value="all">All</option>
                 {availableProjectNames.map((projectName) => (
                   <option key={projectName} value={projectName}>
                     {projectName}
@@ -142,11 +145,13 @@ export default function ProjectsPageView({
           </div>
         </section>
 
-        {projects.length > 0 ? (
+        {isProjectsLoading ? (
+          <ProjectsPageSkeleton count={projectsSkeletonCount} viewMode={projectViewMode} />
+        ) : projects.length > 0 ? (
           <section
             className={`${styles.projectGrid} ${
               projectViewMode === "list" ? styles.projectList : ""
-            }`}
+            } ${styles.projectDataReveal}`}
           >
             {projectViewMode === "list" ? (
               <div className={styles.tableWrapper}>
@@ -223,7 +228,7 @@ export default function ProjectsPageView({
             <p>No projects yet. Click New project to create one.</p>
           </div>
         )}
-        {totalPages > 1 && (
+        {totalPages > 1 && !isProjectsLoading && (
           <div className={styles.paginationRow}>
             {Array.from({ length: totalPages }, (_, index) => {
               const page = index + 1;
