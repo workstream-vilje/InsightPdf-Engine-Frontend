@@ -268,12 +268,13 @@
   background: var(--projects-page-accent-hover);
 }
 
-/* auto-fit collapses empty tracks so a single card spans the row; auto-fill leaves ghost columns */
+/* Fixed max track width keeps cards compact; auto-fill tiles without one card stretching full row */
 .projectGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 280px));
+  gap: 16px;
   align-items: stretch;
+  justify-content: start;
   justify-items: stretch;
   width: 100%;
 }
@@ -416,25 +417,26 @@
 }
 
 .projectCard {
-  min-height: 150px;
+  min-height: 154px;
   width: 100%;
-  max-width: 100%;
+  max-width: 280px;
   min-width: 0;
   height: 100%;
   box-sizing: border-box;
   border: 1px solid var(--projects-page-border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--projects-page-surface);
-  padding: 20px 24px 18px;
+  /* Padding comes from Card (padding-default); avoid padding-none override */
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   cursor: pointer;
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .projectCardList {
   max-width: none;
+  width: 100%;
 }
 
 .projectCard:hover {
@@ -451,39 +453,45 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
+  gap: 16px;
 }
 
 .projectCardTitleBlock {
   min-width: 0;
+  flex: 1;
+  padding-right: 4px;
 }
 
 .projectCardTitle {
   font-family: var(--projects-font-display);
-  font-size: 0.98rem;
+  font-size: 1.02rem;
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 1.35;
   color: var(--projects-page-text);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .projectCardSubtitle {
-  margin-top: 8px;
-  font-size: 0.96rem;
+  margin-top: 6px;
+  font-size: 0.9rem;
   line-height: 1.45;
   color: var(--projects-page-text-muted);
   font-family: var(--projects-font-body);
 }
 
 .projectActionButton {
-  width: 28px;
-  height: 28px;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  margin: -2px -4px 0 0;
   border: none;
   background: transparent;
   color: var(--projects-page-text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
 }
 
@@ -493,11 +501,12 @@
 
 .projectBadge {
   width: fit-content;
+  max-width: 100%;
   border: 1px solid var(--projects-page-border);
-  border-radius: 8px;
-  padding: 4px 8px;
+  border-radius: 10px;
+  padding: 8px 12px;
   font-size: 0.72rem;
-  line-height: 1;
+  line-height: 1.25;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--projects-page-accent-text);
@@ -507,14 +516,17 @@
 
 .projectMetaRow {
   display: flex;
-  gap: 34px;
+  flex-wrap: wrap;
+  gap: 28px 40px;
   margin-top: auto;
+  padding-top: 4px;
 }
 
 .projectMetaItem {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .projectMetaItem span {
@@ -594,7 +606,8 @@
   }
 
   .projectGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 260px));
+    justify-content: start;
   }
 
   .projectsTable {
@@ -637,9 +650,8 @@
   }
 
   .projectCard {
-    max-width: none;
+    max-width: 100%;
     min-height: 148px;
-    padding: 18px 18px 16px;
   }
 
   .projectMetaRow {

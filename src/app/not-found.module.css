@@ -6,14 +6,13 @@
   padding: 32px 20px;
 }
 
-.card {
+.content {
   width: min(100%, 640px);
-  padding: 48px;
-  border: 1px solid var(--projects-page-border);
-  border-radius: 28px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(var(--surface-2), 0.92));
-  box-shadow: var(--shadow-soft);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .kicker {
@@ -91,10 +90,6 @@
 }
 
 @media (max-width: 640px) {
-  .card {
-    padding: 32px 24px;
-  }
-
   .actions {
     flex-direction: column;
   }

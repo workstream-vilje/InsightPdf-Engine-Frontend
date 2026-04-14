@@ -3820,29 +3820,36 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                         </span>
                       </div>
                       <div className={styles.uploadFilesSectionActions}>
-                        {ingestionFileReports.length > 0 && (
-                          <button
-                            type="button"
-                            className={styles.reportLogsHeaderButton}
-                            title="View report logs for all files with metrics"
-                            onClick={openIngestionReportLogsPage}
-                          >
-                            Report logs
-                          </button>
-                        )}
-                        {hasSelectedFile && (
-                          <button
-                            type="button"
-                            className={styles.fileSelectionClearButton}
-                            onClick={() =>
-                              updateActiveWorkspace((current) => ({
-                                ...current,
-                                selectedFileId: null,
-                              }))
-                            }
-                          >
-                            Clear selection
-                          </button>
+                        {(ingestionFileReports.length > 0 || hasSelectedFile) && (
+                          <div className={styles.uploadFilesReportLogsRow}>
+                            {ingestionFileReports.length > 0 && (
+                              <button
+                                type="button"
+                                className={styles.reportLogsHeaderButton}
+                                title="View report logs for all files with metrics"
+                                onClick={openIngestionReportLogsPage}
+                              >
+                                Report logs
+                              </button>
+                            )}
+                            {hasSelectedFile && (
+                              <button
+                                type="button"
+                                className={classNames(
+                                  styles.fileSelectionClearButton,
+                                  styles.uploadFilesClearNextToReport,
+                                )}
+                                onClick={() =>
+                                  updateActiveWorkspace((current) => ({
+                                    ...current,
+                                    selectedFileId: null,
+                                  }))
+                                }
+                              >
+                                Clear selection
+                              </button>
+                            )}
+                          </div>
                         )}
                         {activeWorkspace.files.length > 0 && (
                           <>
@@ -3966,7 +3973,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                     <p className={styles.pipelineCtaNote}>Select one file to process.</p>
                   )}
                   {hasSelectedProcessedFile && (
-                    <p className={styles.pipelineCtaNote}>Selected file is already processed.</p>
+                    <p className={styles.pipelineCtaNote}>Selected file is already processed Start Your Chat.</p>
                   )}
                 </div>
               </div>
@@ -4021,16 +4028,38 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                           Pipeline execution
                         </button>
                       </div>
-                      {uploadExpandedPanel === "files" && ingestionFileReports.length > 0 && (
-                        <button
-                          type="button"
-                          className={styles.reportLogsHeaderButton}
-                          title="View report logs for all files with metrics"
-                          onClick={openIngestionReportLogsPage}
-                        >
-                          Report logs
-                        </button>
-                      )}
+                      {uploadExpandedPanel === "files" &&
+                        (ingestionFileReports.length > 0 || hasSelectedFile) && (
+                          <div className={styles.uploadFilesReportLogsRow}>
+                            {ingestionFileReports.length > 0 && (
+                              <button
+                                type="button"
+                                className={styles.reportLogsHeaderButton}
+                                title="View report logs for all files with metrics"
+                                onClick={openIngestionReportLogsPage}
+                              >
+                                Report logs
+                              </button>
+                            )}
+                            {hasSelectedFile && (
+                              <button
+                                type="button"
+                                className={classNames(
+                                  styles.fileSelectionClearButton,
+                                  styles.uploadFilesClearNextToReport,
+                                )}
+                                onClick={() =>
+                                  updateActiveWorkspace((current) => ({
+                                    ...current,
+                                    selectedFileId: null,
+                                  }))
+                                }
+                              >
+                                Clear selection
+                              </button>
+                            )}
+                          </div>
+                        )}
                       {activeWorkspace.files.some((f) => f?.fileId != null) && (
                       <button
                         type="button"
