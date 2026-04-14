@@ -368,6 +368,7 @@ const mapUploadedFileToWorkspaceFile = (file, category) => ({
   fileType: file?.file_type || null,
   pages: file?.pages_count ?? file?.pagesCount ?? file?.pages ?? null,
   allowedTechniques: file?.allowed_techniques || null,
+  processed: Boolean(file?.allowed_techniques),
 });
 
 /** One row per backend file id; first occurrence wins (order-stable). */
@@ -1085,20 +1086,24 @@ const buildUsedStrategiesSummary = (workspace) => {
   ].filter((item) => item.value);
 };
 
+const coerceAllowedTechniquesArray = (value) => (Array.isArray(value) ? value : []);
+
 const buildVariantStrategiesSummary = (workspace, result, allowedTechniques = null) => {
   const persistedStrategies = allowedTechniques
     ? [
         {
           label: "Splitter",
-          value: (allowedTechniques?.splitters || []).join(", "),
+          value: coerceAllowedTechniquesArray(allowedTechniques?.splitters).join(", "),
         },
         {
           label: "Extraction",
-          value: (allowedTechniques?.data_extraction_methods || []).join(", "),
+          value: coerceAllowedTechniquesArray(allowedTechniques?.data_extraction_methods).join(
+            ", ",
+          ),
         },
         {
           label: "Embedding",
-          value: (allowedTechniques?.embeddings || [])
+          value: coerceAllowedTechniquesArray(allowedTechniques?.embeddings)
             .map((item) => `${item.provider}/${item.model}`)
             .join(", "),
         },
@@ -1129,12 +1134,12 @@ const buildVariantStrategiesSummary = (workspace, result, allowedTechniques = nu
 };
 
 const getAllowedVectorStoreOptions = (allowedTechniques) => {
-  const allowed = new Set((allowedTechniques?.vector_stores || []).map(String));
+  const allowed = new Set(coerceAllowedTechniquesArray(allowedTechniques?.vector_stores).map(String));
   return VECTOR_STORE_OPTIONS.filter((option) => allowed.has(option.value));
 };
 
 const getAllowedEmbeddingOptions = (allowedTechniques) => {
-  const embeddings = allowedTechniques?.embeddings || [];
+  const embeddings = coerceAllowedTechniquesArray(allowedTechniques?.embeddings);
   const allowedValues = new Set();
 
   embeddings.forEach((item) => {
@@ -1258,6 +1263,15 @@ function UploadProjectFilesList({
           (r) => r.fileId != null && String(r.fileId) === String(file.fileId),
         );
         const showReportBtn = executionState?.status === "success" && fileReport;
+        const isSelected = String(file.fileId) === activeWorkspaceFileId;
+        const isProcessed = Boolean(file.processed || file.allowedTechniques || fileReport);
+        const statusLabel = isSelected
+          ? isProcessed
+            ? "Selected / Processed"
+            : "Selected"
+          : isProcessed
+          ? "Processed"
+          : "Ready";
         return uploadFilesViewMode === "grid" ? (
           <button
             key={file.id}
@@ -1307,10 +1321,10 @@ function UploadProjectFilesList({
             </p>
                 <span
                   className={classNames(styles.fileStatusBadge, styles.uploadFileStatusPill, styles.uploadFileCardBadge, {
-                    [styles.fileStatusBadgeActive]: String(file.fileId) === activeWorkspaceFileId,
+                    [styles.fileStatusBadgeActive]: isSelected,
                   })}
                 >
-                  {String(file.fileId) === activeWorkspaceFileId ? "Selected" : "Ready"}
+                  {statusLabel}
                 </span>
             {showReportBtn && (
               <span
@@ -1380,10 +1394,10 @@ function UploadProjectFilesList({
               )}
               <span
                 className={classNames(styles.fileStatusBadge, styles.uploadFileStatusPill, {
-                  [styles.fileStatusBadgeActive]: String(file.fileId) === activeWorkspaceFileId,
+                  [styles.fileStatusBadgeActive]: isSelected,
                 })}
               >
-                {String(file.fileId) === activeWorkspaceFileId ? "Selected" : "Ready"}
+                {statusLabel}
               </span>
               {file.fileId != null && (
                 <span
@@ -2321,19 +2335,29 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     if (!activeWorkspace || !activeProjectId) return;
 
     const selectableFiles = activeWorkspace.files.filter((file) => file.fileId);
-    const filesToProcess = selectableFiles;
     const executionTargetFile =
       selectableFiles.find(
         (file) => Number(file.fileId) === Number(activeWorkspace.selectedFileId),
-      ) ||
-      selectableFiles[0] ||
-      null;
-    if (!filesToProcess.length) {
+      ) || null;
+    if (!selectableFiles.length) {
       if (typeof window !== "undefined") {
         window.alert("Upload at least one file before processing.");
       }
       return;
     }
+    if (!executionTargetFile?.fileId) {
+      if (typeof window !== "undefined") {
+        window.alert("Select one uploaded file before processing.");
+      }
+      return;
+    }
+    if (executionTargetFile.processed || executionTargetFile.allowedTechniques) {
+      if (typeof window !== "undefined") {
+        window.alert("The selected file is already processed.");
+      }
+      return;
+    }
+    const filesToProcess = [executionTargetFile];
 
     const processFiles = async () => {
       clearTimers();
@@ -2356,10 +2380,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           visible: true,
           status: "running",
           stage: "processing",
-          message:
-            filesToProcess.length > 1
-              ? `Processing ${filesToProcess.length} files...`
-              : `Processing ${executionTargetFile?.name || "document"}...`,
+          message: `Processing ${executionTargetFile?.name || "document"}...`,
           fileId:
             filesToProcess.length === 1 && executionTargetFile?.fileId != null
               ? Number(executionTargetFile.fileId)
@@ -2369,9 +2390,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
               ? executionTargetFile?.fileCode || null
               : `${filesToProcess.length} FILES`,
           fileName:
-            filesToProcess.length > 1
-              ? `${filesToProcess.length} files selected`
-              : executionTargetFile?.name || "",
+            executionTargetFile?.name || "",
           chunkCount: null,
           previewCount: null,
           embedding: null,
@@ -2447,6 +2466,15 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
         updateActiveWorkspace((current) => ({
           ...current,
+          files: (current.files || []).map((file) =>
+            String(file.fileId) === String(executionTargetFile.fileId)
+              ? {
+                  ...file,
+                  processed: true,
+                  allowedTechniques: processingConfig,
+                }
+              : file,
+          ),
           phase: "query-ready",
           visibleLines: [],
           retrievalStrategies:
@@ -2541,6 +2569,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       }
       return;
     }
+    if (!targetFile.processed && !targetFile.allowedTechniques) {
+      if (typeof window !== "undefined") {
+        window.alert("Process the selected file before asking a query.");
+      }
+      return;
+    }
 
     const runQuery = async () => {
       clearTimers();
@@ -2565,21 +2599,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       }));
 
       try {
-        pendingMessages.slice(1).forEach((message, index) => {
-          const timeoutId = window.setTimeout(() => {
-            updateActiveWorkspace((current) => ({
-              ...current,
-              queryActivity: {
-                ...current.queryActivity,
-                visible: true,
-                status: "running",
-                messages: pendingMessages.slice(0, index + 2),
-              },
-            }));
-          }, (index + 1) * 900);
-          timersRef.current.push(timeoutId);
-        });
-
         const payload = buildQueryPayload({
           projectId: activeProjectId,
           fileId: targetFile.fileId,
@@ -2645,39 +2664,81 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           targetFile,
         });
 
-        updateActiveWorkspace((current) => ({
-          ...current,
-          experimentId: primaryVariant?.experimentId || current?.experimentId || null,
-          phase: "query-complete",
-          submittedQuery: "",
-          response: finalAnswer,
-          responseVisible: true,
-          usedStrategies: primaryVariant?.usedStrategies || [],
-          responseVariants,
-          qualityMetrics: primaryVariant?.qualityMetrics || current?.qualityMetrics || DEFAULT_QUALITY_METRICS,
-          queryActivity: {
-            visible: true,
-            status: "success",
-            messages: activityMessages,
-          },
-          conversation: [
-            ...(current?.conversation || []),
-            {
-              id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              fileId: targetFile.fileId,
-              query: submittedQuery,
-              responseVariants,
-              activityMessages,
+        const playbackRows =
+          Array.isArray(response?.query_progress) && response.query_progress.length > 0
+            ? response.query_progress
+            : pendingMessages.map((m, idx) => ({
+                id: m.id,
+                text: m.text,
+                elapsed_ms: idx * 520,
+              }));
+
+        const applyQuerySuccess = () => {
+          updateActiveWorkspace((current) => ({
+            ...current,
+            experimentId: primaryVariant?.experimentId || current?.experimentId || null,
+            phase: "query-complete",
+            submittedQuery: "",
+            response: finalAnswer,
+            responseVisible: true,
+            usedStrategies: primaryVariant?.usedStrategies || [],
+            responseVariants,
+            qualityMetrics:
+              primaryVariant?.qualityMetrics || current?.qualityMetrics || DEFAULT_QUALITY_METRICS,
+            queryActivity: {
+              visible: true,
+              status: "success",
+              messages: activityMessages,
             },
-          ],
-          retrievedChunks: finalChunks.map((chunk, index) => ({
-            title: chunk?.source || targetFile.name || `Chunk ${index + 1}`,
-            page: chunk?.page || index + 1,
-            score: Number(chunk?.relevance_score ?? chunk?.raw_score ?? 0),
-            text: chunk?.content || "",
-          })),
-        }));
+            conversation: [
+              ...(current?.conversation || []),
+              {
+                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                fileId: targetFile.fileId,
+                query: submittedQuery,
+                responseVariants,
+                activityMessages,
+              },
+            ],
+            retrievedChunks: finalChunks.map((chunk, index) => ({
+              title: chunk?.source || targetFile.name || `Chunk ${index + 1}`,
+              page: chunk?.page || index + 1,
+              score: Number(chunk?.relevance_score ?? chunk?.raw_score ?? 0),
+              text: chunk?.content || "",
+            })),
+          }));
+        };
+
+        let cumulative = 0;
+        playbackRows.forEach((row, index) => {
+          const prevElapsed = index > 0 ? Number(playbackRows[index - 1].elapsed_ms) || 0 : 0;
+          const curElapsed = Number(row.elapsed_ms) || 0;
+          const stepDelta =
+            index === 0 ? 0 : Math.max(200, Math.min(9000, curElapsed - prevElapsed));
+          cumulative += stepDelta;
+          const timeoutId = window.setTimeout(() => {
+            updateActiveWorkspace((current) => ({
+              ...current,
+              phase: "query-processing",
+              queryActivity: {
+                visible: true,
+                status: "running",
+                messages: playbackRows
+                  .slice(0, index + 1)
+                  .map((ev) =>
+                    createActivityMessage(String(ev.id || "step"), String(ev.text || "")),
+                  ),
+              },
+            }));
+          }, cumulative);
+          timersRef.current.push(timeoutId);
+        });
+
+        const finalizeDelay = Math.max(cumulative + 220, 400);
+        const finalizeId = window.setTimeout(applyQuerySuccess, finalizeDelay);
+        timersRef.current.push(finalizeId);
       } catch (error) {
+        clearTimers();
         const message =
           error?.payload?.detail ||
           error?.payload?.message ||
@@ -2698,8 +2759,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
             messages: [createActivityMessage("query-error", message, "error")],
           },
         }));
-      } finally {
-        clearTimers();
       }
     };
 
@@ -2726,6 +2785,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   );
   const hasUploadedFiles = Boolean(
     activeWorkspace?.files?.some((file) => file?.fileId != null),
+  );
+  const hasSelectedProcessedFile = Boolean(
+    selectedWorkspaceFile?.processed || selectedWorkspaceFile?.allowedTechniques,
   );
   const executionState = activeWorkspace?.execution || {};
   const executionStatusLabel =
@@ -2800,7 +2862,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     status: "idle",
     messages: [],
   };
-  const isChatInputDisabled = !hasSelectedFile;
+  const isChatInputDisabled = !hasSelectedFile || !hasSelectedProcessedFile;
 
   useEffect(() => {
     const prevStatus = previousExecutionStatusRef.current;
@@ -3558,16 +3620,28 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                     size="lg"
                     className={styles.pipelineRunButton}
                     onClick={handleStartIngestion}
-                    disabled={isPending || isProcessingFiles || !hasUploadedFiles}
+                    disabled={
+                      isPending ||
+                      isProcessingFiles ||
+                      !hasUploadedFiles ||
+                      activeWorkspace.selectedFileId == null ||
+                      hasSelectedProcessedFile
+                    }
                   >
                     <PlayCircle size={20} />
-                    {isProcessingFiles ? "Pipeline running…" : "Run pipeline"}
+                    {isProcessingFiles ? "Pipeline running..." : "Run selected file"}
                   </Button>
                   <p className={styles.pipelineCtaHintLatin}>
-                    (chunk → embed → vector store). Required before chat.
+                    Select one file, then run chunk to embed to vector store before chat.
                   </p>
                   {!hasUploadedFiles && (
                     <p className={styles.pipelineCtaNote}>Upload at least one PDF first.</p>
+                  )}
+                  {hasUploadedFiles && activeWorkspace.selectedFileId == null && (
+                    <p className={styles.pipelineCtaNote}>Select one file to process.</p>
+                  )}
+                  {hasSelectedProcessedFile && (
+                    <p className={styles.pipelineCtaNote}>Selected file is already processed.</p>
                   )}
                 </div>
               </div>
@@ -4118,7 +4192,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
               {queryActivityState.visible && activeWorkspace.phase === "query-processing" && (
                 <div className={styles.queryActivityStack}>
-                  {queryActivityState.messages.map((message) => (
+                  {queryActivityState.messages.map((message, messageIndex) => (
                     <p
                       key={message.id}
                       className={classNames(styles.queryActivityLine, {
@@ -4160,7 +4234,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   }}
                   placeholder={
                     isChatInputDisabled
-                      ? "Select an uploaded file to enable chat"
+                      ? hasSelectedFile
+                        ? "Process the selected file to enable chat"
+                        : "Select an uploaded file to enable chat"
                       : "How can I help you today?"
                   }
                   className={classNames(styles.queryInput, styles.queryInputHero, {
