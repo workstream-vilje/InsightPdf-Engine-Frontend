@@ -1006,31 +1006,6 @@ const createActivityMessage = (id, text, tone = "info") => ({
   tone,
 });
 
-const buildPendingQueryActivityMessages = ({ workspace }) => {
-  const vectorStores = (workspace?.vectorStores || []).filter(Boolean);
-  const vectorLabel = vectorStores.length ? vectorStores.join(", ") : "the selected vector store";
-  const topK = Math.max(1, Number(workspace?.topK) || 3);
-
-  return [
-    createActivityMessage(
-      "search",
-      `Searching ${vectorLabel} for the most relevant passages with top-k ${topK}.`,
-    ),
-    createActivityMessage(
-      "ranking",
-      "Ranking retrieved passages and preparing the grounded prompt.",
-    ),
-    createActivityMessage(
-      "generation",
-      "Generating the answer with gpt-4o-mini.",
-    ),
-    createActivityMessage(
-      "validation",
-      "Reviewing the answer for grounding and response quality.",
-    ),
-  ];
-};
-
 const buildQueryActivityMessages = ({ response, targetFile }) => {
   const results =
     Array.isArray(response?.comparison_results) && response.comparison_results.length > 0
@@ -1815,7 +1790,10 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   }, [perf]);
 
   const clearTimers = useCallback(() => {
-    timersRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    timersRef.current.forEach((timerId) => {
+      window.clearTimeout(timerId);
+      window.clearInterval(timerId);
+    });
     timersRef.current = [];
   }, []);
 
@@ -2868,9 +2846,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
     const runQuery = async () => {
       clearTimers();
-      const pendingMessages = buildPendingQueryActivityMessages({
-        workspace: activeWorkspace,
-      });
       updateActiveWorkspace((current) => ({
         ...current,
         phase: "query-processing",
@@ -2882,9 +2857,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         responseVariants: [],
         activeRightSection: "response",
         queryActivity: {
-          visible: true,
+          visible: false,
           status: "running",
-          messages: pendingMessages.slice(0, 1),
+          messages: [],
         },
       }));
 
@@ -2907,7 +2882,27 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           allowedTechniques = null;
         }
 
-        const response = await queryApi.runQuery(payload);
+        let progressSeq = 0;
+        const response = await queryApi.runQuery(payload, {
+          onProgress: ({ id, message }) => {
+            progressSeq += 1;
+            const lineId = `${String(id || "step")}-${progressSeq}`;
+            updateActiveWorkspace((current) => {
+              if (current.phase !== "query-processing") {
+                return current;
+              }
+              const prev = current.queryActivity?.messages || [];
+              return {
+                ...current,
+                queryActivity: {
+                  visible: true,
+                  status: "running",
+                  messages: [...prev, createActivityMessage(lineId, String(message || ""))],
+                },
+              };
+            });
+          },
+        });
         const results =
           Array.isArray(response?.comparison_results) && response.comparison_results.length > 0
             ? response.comparison_results
@@ -2954,79 +2949,41 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           targetFile,
         });
 
-        const playbackRows =
-          Array.isArray(response?.query_progress) && response.query_progress.length > 0
-            ? response.query_progress
-            : pendingMessages.map((m, idx) => ({
-                id: m.id,
-                text: m.text,
-                elapsed_ms: idx * 520,
-              }));
+        clearTimers();
 
-        const applyQuerySuccess = () => {
-          updateActiveWorkspace((current) => ({
-            ...current,
-            experimentId: primaryVariant?.experimentId || current?.experimentId || null,
-            phase: "query-complete",
-            submittedQuery: "",
-            response: finalAnswer,
-            responseVisible: true,
-            usedStrategies: primaryVariant?.usedStrategies || [],
-            responseVariants,
-            qualityMetrics:
-              primaryVariant?.qualityMetrics || current?.qualityMetrics || DEFAULT_QUALITY_METRICS,
-            queryActivity: {
-              visible: true,
-              status: "success",
-              messages: activityMessages,
+        updateActiveWorkspace((current) => ({
+          ...current,
+          experimentId: primaryVariant?.experimentId || current?.experimentId || null,
+          phase: "query-complete",
+          submittedQuery: "",
+          response: finalAnswer,
+          responseVisible: true,
+          usedStrategies: primaryVariant?.usedStrategies || [],
+          responseVariants,
+          qualityMetrics:
+            primaryVariant?.qualityMetrics || current?.qualityMetrics || DEFAULT_QUALITY_METRICS,
+          queryActivity: {
+            visible: true,
+            status: "success",
+            messages: activityMessages,
+          },
+          conversation: [
+            ...(current?.conversation || []),
+            {
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              fileId: targetFile.fileId,
+              query: submittedQuery,
+              responseVariants,
+              activityMessages,
             },
-            conversation: [
-              ...(current?.conversation || []),
-              {
-                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                fileId: targetFile.fileId,
-                query: submittedQuery,
-                responseVariants,
-                activityMessages,
-              },
-            ],
-            retrievedChunks: finalChunks.map((chunk, index) => ({
-              title: chunk?.source || targetFile.name || `Chunk ${index + 1}`,
-              page: chunk?.page || index + 1,
-              score: Number(chunk?.relevance_score ?? chunk?.raw_score ?? 0),
-              text: chunk?.content || "",
-            })),
-          }));
-        };
-
-        let cumulative = 0;
-        playbackRows.forEach((row, index) => {
-          const prevElapsed = index > 0 ? Number(playbackRows[index - 1].elapsed_ms) || 0 : 0;
-          const curElapsed = Number(row.elapsed_ms) || 0;
-          const stepDelta =
-            index === 0 ? 0 : Math.max(200, Math.min(9000, curElapsed - prevElapsed));
-          cumulative += stepDelta;
-          const timeoutId = window.setTimeout(() => {
-            updateActiveWorkspace((current) => ({
-              ...current,
-              phase: "query-processing",
-              queryActivity: {
-                visible: true,
-                status: "running",
-                messages: playbackRows
-                  .slice(0, index + 1)
-                  .map((ev) =>
-                    createActivityMessage(String(ev.id || "step"), String(ev.text || "")),
-                  ),
-              },
-            }));
-          }, cumulative);
-          timersRef.current.push(timeoutId);
-        });
-
-        const finalizeDelay = Math.max(cumulative + 220, 400);
-        const finalizeId = window.setTimeout(applyQuerySuccess, finalizeDelay);
-        timersRef.current.push(finalizeId);
+          ],
+          retrievedChunks: finalChunks.map((chunk, index) => ({
+            title: chunk?.source || targetFile.name || `Chunk ${index + 1}`,
+            page: chunk?.page || index + 1,
+            score: Number(chunk?.relevance_score ?? chunk?.raw_score ?? 0),
+            text: chunk?.content || "",
+          })),
+        }));
       } catch (error) {
         clearTimers();
         const message =
@@ -3201,7 +3158,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     status: "idle",
     messages: [],
   };
-  const isChatInputDisabled = !hasSelectedFile || !hasSelectedProcessedFile;
+  const isQueryInFlight = activeWorkspace?.phase === "query-processing";
+  const isChatInputDisabled =
+    !hasSelectedFile || !hasSelectedProcessedFile || isQueryInFlight;
 
   useEffect(() => {
     const prevStatus = previousExecutionStatusRef.current;
@@ -4659,7 +4618,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                 <div className={styles.queryActivityStack}>
                   {queryActivityState.messages.map((message, messageIndex) => (
                     <p
-                      key={message.id}
+                      key={`${message.id}-${messageIndex}`}
                       className={classNames(styles.queryActivityLine, {
                         [styles.queryActivityLineSuccess]: message.tone === "success",
                         [styles.queryActivityLineWarning]: message.tone === "warning",
@@ -4714,9 +4673,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   }}
                   placeholder={
                     isChatInputDisabled
-                      ? hasSelectedFile
-                        ? "Process the selected file to enable chat"
-                        : "Select an uploaded file to enable chat"
+                      ? isQueryInFlight
+                        ? "Waiting for the model to finish…"
+                        : hasSelectedFile
+                          ? "Process the selected file to enable chat"
+                          : "Select an uploaded file to enable chat"
                       : "How can I help you today?"
                   }
                   className={classNames(styles.queryInput, styles.queryInputHero, {
@@ -4727,7 +4688,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                 <Button
                   className={classNames(styles.querySendButton, styles.querySendButtonHero)}
                   onClick={handleStartQuery}
-                  title="Send query"
+                  title={isQueryInFlight ? "Query in progress" : "Send query"}
                   disabled={isChatInputDisabled}
                 >
                   <Send size={16} />
