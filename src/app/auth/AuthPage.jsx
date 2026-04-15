@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useToast } from "@/components/toast/ToastProvider";
 import styles from "./auth.module.css";
 import { setAuthSession } from "@/services/auth";
 import { ROUTE_PATHS } from "@/utils/routepaths";
@@ -74,12 +75,12 @@ const callAuthApi = async (path, payload) => {
 export default function AuthPage({ mode }) {
   const router = useRouter();
   const { isAuthenticated, isAuthInitialized } = useAuth();
+  const { showToast } = useToast();
   const isSignup = mode === "signup";
   const [switchingMode, setSwitchingMode] = useState("");
   const [signupForm, setSignupForm] = useState(initialSignupForm);
   const [loginForm, setLoginForm] = useState(initialLoginForm);
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState({ type: "", message: "" });
   const switchTimerRef = useRef(null);
 
   useEffect(() => {
@@ -121,25 +122,33 @@ export default function AuthPage({ mode }) {
     event.preventDefault();
 
     if (!signupForm.name.trim()) {
-      setStatus({ type: "error", message: "Enter your name to create the account." });
+      showToast({
+        title: "Sign up",
+        variant: "warning",
+        message: "Enter your name to create the account.",
+      });
       return;
     }
 
     if (!emailLooksValid(signupForm.mail_id)) {
-      setStatus({ type: "error", message: "Enter a valid mail id." });
+      showToast({
+        title: "Sign up",
+        variant: "warning",
+        message: "Enter a valid mail id.",
+      });
       return;
     }
 
     if (signupForm.password.length < 6) {
-      setStatus({
-        type: "error",
+      showToast({
+        title: "Sign up",
+        variant: "warning",
         message: "Password should be at least 6 characters.",
       });
       return;
     }
 
     setLoading(true);
-    setStatus({ type: "", message: "" });
 
     try {
       const payload = {
@@ -150,8 +159,9 @@ export default function AuthPage({ mode }) {
 
       const response = await callAuthApi("/auth/signup", payload);
 
-      setStatus({
-        type: "success",
+      showToast({
+        title: "Sign up",
+        variant: "success",
         message: response?.message || "Signup successful. Continue with login.",
       });
       setSignupForm(initialSignupForm);
@@ -159,8 +169,9 @@ export default function AuthPage({ mode }) {
         router.push(ROUTE_PATHS.AUTH_LOGIN);
       }, 500);
     } catch (error) {
-      setStatus({
-        type: "error",
+      showToast({
+        title: "Authentication",
+        variant: "error",
         message: error?.message || "Unable to sign up right now.",
       });
     } finally {
@@ -172,17 +183,24 @@ export default function AuthPage({ mode }) {
     event.preventDefault();
 
     if (!emailLooksValid(loginForm.mail_id)) {
-      setStatus({ type: "error", message: "Enter a valid mail id." });
+      showToast({
+        title: "Login",
+        variant: "warning",
+        message: "Enter a valid mail id.",
+      });
       return;
     }
 
     if (!loginForm.password) {
-      setStatus({ type: "error", message: "Enter your password to login." });
+      showToast({
+        title: "Login",
+        variant: "warning",
+        message: "Enter your password to login.",
+      });
       return;
     }
 
     setLoading(true);
-    setStatus({ type: "", message: "" });
 
     try {
       const payload = {
@@ -200,8 +218,9 @@ export default function AuthPage({ mode }) {
         mailId: response?.mail_id,
       });
 
-      setStatus({
-        type: "success",
+      showToast({
+        title: "Login",
+        variant: "success",
         message: response?.message || "Login successful.",
       });
 
@@ -209,8 +228,9 @@ export default function AuthPage({ mode }) {
         router.push("/workspace");
       }, 500);
     } catch (error) {
-      setStatus({
-        type: "error",
+      showToast({
+        title: "Authentication",
+        variant: "error",
         message: error?.message || "Unable to login right now.",
       });
     } finally {
@@ -349,16 +369,6 @@ export default function AuthPage({ mode }) {
                 </button>
               </form>
             )}
-
-            {status.message ? (
-              <div
-                className={`${styles.status} ${
-                  status.type === "error" ? styles.statusError : styles.statusSuccess
-                }`}
-              >
-                {status.message}
-              </div>
-            ) : null}
 
             <p className={styles.hint}>
               {isSignup
