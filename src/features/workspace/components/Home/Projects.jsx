@@ -3651,25 +3651,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   />
                 </SidebarSection>
 
-                <SidebarSection
-                  icon={Blocks}
-                  title="Top-k"
-                  description="Maximum value is 5"
-                  expanded
-                >
-                  <Input
-                    type="number"
-                    min={1}
-                    max={5}
-                    value={activeWorkspace.topK}
-                    onChange={(event) =>
-                      updateActiveWorkspace((current) => ({
-                        ...current,
-                        topK: `${Math.min(5, Math.max(1, Number(event.target.value || 1)))}`,
-                      }))
-                    }
-                  />
-                </SidebarSection>
+
 
                 <SidebarSection
                   icon={FolderKanban}
