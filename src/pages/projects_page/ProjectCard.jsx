@@ -45,7 +45,7 @@ export default function ProjectCard({
       tabIndex={0}
       className={`${styles.projectCard} ${viewMode === "list" ? styles.projectCardList : ""}`}
       variant="default"
-      padding="none"
+      padding="default"
       interactive
       onClick={() => onOpen(project.id)}
       onKeyDown={(event) => {

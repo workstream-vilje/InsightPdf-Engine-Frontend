@@ -6,7 +6,7 @@ import { ROUTE_PATHS } from "@/utils/routepaths";
 export default function NotFound() {
   return (
     <main className={styles.page}>
-      <section className={styles.card}>
+      <section className={styles.content}>
         <p className={styles.kicker}>404 Error</p>
         <h1 className={styles.title}>Page not found.</h1>
         <p className={styles.description}>

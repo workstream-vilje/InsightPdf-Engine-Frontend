@@ -1716,6 +1716,11 @@
   box-sizing: border-box;
 }
 
+/* Grid file cards are often under 200px wide; long labels must not reserve fixed min width */
+.uploadFileCard .uploadFileStatusPill {
+  min-width: 0;
+}
+
 .uploadFileRowDelete {
   display: inline-flex;
   align-items: center;
@@ -1911,7 +1916,7 @@
   flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
   flex: 1;
   min-width: 0;
   overflow-x: auto;
@@ -1920,9 +1925,36 @@
   scrollbar-width: thin;
 }
 
+.uploadFilesReportLogsRow {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .uploadFilesSectionActions .fileSelectionClearButton {
   flex-shrink: 0;
   white-space: nowrap;
+}
+
+/* Clear selection sits beside Report logs (not stacked above Delete all) */
+.uploadFilesClearNextToReport {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--border), 0.85);
+  background: rgba(var(--surface-1), 0.95);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+.uploadFilesClearNextToReport:hover {
+  text-decoration: none;
+  border-color: rgba(var(--primary), 0.35);
+  background: rgba(var(--primary), 0.06);
 }
 
 .uploadFilesExpandPrimaryButton {
@@ -2061,6 +2093,7 @@
   min-height: 118px;
   min-width: 0;
   width: 100%;
+  overflow: hidden;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   transition:
     border-color 0.15s ease,
@@ -2108,22 +2141,44 @@
 }
 
 .uploadFileCardFooter {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 6px 8px;
   width: 100%;
+  min-width: 0;
   margin-top: auto;
   padding-top: 10px;
   border-top: 1px solid rgba(var(--border), 0.55);
 }
 
+/* Narrow grid cards: keep status + Report inside the border (no horizontal overflow) */
+.uploadFileCardFooter .fileStatusBadge {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 100%;
+  justify-self: start;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.25;
+  padding: 5px 8px;
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+}
+
+.uploadFileCardFooter .uploadFileReportTag {
+  justify-self: end;
+  align-self: center;
+}
+
 .uploadFileReportTag {
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
   margin: 0;
-  padding: 5px 10px;
+  padding: 5px 8px;
   border-radius: 6px;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 650;
   font-family: inherit;
   letter-spacing: 0.02em;
@@ -2135,11 +2190,17 @@
   transition:
     background 0.15s ease,
     border-color 0.15s ease;
+  max-width: 100%;
 }
 
 .uploadFileReportTag:hover {
   background: rgba(var(--primary), 0.08);
   border-color: rgba(var(--primary), 0.35);
+}
+
+.uploadFileReportTag:focus-visible {
+  outline: 2px solid rgba(var(--primary), 0.45);
+  outline-offset: 2px;
 }
 
 .uploadFileCardBadge {
@@ -2298,7 +2359,9 @@
 
 .uploadFilesExpandedHeaderActions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
   flex-shrink: 0;
 }
@@ -3431,6 +3494,40 @@
   box-shadow: none;
 }
 
+.queryAgentModeBadge {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(var(--border), 0.88);
+  background: rgba(var(--surface-1), 0.92);
+  color: rgb(var(--muted-foreground));
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.queryAgentModeBadge:hover {
+  transform: translateY(-1px);
+  border-color: rgba(var(--primary), 0.35);
+  color: rgb(var(--foreground));
+}
+
+.queryAgentModeBadgeActive {
+  border-color: rgba(var(--primary), 0.5);
+  background: rgba(var(--primary), 0.12);
+  color: rgb(var(--primary));
+}
+
 .queryInputHero {
   height: 62px;
   flex: 1;
@@ -4060,6 +4157,15 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.choiceGridDisabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.choiceGridDisabled .choiceChip {
+  cursor: not-allowed;
 }
 
 .choiceChip {

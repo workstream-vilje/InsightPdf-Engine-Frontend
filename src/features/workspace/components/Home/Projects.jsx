@@ -64,6 +64,11 @@ import {
   VECTOR_STORE_OPTIONS,
   createWorkspaceState,
 } from "@/lib/projects/data";
+
+/** Agent is toggled from the query bar, not the sidebar chips. */
+const QUERY_CONFIGURATION_SIDEBAR_OPTIONS = QUERY_CONFIGURATION_OPTIONS.filter(
+  (option) => option.value !== "agent",
+);
 import {
   ROUTE_PATHS,
   workspaceQueryUrl,
@@ -1001,31 +1006,6 @@ const createActivityMessage = (id, text, tone = "info") => ({
   tone,
 });
 
-const buildPendingQueryActivityMessages = ({ workspace }) => {
-  const vectorStores = (workspace?.vectorStores || []).filter(Boolean);
-  const vectorLabel = vectorStores.length ? vectorStores.join(", ") : "the selected vector store";
-  const topK = Math.max(1, Number(workspace?.topK) || 3);
-
-  return [
-    createActivityMessage(
-      "search",
-      `Searching ${vectorLabel} for the most relevant passages with top-k ${topK}.`,
-    ),
-    createActivityMessage(
-      "ranking",
-      "Ranking retrieved passages and preparing the grounded prompt.",
-    ),
-    createActivityMessage(
-      "generation",
-      "Generating the answer with gpt-4o-mini.",
-    ),
-    createActivityMessage(
-      "validation",
-      "Reviewing the answer for grounding and response quality.",
-    ),
-  ];
-};
-
 const buildQueryActivityMessages = ({ response, targetFile }) => {
   const results =
     Array.isArray(response?.comparison_results) && response.comparison_results.length > 0
@@ -1134,11 +1114,8 @@ const buildSharedPipelineConfig = (workspace) => {
   const embeddingProvider = workspace.embeddingModels.includes("ollama-nomic-embed")
     ? "ollama"
     : "openai";
-  const embeddingModel = embeddingProvider === "ollama"
-    ? "nomic-embed-text"
-    : workspace.embeddingModels.includes("text-embedding-3-large")
-    ? "text-embedding-3-large"
-    : "text-embedding-3-small";
+  const embeddingModel =
+    embeddingProvider === "ollama" ? "nomic-embed-text" : "text-embedding-3-large";
   const normalizedExtractionMethods = (workspace.dataExtraction || []).filter((value) =>
     ["pymupdf", "unstructured", "pdfplumber"].includes(value),
   );
@@ -1352,9 +1329,6 @@ const getAllowedEmbeddingOptions = (allowedTechniques) => {
     if (model === "text-embedding-3-large") {
       allowedValues.add("text-embedding-3-large");
     }
-    if (model === "text-embedding-3-small") {
-      allowedValues.add("text-embedding-3-small");
-    }
   });
 
   return EMBEDDING_OPTIONS.filter((option) => allowedValues.has(option.value));
@@ -1383,26 +1357,35 @@ const TypedLine = ({ text }) => {
   return <p className={styles.statusLine}>{visibleText}</p>;
 };
 
-const MultiSelectChips = ({ options, selectedValues, onToggle }) => (
-  <div className={styles.choiceGrid}>
+const MultiSelectChips = ({ options, selectedValues, onToggle, disabled = false }) => (
+  <div
+    className={classNames(styles.choiceGrid, {
+      [styles.choiceGridDisabled]: disabled,
+    })}
+  >
     {options.map((option) => {
       const checked = selectedValues.includes(option.value);
       return (
         <div
           key={option.value}
           role="button"
-          tabIndex={0}
+          tabIndex={disabled ? -1 : 0}
           className={classNames(styles.choiceChip, {
             [styles.choiceChipActive]: checked,
           })}
-          onClick={() => onToggle(option.value)}
+          aria-disabled={disabled}
+          aria-pressed={checked}
+          onClick={() => {
+            if (disabled) return;
+            onToggle(option.value);
+          }}
           onKeyDown={(event) => {
+            if (disabled) return;
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
               onToggle(option.value);
             }
           }}
-          aria-pressed={checked}
         >
           <Checkbox checked={checked} className={styles.choiceCheckbox} asSpan />
           <span>{option.label}</span>
@@ -1535,17 +1518,25 @@ function UploadProjectFilesList({
                 {statusLabel}
               </span>
               {showReportBtn && (
-                <button
-                  type="button"
+                <span
+                  role="button"
+                  tabIndex={0}
                   className={styles.uploadFileReportTag}
                   title="View ingestion report"
                   onClick={(e) => {
                     e.stopPropagation();
                     onOpenFileReport(fileReport);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onOpenFileReport(fileReport);
+                    }
+                  }}
                 >
                   Report
-                </button>
+                </span>
               )}
             </div>
           </button>
@@ -1580,17 +1571,25 @@ function UploadProjectFilesList({
             </div>
             <div className={styles.uploadFileRowActions}>
               {showReportBtn && (
-                <button
-                  type="button"
+                <span
+                  role="button"
+                  tabIndex={0}
                   className={styles.uploadFileReportTag}
                   title="View ingestion report"
                   onClick={(e) => {
                     e.stopPropagation();
                     onOpenFileReport(fileReport);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onOpenFileReport(fileReport);
+                    }
+                  }}
                 >
                   Report
-                </button>
+                </span>
               )}
               <span
                 className={classNames(styles.fileStatusBadge, styles.uploadFileStatusPill, {
@@ -1791,7 +1790,10 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   }, [perf]);
 
   const clearTimers = useCallback(() => {
-    timersRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    timersRef.current.forEach((timerId) => {
+      window.clearTimeout(timerId);
+      window.clearInterval(timerId);
+    });
     timersRef.current = [];
   }, []);
 
@@ -2805,9 +2807,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const handleStartQuery = () => {
     if (!activeWorkspace?.query.trim() || !activeProjectId) return;
     const submittedQuery = activeWorkspace.query.trim();
-    const hasConfigurationSelected =
+    const agentModeOn = (activeWorkspace?.queryConfigurations || []).includes("agent");
+    const hasRetrievalSelection =
       Array.isArray(activeWorkspace?.retrievalStrategies) &&
-      activeWorkspace.retrievalStrategies.length > 0 &&
+      activeWorkspace.retrievalStrategies.length > 0;
+    const hasConfigurationSelected =
+      (agentModeOn || hasRetrievalSelection) &&
       Array.isArray(activeWorkspace?.vectorStores) &&
       activeWorkspace.vectorStores.length > 0 &&
       Array.isArray(activeWorkspace?.embeddingModels) &&
@@ -2841,9 +2846,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
     const runQuery = async () => {
       clearTimers();
-      const pendingMessages = buildPendingQueryActivityMessages({
-        workspace: activeWorkspace,
-      });
       updateActiveWorkspace((current) => ({
         ...current,
         phase: "query-processing",
@@ -2855,9 +2857,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         responseVariants: [],
         activeRightSection: "response",
         queryActivity: {
-          visible: true,
+          visible: false,
           status: "running",
-          messages: pendingMessages.slice(0, 1),
+          messages: [],
         },
       }));
 
@@ -2880,7 +2882,27 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           allowedTechniques = null;
         }
 
-        const response = await queryApi.runQuery(payload);
+        let progressSeq = 0;
+        const response = await queryApi.runQuery(payload, {
+          onProgress: ({ id, message }) => {
+            progressSeq += 1;
+            const lineId = `${String(id || "step")}-${progressSeq}`;
+            updateActiveWorkspace((current) => {
+              if (current.phase !== "query-processing") {
+                return current;
+              }
+              const prev = current.queryActivity?.messages || [];
+              return {
+                ...current,
+                queryActivity: {
+                  visible: true,
+                  status: "running",
+                  messages: [...prev, createActivityMessage(lineId, String(message || ""))],
+                },
+              };
+            });
+          },
+        });
         const results =
           Array.isArray(response?.comparison_results) && response.comparison_results.length > 0
             ? response.comparison_results
@@ -2927,79 +2949,41 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           targetFile,
         });
 
-        const playbackRows =
-          Array.isArray(response?.query_progress) && response.query_progress.length > 0
-            ? response.query_progress
-            : pendingMessages.map((m, idx) => ({
-                id: m.id,
-                text: m.text,
-                elapsed_ms: idx * 520,
-              }));
+        clearTimers();
 
-        const applyQuerySuccess = () => {
-          updateActiveWorkspace((current) => ({
-            ...current,
-            experimentId: primaryVariant?.experimentId || current?.experimentId || null,
-            phase: "query-complete",
-            submittedQuery: "",
-            response: finalAnswer,
-            responseVisible: true,
-            usedStrategies: primaryVariant?.usedStrategies || [],
-            responseVariants,
-            qualityMetrics:
-              primaryVariant?.qualityMetrics || current?.qualityMetrics || DEFAULT_QUALITY_METRICS,
-            queryActivity: {
-              visible: true,
-              status: "success",
-              messages: activityMessages,
+        updateActiveWorkspace((current) => ({
+          ...current,
+          experimentId: primaryVariant?.experimentId || current?.experimentId || null,
+          phase: "query-complete",
+          submittedQuery: "",
+          response: finalAnswer,
+          responseVisible: true,
+          usedStrategies: primaryVariant?.usedStrategies || [],
+          responseVariants,
+          qualityMetrics:
+            primaryVariant?.qualityMetrics || current?.qualityMetrics || DEFAULT_QUALITY_METRICS,
+          queryActivity: {
+            visible: true,
+            status: "success",
+            messages: activityMessages,
+          },
+          conversation: [
+            ...(current?.conversation || []),
+            {
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              fileId: targetFile.fileId,
+              query: submittedQuery,
+              responseVariants,
+              activityMessages,
             },
-            conversation: [
-              ...(current?.conversation || []),
-              {
-                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                fileId: targetFile.fileId,
-                query: submittedQuery,
-                responseVariants,
-                activityMessages,
-              },
-            ],
-            retrievedChunks: finalChunks.map((chunk, index) => ({
-              title: chunk?.source || targetFile.name || `Chunk ${index + 1}`,
-              page: chunk?.page || index + 1,
-              score: Number(chunk?.relevance_score ?? chunk?.raw_score ?? 0),
-              text: chunk?.content || "",
-            })),
-          }));
-        };
-
-        let cumulative = 0;
-        playbackRows.forEach((row, index) => {
-          const prevElapsed = index > 0 ? Number(playbackRows[index - 1].elapsed_ms) || 0 : 0;
-          const curElapsed = Number(row.elapsed_ms) || 0;
-          const stepDelta =
-            index === 0 ? 0 : Math.max(200, Math.min(9000, curElapsed - prevElapsed));
-          cumulative += stepDelta;
-          const timeoutId = window.setTimeout(() => {
-            updateActiveWorkspace((current) => ({
-              ...current,
-              phase: "query-processing",
-              queryActivity: {
-                visible: true,
-                status: "running",
-                messages: playbackRows
-                  .slice(0, index + 1)
-                  .map((ev) =>
-                    createActivityMessage(String(ev.id || "step"), String(ev.text || "")),
-                  ),
-              },
-            }));
-          }, cumulative);
-          timersRef.current.push(timeoutId);
-        });
-
-        const finalizeDelay = Math.max(cumulative + 220, 400);
-        const finalizeId = window.setTimeout(applyQuerySuccess, finalizeDelay);
-        timersRef.current.push(finalizeId);
+          ],
+          retrievedChunks: finalChunks.map((chunk, index) => ({
+            title: chunk?.source || targetFile.name || `Chunk ${index + 1}`,
+            page: chunk?.page || index + 1,
+            score: Number(chunk?.relevance_score ?? chunk?.raw_score ?? 0),
+            text: chunk?.content || "",
+          })),
+        }));
       } catch (error) {
         clearTimers();
         const message =
@@ -3051,6 +3035,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   );
   const hasSelectedProcessedFile = Boolean(
     selectedWorkspaceFile?.processed || selectedWorkspaceFile?.allowedTechniques,
+  );
+  const queryAgentModeEnabled = Boolean(
+    (activeWorkspace?.queryConfigurations || []).includes("agent"),
   );
   const executionState = activeWorkspace?.execution || {};
   const executionStatusLabel =
@@ -3171,7 +3158,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     status: "idle",
     messages: [],
   };
-  const isChatInputDisabled = !hasSelectedFile || !hasSelectedProcessedFile;
+  const isQueryInFlight = activeWorkspace?.phase === "query-processing";
+  const isChatInputDisabled =
+    !hasSelectedFile || !hasSelectedProcessedFile || isQueryInFlight;
 
   useEffect(() => {
     const prevStatus = previousExecutionStatusRef.current;
@@ -3641,13 +3630,18 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                 <SidebarSection
                   icon={Database}
                   title="Retrieved Strategy"
-                  description="Select multiple retrieval strategies"
+                  description={
+                    queryAgentModeEnabled
+                      ? "Shown for reference while Agent mode is on (use Agent mode in the chat bar)"
+                      : "Select multiple retrieval strategies"
+                  }
                   expanded
                 >
                   <MultiSelectChips
                     options={RETRIEVAL_STRATEGY_OPTIONS}
                     selectedValues={activeWorkspace.retrievalStrategies}
                     onToggle={(value) => toggleWorkspaceValue("retrievalStrategies", value)}
+                    disabled={queryAgentModeEnabled}
                   />
                 </SidebarSection>
 
@@ -3682,11 +3676,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                 <SidebarSection
                   icon={MessageSquare}
                   title="Query Configuration"
-                  description="Toggle query services"
+                  description="Ragas and LangSmith (Agent mode is in the chat bar)"
                   expanded
                 >
                   <MultiSelectChips
-                    options={QUERY_CONFIGURATION_OPTIONS}
+                    options={QUERY_CONFIGURATION_SIDEBAR_OPTIONS}
                     selectedValues={activeWorkspace.queryConfigurations || []}
                     onToggle={(value) => toggleWorkspaceValue("queryConfigurations", value)}
                   />
@@ -3802,29 +3796,36 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                         </span>
                       </div>
                       <div className={styles.uploadFilesSectionActions}>
-                        {ingestionFileReports.length > 0 && (
-                          <button
-                            type="button"
-                            className={styles.reportLogsHeaderButton}
-                            title="View report logs for all files with metrics"
-                            onClick={openIngestionReportLogsPage}
-                          >
-                            Report logs
-                          </button>
-                        )}
-                        {hasSelectedFile && (
-                          <button
-                            type="button"
-                            className={styles.fileSelectionClearButton}
-                            onClick={() =>
-                              updateActiveWorkspace((current) => ({
-                                ...current,
-                                selectedFileId: null,
-                              }))
-                            }
-                          >
-                            Clear selection
-                          </button>
+                        {(ingestionFileReports.length > 0 || hasSelectedFile) && (
+                          <div className={styles.uploadFilesReportLogsRow}>
+                            {ingestionFileReports.length > 0 && (
+                              <button
+                                type="button"
+                                className={styles.reportLogsHeaderButton}
+                                title="View report logs for all files with metrics"
+                                onClick={openIngestionReportLogsPage}
+                              >
+                                Report logs
+                              </button>
+                            )}
+                            {hasSelectedFile && (
+                              <button
+                                type="button"
+                                className={classNames(
+                                  styles.fileSelectionClearButton,
+                                  styles.uploadFilesClearNextToReport,
+                                )}
+                                onClick={() =>
+                                  updateActiveWorkspace((current) => ({
+                                    ...current,
+                                    selectedFileId: null,
+                                  }))
+                                }
+                              >
+                                Clear selection
+                              </button>
+                            )}
+                          </div>
                         )}
                         {activeWorkspace.files.length > 0 && (
                           <>
@@ -3948,7 +3949,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                     <p className={styles.pipelineCtaNote}>Select one file to process.</p>
                   )}
                   {hasSelectedProcessedFile && (
-                    <p className={styles.pipelineCtaNote}>Selected file is already processed.</p>
+                    <p className={styles.pipelineCtaNote}>Selected file is already processed. Start Your Chat.</p>
                   )}
                 </div>
               </div>
@@ -4003,16 +4004,38 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                           Pipeline execution
                         </button>
                       </div>
-                      {uploadExpandedPanel === "files" && ingestionFileReports.length > 0 && (
-                        <button
-                          type="button"
-                          className={styles.reportLogsHeaderButton}
-                          title="View report logs for all files with metrics"
-                          onClick={openIngestionReportLogsPage}
-                        >
-                          Report logs
-                        </button>
-                      )}
+                      {uploadExpandedPanel === "files" &&
+                        (ingestionFileReports.length > 0 || hasSelectedFile) && (
+                          <div className={styles.uploadFilesReportLogsRow}>
+                            {ingestionFileReports.length > 0 && (
+                              <button
+                                type="button"
+                                className={styles.reportLogsHeaderButton}
+                                title="View report logs for all files with metrics"
+                                onClick={openIngestionReportLogsPage}
+                              >
+                                Report logs
+                              </button>
+                            )}
+                            {hasSelectedFile && (
+                              <button
+                                type="button"
+                                className={classNames(
+                                  styles.fileSelectionClearButton,
+                                  styles.uploadFilesClearNextToReport,
+                                )}
+                                onClick={() =>
+                                  updateActiveWorkspace((current) => ({
+                                    ...current,
+                                    selectedFileId: null,
+                                  }))
+                                }
+                              >
+                                Clear selection
+                              </button>
+                            )}
+                          </div>
+                        )}
                       {activeWorkspace.files.some((f) => f?.fileId != null) && (
                       <button
                         type="button"
@@ -4315,15 +4338,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                           </div>
                         );
                       })()}
-                      <div className={styles.ingestionReportModalFooter}>
-                        <button
-                          type="button"
-                          className={styles.devModalBtnSecondary}
-                          onClick={() => setIngestionReportOpen(false)}
-                        >
-                          Close
-                        </button>
-                      </div>
                     </div>
                   </div>
                 )}
@@ -4586,7 +4600,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                 <div className={styles.queryActivityStack}>
                   {queryActivityState.messages.map((message, messageIndex) => (
                     <p
-                      key={message.id}
+                      key={`${message.id}-${messageIndex}`}
                       className={classNames(styles.queryActivityLine, {
                         [styles.queryActivityLineSuccess]: message.tone === "success",
                         [styles.queryActivityLineWarning]: message.tone === "warning",
@@ -4606,6 +4620,21 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
               </div>
               <div className={classNames(styles.queryInputShell, styles.queryInputShellHero)}>
+                <button
+                  type="button"
+                  className={classNames(styles.queryAgentModeBadge, {
+                    [styles.queryAgentModeBadgeActive]: queryAgentModeEnabled,
+                  })}
+                  onClick={() => toggleWorkspaceValue("queryConfigurations", "agent")}
+                  aria-pressed={queryAgentModeEnabled}
+                  title={
+                    queryAgentModeEnabled
+                      ? "Turn off Agent mode (retrieval strategy picks re-enabled)"
+                      : "Turn on Agent mode (meta-retriever; retrieval strategy picks disabled)"
+                  }
+                >
+                  Agent mode
+                </button>
                 <Input
                   ref={queryInputRef}
                   value={activeWorkspace.query}
@@ -4626,9 +4655,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   }}
                   placeholder={
                     isChatInputDisabled
-                      ? hasSelectedFile
-                        ? "Process the selected file to enable chat"
-                        : "Select an uploaded file to enable chat"
+                      ? isQueryInFlight
+                        ? "Waiting for the model to finish…"
+                        : hasSelectedFile
+                          ? "Process the selected file to enable chat"
+                          : "Select an uploaded file to enable chat"
                       : "How can I help you today?"
                   }
                   className={classNames(styles.queryInput, styles.queryInputHero, {
@@ -4639,7 +4670,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                 <Button
                   className={classNames(styles.querySendButton, styles.querySendButtonHero)}
                   onClick={handleStartQuery}
-                  title="Send query"
+                  title={isQueryInFlight ? "Query in progress" : "Send query"}
                   disabled={isChatInputDisabled}
                 >
                   <Send size={16} />

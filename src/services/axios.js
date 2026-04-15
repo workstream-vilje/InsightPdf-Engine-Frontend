@@ -1,4 +1,4 @@
-import { clearAuthSession, redirectToLogin } from "@/services/auth";
+import { clearAuthSession, getAccessToken, redirectToLogin } from "@/services/auth";
 
 /**
  * API base defaults to the local FastAPI backend.
@@ -39,8 +39,7 @@ const withQuery = (path, params = {}) => {
 };
 
 const buildHeaders = (headers = {}) => {
-  const token =
-    typeof window !== "undefined" ? window.localStorage.getItem("access_token") : null;
+  const token = typeof window !== "undefined" ? getAccessToken() : null;
 
   return {
     Accept: "application/json",
@@ -69,10 +68,16 @@ const parseResponse = async (response) => {
       redirectToLogin();
     }
 
+    const detail = isJson ? payload?.detail : null;
+    const detailMessage =
+      typeof detail === "string"
+        ? detail
+        : detail != null
+          ? JSON.stringify(detail)
+          : null;
+
     const message =
-      (Array.isArray(detail) || (detail && typeof detail === "object")
-        ? JSON.stringify(detail)
-        : detail) ||
+      detailMessage ||
       (isJson && (payload?.message || payload?.error)) ||
       response.statusText ||
       "Request failed";
