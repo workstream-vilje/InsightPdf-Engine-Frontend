@@ -5,6 +5,8 @@ export const root = "/";
 // Project ENDPOINTS
 export const createProject = "/create/project";
 export const fetchProjects = "/fetch/projects-all";
+export const deleteProject = (projectId) =>
+  `/project/${projectId}`;
 export const fetchProjectHistory = (projectId) =>
   `/project/${projectId}/history`;
 

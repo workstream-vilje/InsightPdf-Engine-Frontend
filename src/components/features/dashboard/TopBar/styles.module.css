@@ -5,7 +5,9 @@
   height: var(--topbar-height);
   padding: 0 var(--spacing-6) 0 0;
   /* 0 on left to match sidebar 64px centering */
-  background-color: rgba(var(--surface-1), 0.98);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
+    rgba(var(--surface-1), 0.92);
   border-bottom: 1px solid rgb(var(--border));
   backdrop-filter: blur(14px);
   z-index: 100;
@@ -79,8 +81,8 @@
 }
 
 .logoContainer:hover .logoWrapper {
-  border-color: #00d1ff;
-  box-shadow: 0 0 15px rgba(0, 209, 255, 0.25);
+  border-color: rgba(var(--primary), 0.9);
+  box-shadow: 0 0 15px rgba(var(--primary), 0.18);
   transform: translateY(-1px);
 }
 
@@ -146,7 +148,7 @@
 }
 
 .navIcon {
-  color: #00d1ff;
+  color: rgb(var(--primary));
   opacity: 0.6;
 }
 
@@ -170,11 +172,13 @@
 .actionsContainer {
   display: flex;
   align-items: center;
-  background-color: rgba(var(--surface-2), 0.5);
-  border: 1px solid rgba(var(--border), 0.6);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
+    rgba(var(--surface-2), 0.5);
+  border: 1px solid rgba(var(--border), 0.58);
   border-radius: 12px;
   padding: 3px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-soft);
 }
 
 .actionBtn {
@@ -197,8 +201,8 @@
 }
 
 .actionBtnActive {
-  color: #00d1ff !important;
-  background-color: rgba(0, 209, 255, 0.1) !important;
+  color: rgb(var(--primary)) !important;
+  background-color: rgba(var(--primary), 0.16) !important;
 }
 
 .innerDivider {
@@ -216,19 +220,20 @@
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background-color: white !important;
-  color: black !important;
+  background:
+    linear-gradient(135deg, rgba(var(--primary), 0.92), rgba(var(--secondary), 0.88)) !important;
+  color: rgb(var(--primary-foreground)) !important;
   border: none;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 10px rgba(255, 255, 255, 0.25);
+  box-shadow: 0 10px 24px rgba(var(--primary), 0.2);
   margin-left: 2px;
 }
 
 .runShellBtn:hover {
   transform: scale(1.02);
   filter: brightness(1.05);
-  box-shadow: 0 6px 18px rgba(255, 255, 255, 0.35);
+  box-shadow: 0 12px 28px rgba(var(--primary), 0.24);
 }
 
 .runShellBtn:active {
@@ -236,13 +241,13 @@
 }
 
 .runIcon {
-  fill: black;
+  fill: rgb(var(--primary-foreground));
   margin-left: 2px;
 }
 
 .spinIcon {
   animation: spin 1s linear infinite;
-  color: black;
+  color: rgb(var(--primary-foreground));
 }
 
 @keyframes spin {
@@ -251,6 +256,7 @@
 }
 
 .runningBtn {
-  background-color: #00d1ff !important;
-  box-shadow: 0 0 20px rgba(0, 209, 255, 0.4);
+  background:
+    linear-gradient(135deg, rgba(var(--primary), 0.96), rgba(var(--info), 0.96)) !important;
+  box-shadow: 0 0 20px rgba(var(--primary), 0.24);
 }

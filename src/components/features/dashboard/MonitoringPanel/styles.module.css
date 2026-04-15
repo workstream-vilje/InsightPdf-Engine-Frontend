@@ -146,7 +146,7 @@
 }
 
 .sectionIcon {
-  color: #00e5ff;
+  color: rgb(var(--primary));
 }
 
 .sectionTitle {
@@ -160,7 +160,7 @@
 .responseBox {
   background: rgba(var(--surface-3), 0.1);
   border: 1px solid rgba(var(--border), 0.3);
-  border-left: 3px solid #00e5ff;
+  border-left: 3px solid rgb(var(--primary));
   border-radius: var(--radius-lg);
   padding: var(--spacing-5) var(--spacing-6);
   font-size: 0.9rem;
@@ -198,7 +198,7 @@
 }
 
 .chunkIcon {
-  color: #00e5ff;
+  color: rgb(var(--primary));
   opacity: 0.8;
 }
 
@@ -241,7 +241,7 @@
 .similarityValue {
   font-family: var(--font-mono);
   font-size: 1rem;
-  color: #00e5ff;
+  color: rgb(var(--primary));
   font-weight: var(--weight-bold);
 }
 
@@ -343,7 +343,7 @@
   font-family: var(--font-mono);
   font-size: 0.82rem;
   font-weight: var(--weight-bold);
-  color: #00e5ff;
+  color: rgb(var(--primary));
   flex-shrink: 0;
   padding-left: var(--spacing-2);
 }
@@ -357,7 +357,7 @@
 
 .progressBarFill {
   height: 100%;
-  background: linear-gradient(to right, #00e5ff, #00b8d4);
+  background: linear-gradient(to right, rgb(var(--primary)), rgb(var(--info)));
   border-radius: var(--radius-full);
 }
 
@@ -369,7 +369,7 @@
   width: 28px;
   height: 28px;
   background: rgba(var(--surface-3), 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(var(--border), 0.8);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -486,7 +486,7 @@
 
 .miniBarFillRelevance {
   height: 100%;
-  background-color: #10b981;
+  background-color: rgb(var(--success));
 }
 
 
@@ -614,17 +614,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--spacing-8);
+  padding: var(--spacing-10) var(--spacing-8);
 }
 
 .recommendationCard {
   width: 100%;
-  max-width: 500px;
-  background: linear-gradient(135deg, rgba(var(--surface-2), 0.8), rgba(var(--surface-1), 0.8));
-  border: 1px solid rgba(var(--primary), 0.3);
-  border-radius: 16px;
+  max-width: 540px;
+  background:
+    radial-gradient(circle at top right, rgba(var(--secondary), 0.22), transparent 28%),
+    radial-gradient(circle at top left, rgba(var(--primary), 0.16), transparent 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(var(--surface-1), 0.98));
+  border: 1px solid rgba(var(--primary), 0.34);
+  border-radius: 24px;
   padding: var(--spacing-8);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 28px 60px rgba(176, 132, 151, 0.18);
   position: relative;
   overflow: hidden;
 }
@@ -635,90 +638,122 @@
   top: 0;
   left: 0;
   width: 100%;
-  height: 4px;
-  background: linear-gradient(to right, rgb(var(--primary)), rgb(var(--success)));
+  height: 5px;
+  background: linear-gradient(to right, rgba(var(--primary), 0.95), rgba(var(--secondary), 0.8));
+}
+
+.recommendationCard::after {
+  content: '';
+  position: absolute;
+  inset: auto -20% -45% auto;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--primary), 0.14), transparent 70%);
+  pointer-events: none;
 }
 
 .recHeader {
   display: flex;
   align-items: center;
   gap: var(--spacing-4);
-  margin-bottom: var(--spacing-6);
+  margin-bottom: var(--spacing-7);
+}
+
+.recBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-6);
 }
 
 .winnerIcon {
-  color: #fbbf24;
-  filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.4));
+  color: rgb(var(--gold));
+  filter: drop-shadow(0 0 8px rgba(var(--gold), 0.35));
 }
 
 .recTitle {
   font-family: var(--font-mono);
   font-size: 0.7rem;
   font-weight: 800;
-  color: rgb(var(--muted-foreground));
+  color: rgb(var(--primary-foreground));
   text-transform: uppercase;
   letter-spacing: 0.15em;
 }
 
 .recStrategyName {
-  font-size: 1.6rem;
+  font-size: 2rem;
   font-weight: 900;
   color: rgb(var(--foreground));
-  margin-bottom: var(--spacing-2);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
 }
 
 .recConfig {
   font-family: var(--font-mono);
   font-size: 0.72rem;
   color: rgb(var(--muted-foreground));
-  margin-bottom: var(--spacing-8);
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
 }
 
 .recMetricsGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  width: 100%;
   gap: var(--spacing-4);
-  margin-bottom: var(--spacing-8);
-  background-color: rgba(0, 0, 0, 0.2);
-  padding: var(--spacing-5);
-  border-radius: 12px;
-  border: 1px solid rgba(var(--border), 0.5);
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  border: none;
 }
 
 .recMetric {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  min-height: 112px;
+  padding: var(--spacing-5) var(--spacing-4);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(var(--surface-2), 0.86));
+  border: 1px solid rgba(var(--border), 0.62);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(176, 132, 151, 0.08);
 }
 
 .recMetricValue {
   font-family: var(--font-mono);
-  font-size: 1.1rem;
+  font-size: 1.25rem;
   font-weight: 800;
   color: rgb(var(--primary));
+  line-height: 1;
 }
 
 .recMetricLabel {
-  font-size: 0.58rem;
-  color: rgb(var(--muted-foreground));
+  font-size: 0.6rem;
+  color: rgb(var(--primary-foreground));
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  opacity: 0.6;
+  letter-spacing: 0.08em;
+  opacity: 0.72;
 }
 
 .recBadge {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
-  background-color: rgba(var(--success), 0.1);
-  color: rgb(var(--success));
-  padding: 6px 14px;
+  background-color: rgba(var(--primary), 0.1);
+  color: rgb(var(--primary));
+  border: 1px solid rgba(var(--primary), 0.2);
+  padding: 8px 16px;
   border-radius: var(--radius-full);
   font-size: 0.7rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  align-self: flex-start;
 }
 
 .recBadgeCheck {
@@ -764,7 +799,7 @@
   height: 38px;
   padding: 0 var(--spacing-5);
   background-color: rgb(var(--primary));
-  color: white;
+  color: rgb(var(--primary-foreground));
   border-radius: 8px;
   font-size: 0.72rem;
   font-weight: 800;

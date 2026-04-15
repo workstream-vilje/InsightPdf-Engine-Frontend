@@ -2,12 +2,14 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-1);
-  padding: 6px 16px;
-  background-color: rgba(var(--surface-2), 0.3);
-  border: 1px solid rgba(var(--border), 0.5);
+  padding: 8px 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(var(--surface-1), 0.95));
+  border: 1px solid rgba(var(--border), 0.6);
   border-radius: var(--radius-full);
   width: fit-content;
   margin: 0 auto;
+  box-shadow: 0 14px 28px rgba(176, 132, 151, 0.08);
 }
 
 .vertical {
@@ -33,10 +35,11 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  color: rgba(var(--muted-foreground), 0.7);
+  color: rgba(var(--primary), 0.82);
   transition: all 0.3s ease;
   position: relative;
-  border: 1px solid transparent;
+  border: 1px solid rgba(var(--primary), 0.08);
+  background: rgba(var(--primary), 0.03);
 }
 
 .verticalStep {
@@ -55,9 +58,9 @@
 
 .active {
   color: rgb(var(--primary));
-  background-color: rgba(var(--primary), 0.1);
-  border-color: rgba(var(--primary), 0.4);
-  box-shadow: 0 0 10px rgba(var(--primary), 0.2);
+  background-color: rgba(var(--primary), 0.12);
+  border-color: rgba(var(--primary), 0.34);
+  box-shadow: 0 8px 18px rgba(var(--primary), 0.16);
   animation: pulse 2s infinite ease-in-out;
 }
 
@@ -79,11 +82,11 @@
 }
 
 .completed {
-  color: rgb(var(--success));
+  color: rgba(var(--primary), 0.86);
 }
 
 .separator {
-  color: rgb(var(--border));
+  color: rgba(var(--primary), 0.45);
   margin: 0 var(--spacing-1);
 }
 

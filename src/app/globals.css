@@ -7,54 +7,65 @@
 }
 
 :root {
+<<<<<<< HEAD
   --font-geist-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   --font-mono: var(--font-geist-mono);
   /* Core Palette (RGB format for opacity support) */
   --foreground: 255, 255, 255;
   --background: 13, 13, 13;
   /* Deep Dark */
+=======
+  --foreground: 15, 23, 42;
+  --background: 244, 249, 255;
+>>>>>>> 12edc9b0248ca73f33e4fd75449dc5393c438ff7
 
-  --surface-1: 18, 18, 18;  
-  /* Sidebar */
-  --surface-2: 22, 22, 22;
-  /* Cards/Header */
-  --surface-3: 30, 30, 30;
-  /* Hover/Active */
+  --surface-1: 255, 255, 255;
+  --surface-2: 239, 246, 255;
+  --surface-3: 219, 234, 254;
 
-  --primary: 0, 209, 255;
-  /* Cyan Accent */
+  --primary: 37, 99, 235;
   --primary-foreground: 255, 255, 255;
 
-  --secondary: 104, 107, 110;
+  --secondary: 14, 165, 233;
   --secondary-foreground: 255, 255, 255;
 
-  --muted: 33, 33, 33;
-  --muted-foreground: 160, 160, 160;
+  --muted: 226, 232, 240;
+  --muted-foreground: 100, 116, 139;
 
-  --accent: 0, 209, 255;
-  --accent-foreground: 255, 255, 255;
+  --accent: 191, 219, 254;
+  --accent-foreground: 30, 64, 175;
 
-  --destructive: 255, 78, 78;
+  --destructive: 239, 68, 68;
   --destructive-foreground: 255, 255, 255;
 
-  --success: 5, 226, 178;
-  /* Teal-Green */
-  --warning: 255, 170, 0;
-  /* Amber */
-  --border: 45, 45, 45;
-  /* Subtle borders */
-  --input: 45, 45, 45;
-  --ring: 0, 209, 255;
+  --success: 16, 185, 129;
+  --warning: 245, 158, 11;
+  --border: 191, 219, 254;
+  --input: 226, 232, 240;
+  --ring: 59, 130, 246;
 
-  /* Chart Colors */
-  --chart-1: 0, 209, 255;
-  --chart-2: 5, 226, 178;
-  --chart-3: 171, 71, 188;
-  --chart-label: 160, 160, 160;
-  --chart-tooltip-bg: 22, 22, 22;
-  --chart-tooltip-border: 45, 45, 45;
+  --sky: 125, 211, 252;
+  --sky-strong: 56, 189, 248;
+  --gold: 250, 204, 21;
+  --stage-0: 219, 234, 254;
+  --stage-1: 191, 219, 254;
+  --stage-2: 186, 230, 253;
+  --stage-3: 224, 242, 254;
+  --stage-4: 191, 219, 254;
+  --stage-5: 219, 234, 254;
+  --stage-6: 224, 242, 254;
+  --stage-7: 191, 219, 254;
+  --stage-8: 219, 234, 254;
 
+  --chart-1: 37, 99, 235;
+  --chart-2: 14, 165, 233;
+  --chart-3: 125, 211, 252;
+  --chart-label: 71, 85, 105;
+  --chart-tooltip-bg: 255, 255, 255;
+  --chart-tooltip-border: 191, 219, 254;
 
+  --font-sans: var(--font-geist-sans), "Urbanist", sans-serif;
+  --font-mono: var(--font-geist-mono), "SFMono-Regular", Consolas, monospace;
 
   --text-xs: 0.7rem;
   --text-sm: 0.8rem;
@@ -92,8 +103,9 @@
   --radius-xl: 18px;
   --radius-full: 9999px;
 
-  /* Shadows/Glows */
-  --glow-primary: 0 0 15px rgba(0, 209, 255, 0.4);
+  --glow-primary: 0 0 18px rgba(37, 99, 235, 0.18);
+  --shadow-soft: 0 16px 40px rgba(15, 23, 42, 0.08);
+  --shadow-panel: 0 24px 48px rgba(37, 99, 235, 0.14);
 }
 
 * {
@@ -104,9 +116,17 @@
 }
 
 body {
-  background-color: rgb(var(--background));
+  background:
+    radial-gradient(circle at top left, rgba(var(--sky), 0.25), transparent 28%),
+    radial-gradient(circle at top right, rgba(var(--primary), 0.12), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(240, 249, 255, 0.75)),
+    rgb(var(--background));
   color: rgb(var(--foreground));
+<<<<<<< HEAD
   font-family: var(--font-geist-sans), 'Urbanist', sans-serif;
+=======
+  font-family: var(--font-sans);
+>>>>>>> 12edc9b0248ca73f33e4fd75449dc5393c438ff7
   font-size: var(--text-base);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
@@ -125,12 +145,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgb(var(--muted));
+  background: rgba(var(--muted-foreground), 0.26);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--border));
+  background: rgba(var(--primary), 0.45);
 }
 
 /* Utility Classes */
@@ -143,7 +163,7 @@ body {
 }
 
 .text-gradient {
-  background: linear-gradient(135deg, rgb(var(--primary)), rgb(var(--success)));
+  background: linear-gradient(135deg, rgb(var(--primary)), rgb(var(--secondary)));
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
