@@ -1,4 +1,5 @@
 import { buildUrl } from "@/services/axios";
+import { getAccessToken } from "@/services/auth";
 
 /**
  * POST multipart FormData with upload progress (fetch API does not expose upload progress).
@@ -21,8 +22,7 @@ export function postFormDataWithProgress(path, formData, options = {}) {
     xhr.open("POST", url);
     xhr.setRequestHeader("Accept", "application/json");
 
-    const token =
-      typeof window !== "undefined" ? window.localStorage.getItem("access_token") : null;
+    const token = typeof window !== "undefined" ? getAccessToken() : null;
     if (token) {
       xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     }
