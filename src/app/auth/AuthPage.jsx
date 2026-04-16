@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useToast } from "@/components/toast/ToastProvider";
@@ -10,11 +10,13 @@ import styles from "./auth.module.css";
 import { setAuthSession } from "@/services/auth";
 import { ROUTE_PATHS } from "@/utils/routepaths";
 
-const initialSignupForm = { name: "", mail_id: "", password: "" };
+/* ── initial form state ── */
+const initialSignupForm = { name: "", mail_id: "", password: "", confirm_password: "" };
 const initialLoginForm = { mail_id: "", password: "" };
 
 const emailLooksValid = (v) => /\S+@\S+\.\S+/.test(v);
 
+/* ── API helpers ── */
 const authBases = () => {
   const host = process.env.NEXT_PUBLIC_API_HOST || "localhost";
   const port = process.env.NEXT_PUBLIC_API_PORT || "8000";
@@ -38,65 +40,135 @@ const callAuthApi = async (path, payload) => {
       const isJson = ct.includes("application/json");
       const parsed = isJson ? await res.json() : await res.text();
       if (!res.ok) {
-        const msg = (isJson && (parsed?.detail || parsed?.message || parsed?.error)) || res.statusText || "Request failed";
+        const msg =
+          (isJson && (parsed?.detail || parsed?.message || parsed?.error)) ||
+          res.statusText ||
+          "Request failed";
         const err = new Error(msg);
         err.status = res.status;
         throw err;
       }
       return parsed;
-    } catch (e) { lastError = e; }
+    } catch (e) {
+      lastError = e;
+    }
   }
   throw lastError || new Error("Unable to connect to the auth service.");
 };
 
+/* ── Eye icon SVG (no external dep) ── */
+function EyeIcon({ open }) {
+  return open ? (
+    /* eye-open */
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ) : (
+    /* eye-off */
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  );
+}
+
+/* ── Right panel stats ── */
 const RIGHT_STATS = [
   "Smart PDF ingestion & chunking",
   "RAG queries with self-reflection",
   "Experiment analytics & RAGAS scores",
 ];
 
+/* ════════════════════════════════════════════
+   MAIN COMPONENT
+════════════════════════════════════════════ */
 export default function AuthPage({ mode }) {
   const router = useRouter();
   const { isAuthenticated, isAuthInitialized } = useAuth();
   const { showToast } = useToast();
   const isSignup = mode === "signup";
 
+  /* ── routing state ── */
   const [switchingMode, setSwitchingMode] = useState("");
+  const switchTimerRef = useRef(null);
+
+  /* ── form state ── */
   const [signupForm, setSignupForm] = useState(initialSignupForm);
   const [loginForm, setLoginForm] = useState(initialLoginForm);
   const [loading, setLoading] = useState(false);
-  const switchTimerRef = useRef(null);
 
+  /* ── password visibility ── */
+  const [showLoginPw, setShowLoginPw] = useState(false);
+  const [showSignupPw, setShowSignupPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+
+  /* ── confirm-password validation ──
+     Only show error after the user has touched the confirm field
+     AND both fields are non-empty AND they don't match.            */
+  const [confirmTouched, setConfirmTouched] = useState(false);
+  const passwordMismatch =
+    confirmTouched &&
+    signupForm.confirm_password.length > 0 &&
+    signupForm.password !== signupForm.confirm_password;
+
+  /* ── redirect if already authenticated ── */
   useEffect(() => {
     if (isAuthInitialized && isAuthenticated) {
       router.replace(ROUTE_PATHS.WORKSPACE_UPLOAD);
     }
   }, [isAuthInitialized, isAuthenticated, router]);
 
-  useEffect(() => () => { if (switchTimerRef.current) clearTimeout(switchTimerRef.current); }, []);
+  /* ── cleanup timers ── */
+  useEffect(
+    () => () => { if (switchTimerRef.current) clearTimeout(switchTimerRef.current); },
+    [],
+  );
 
+  /* ── reset visibility + confirm state when switching modes ── */
+  useEffect(() => {
+    setShowLoginPw(false);
+    setShowSignupPw(false);
+    setShowConfirmPw(false);
+    setConfirmTouched(false);
+  }, [mode]);
+
+  /* ── mode switch ── */
   const activeMode = switchingMode || mode;
 
-  const handleModeSwitch = (next) => {
+  const handleModeSwitch = useCallback((next) => {
     if (next === mode || switchingMode) return;
     setSwitchingMode(next);
     switchTimerRef.current = setTimeout(() => {
       router.push(next === "signup" ? ROUTE_PATHS.AUTH_SIGNUP : ROUTE_PATHS.AUTH_LOGIN);
     }, 200);
-  };
+  }, [mode, switchingMode, router]);
 
-  const handleSignupChange = (e) => {
+  /* ── form change handlers ── */
+  const handleSignupChange = useCallback((e) => {
     const { name, value } = e.target;
     setSignupForm((c) => ({ ...c, [name]: value }));
-  };
+  }, []);
 
-  const handleLoginChange = (e) => {
+  const handleLoginChange = useCallback((e) => {
     const { name, value } = e.target;
     setLoginForm((c) => ({ ...c, [name]: value }));
-  };
+  }, []);
 
+  /* ── confirm-password blur: mark as touched ── */
+  const handleConfirmBlur = useCallback(() => {
+    if (signupForm.confirm_password.length > 0) {
+      setConfirmTouched(true);
+    }
+  }, [signupForm.confirm_password]);
+
+  /* ── signup submit ── */
   const handleSignup = async (e) => {
     e.preventDefault();
+
     if (!signupForm.name.trim()) {
       showToast({ title: "Sign up", variant: "warning", message: "Enter your name." });
       return;
@@ -109,6 +181,12 @@ export default function AuthPage({ mode }) {
       showToast({ title: "Sign up", variant: "warning", message: "Password must be at least 6 characters." });
       return;
     }
+    if (signupForm.confirm_password !== signupForm.password) {
+      setConfirmTouched(true);
+      showToast({ title: "Sign up", variant: "warning", message: "Passwords do not match." });
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await callAuthApi("/auth/signup", {
@@ -118,6 +196,7 @@ export default function AuthPage({ mode }) {
       });
       showToast({ title: "Sign up", variant: "success", message: res?.message || "Account created. Please log in." });
       setSignupForm(initialSignupForm);
+      setConfirmTouched(false);
       switchTimerRef.current = setTimeout(() => router.push(ROUTE_PATHS.AUTH_LOGIN), 500);
     } catch (err) {
       showToast({ title: "Authentication", variant: "error", message: err?.message || "Unable to sign up." });
@@ -126,8 +205,10 @@ export default function AuthPage({ mode }) {
     }
   };
 
+  /* ── login submit ── */
   const handleLogin = async (e) => {
     e.preventDefault();
+
     if (!emailLooksValid(loginForm.mail_id)) {
       showToast({ title: "Login", variant: "warning", message: "Enter a valid email." });
       return;
@@ -136,6 +217,7 @@ export default function AuthPage({ mode }) {
       showToast({ title: "Login", variant: "warning", message: "Enter your password." });
       return;
     }
+
     setLoading(true);
     try {
       const res = await callAuthApi("/auth/login", {
@@ -158,6 +240,9 @@ export default function AuthPage({ mode }) {
     }
   };
 
+  /* ════════════════════════════════════════════
+     RENDER
+  ════════════════════════════════════════════ */
   return (
     <main className={styles.page}>
 
@@ -165,7 +250,7 @@ export default function AuthPage({ mode }) {
       <section className={styles.leftPane}>
         <div className={styles.leftInner}>
 
-          {/* top bar — always at top */}
+          {/* top bar */}
           <div className={styles.topRow}>
             <Link className={styles.brand} href={ROUTE_PATHS.HOME}>
               <span className={styles.brandMark} />
@@ -176,10 +261,10 @@ export default function AuthPage({ mode }) {
             </Link>
           </div>
 
-          {/* centre zone — toggle + header always at same vertical position */}
+          {/* centre zone */}
           <div className={styles.centreZone}>
 
-            {/* mode toggle — FIXED position, never moves */}
+            {/* mode toggle */}
             <div className={`${styles.modeRow} ${activeMode === "signup" ? styles.modeRowSignup : styles.modeRowLogin}`}>
               <button
                 className={`${styles.modeLink} ${activeMode === "login" ? styles.modeLinkActive : ""}`}
@@ -209,9 +294,11 @@ export default function AuthPage({ mode }) {
               </p>
             </div>
 
-            {/* form — only this part changes height */}
+            {/* ── SIGNUP FORM ── */}
             {isSignup ? (
               <form className={styles.form} onSubmit={handleSignup} key="signup">
+
+                {/* Username */}
                 <label className={styles.field}>
                   <span className={styles.label}>Username</span>
                   <input
@@ -223,6 +310,8 @@ export default function AuthPage({ mode }) {
                     autoComplete="name"
                   />
                 </label>
+
+                {/* Email */}
                 <label className={styles.field}>
                   <span className={styles.label}>Email</span>
                   <input
@@ -235,24 +324,76 @@ export default function AuthPage({ mode }) {
                     autoComplete="email"
                   />
                 </label>
-                <label className={styles.field}>
+
+                {/* Password */}
+                <div className={styles.field}>
                   <span className={styles.label}>Password</span>
-                  <input
-                    className={styles.input}
-                    name="password"
-                    placeholder="Create your password"
-                    type="password"
-                    value={signupForm.password}
-                    onChange={handleSignupChange}
-                    autoComplete="new-password"
-                  />
-                </label>
-                <button className={styles.submitButton} disabled={loading} type="submit">
+                  <div className={styles.inputWrap}>
+                    <input
+                      className={styles.input}
+                      name="password"
+                      placeholder="Create your password"
+                      type={showSignupPw ? "text" : "password"}
+                      value={signupForm.password}
+                      onChange={handleSignupChange}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      className={styles.eyeBtn}
+                      onClick={() => setShowSignupPw((v) => !v)}
+                      tabIndex={-1}
+                      aria-label={showSignupPw ? "Hide password" : "Show password"}
+                    >
+                      <EyeIcon open={showSignupPw} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Confirm Password */}
+                <div className={styles.field}>
+                  <span className={styles.label}>Confirm Password</span>
+                  <div className={styles.inputWrap}>
+                    <input
+                      className={`${styles.input} ${passwordMismatch ? styles.inputError : ""}`}
+                      name="confirm_password"
+                      placeholder="Re-enter your password"
+                      type={showConfirmPw ? "text" : "password"}
+                      value={signupForm.confirm_password}
+                      onChange={handleSignupChange}
+                      onBlur={handleConfirmBlur}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      className={styles.eyeBtn}
+                      onClick={() => setShowConfirmPw((v) => !v)}
+                      tabIndex={-1}
+                      aria-label={showConfirmPw ? "Hide password" : "Show password"}
+                    >
+                      <EyeIcon open={showConfirmPw} />
+                    </button>
+                  </div>
+                  {passwordMismatch && (
+                    <span className={styles.fieldError}>Passwords do not match</span>
+                  )}
+                </div>
+
+                <button
+                  className={styles.submitButton}
+                  disabled={loading || passwordMismatch}
+                  type="submit"
+                >
                   {loading ? "Creating account…" : "Create account"}
                 </button>
               </form>
+
             ) : (
+
+              /* ── LOGIN FORM ── */
               <form className={styles.form} onSubmit={handleLogin} key="login">
+
+                {/* Email */}
                 <label className={styles.field}>
                   <span className={styles.label}>Email</span>
                   <input
@@ -265,24 +406,39 @@ export default function AuthPage({ mode }) {
                     autoComplete="email"
                   />
                 </label>
-                <label className={styles.field}>
+
+                {/* Password */}
+                <div className={styles.field}>
                   <span className={styles.label}>Password</span>
-                  <input
-                    className={styles.input}
-                    name="password"
-                    placeholder="Enter your password"
-                    type="password"
-                    value={loginForm.password}
-                    onChange={handleLoginChange}
-                    autoComplete="current-password"
-                  />
-                </label>
+                  <div className={styles.inputWrap}>
+                    <input
+                      className={styles.input}
+                      name="password"
+                      placeholder="Enter your password"
+                      type={showLoginPw ? "text" : "password"}
+                      value={loginForm.password}
+                      onChange={handleLoginChange}
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      className={styles.eyeBtn}
+                      onClick={() => setShowLoginPw((v) => !v)}
+                      tabIndex={-1}
+                      aria-label={showLoginPw ? "Hide password" : "Show password"}
+                    >
+                      <EyeIcon open={showLoginPw} />
+                    </button>
+                  </div>
+                </div>
+
                 <button className={styles.submitButton} disabled={loading} type="submit">
                   {loading ? "Signing in…" : "Sign In"}
                 </button>
               </form>
             )}
 
+            {/* switch hint */}
             <p className={styles.hint}>
               {isSignup ? (
                 <>Already have an account?{" "}
@@ -303,15 +459,12 @@ export default function AuthPage({ mode }) {
         </div>
       </section>
 
-      {/* ── RIGHT PANE  –  never moves ── */}
+      {/* ── RIGHT PANE ── */}
       <aside className={styles.rightPane}>
         <div className={styles.gradientOverlay} />
-
-        {/* animated floating orbs */}
         <div className={styles.orb + " " + styles.orb1} />
         <div className={styles.orb + " " + styles.orb2} />
         <div className={styles.orb + " " + styles.orb3} />
-
         <div className={styles.heroCopy}>
           <span className={styles.heroEyebrow}>
             <span className={styles.heroEyebrowDot} />

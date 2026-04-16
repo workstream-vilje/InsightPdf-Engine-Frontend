@@ -259,6 +259,63 @@
   box-shadow: 0 0 0 3px rgba(var(--primary), 0.10);
 }
 
+/* ── password field wrapper (input + eye button) ── */
+.inputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.inputWrap .input {
+  width: 100%;
+  /* leave room for the eye button */
+  padding-right: 42px;
+}
+
+/* eye toggle button */
+.eyeBtn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: rgba(var(--foreground), 0.40);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 4px;
+  transition: color 150ms ease;
+  /* never steal focus from the input */
+  outline: none;
+}
+
+.eyeBtn:hover {
+  color: rgba(var(--foreground), 0.75);
+}
+
+/* error state on input */
+.inputError {
+  border-color: rgba(var(--destructive), 0.65) !important;
+  background: rgba(var(--destructive), 0.04) !important;
+  box-shadow: 0 0 0 3px rgba(var(--destructive), 0.08) !important;
+}
+
+/* inline error message below field */
+.fieldError {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgb(var(--destructive));
+  line-height: 1.4;
+}
+
 /* ─────────────────────────────────────────────
    SUBMIT BUTTON
 ───────────────────────────────────────────── */

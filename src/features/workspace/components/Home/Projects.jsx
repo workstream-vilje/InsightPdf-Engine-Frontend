@@ -294,6 +294,59 @@ function UploadPipelineOutputCard({
   );
 }
 
+/** Lightweight inline markdown → React nodes (no library).
+ *  Handles: **bold**, *italic*, numbered lists, line breaks.
+ */
+function renderMarkdown(text) {
+  if (!text) return null;
+  const lines = String(text).split("\n");
+  const nodes = [];
+  let key = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      nodes.push(<br key={key++} />);
+      continue;
+    }
+
+    // Parse inline bold/italic within a line
+    const parseInline = (str) => {
+      const parts = [];
+      // split on **bold** or *italic*
+      const regex = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
+      let last = 0;
+      let m;
+      let k = 0;
+      while ((m = regex.exec(str)) !== null) {
+        if (m.index > last) parts.push(str.slice(last, m.index));
+        if (m[0].startsWith("**")) {
+          parts.push(<strong key={k++}>{m[2]}</strong>);
+        } else {
+          parts.push(<em key={k++}>{m[3]}</em>);
+        }
+        last = m.index + m[0].length;
+      }
+      if (last < str.length) parts.push(str.slice(last));
+      return parts;
+    };
+
+    // Numbered list item: "1. text" or "1) text"
+    const listMatch = trimmed.match(/^(\d+)[.)]\s+(.+)$/);
+    if (listMatch) {
+      nodes.push(
+        <div key={key++} className={styles.aiResponseListItem}>
+          <span className={styles.aiResponseListNum}>{listMatch[1]}.</span>
+          <span>{parseInline(listMatch[2])}</span>
+        </div>
+      );
+    } else {
+      nodes.push(<span key={key++} className={styles.aiResponseLine}>{parseInline(trimmed)}</span>);
+    }
+  }
+  return nodes;
+}
+
 const AppWorkspaceRail = ({
   onProjects,
   onSettings,
@@ -1048,7 +1101,104 @@ const createActivityMessage = (id, text, tone = "info") => ({
   id,
   text,
   tone,
+  raw: text,
 });
+
+/* ─────────────────────────────────────────────
+   Transform raw backend log strings into
+   human-readable, friendly progress messages.
+   Returns { label, phase, tone }
+───────────────────────────────────────────── */
+const PHASE_UNDERSTAND = "understand";
+const PHASE_SEARCH = "search";
+const PHASE_GENERATE = "generate";
+const PHASE_DONE = "done";
+
+const transformProgressMessage = (raw) => {
+  const s = String(raw || "").toLowerCase().trim();
+
+  /* ── Understanding phase ── */
+  if (s.includes("starting rag query") || s.includes("start query")) {
+    return { label: "Understanding your question…", phase: PHASE_UNDERSTAND, tone: "info" };
+  }
+  if (s.includes("embedding the question") || s.includes("embed query") || s.includes("embedding query")) {
+    return { label: "Analyzing your question to find the best matches…", phase: PHASE_UNDERSTAND, tone: "info" };
+  }
+
+  /* ── Search phase ── */
+  if (s.includes("searching") || s.includes("searching faiss") || s.includes("searching chroma") || s.includes("searching pgvector") || s.includes("searching pinecone")) {
+    return { label: "Searching through your documents…", phase: PHASE_SEARCH, tone: "info" };
+  }
+  if (/retrieved\s+0\s+chunk/.test(s) || s.includes("no relevant chunks")) {
+    return { label: "No strong matches yet — trying a deeper search…", phase: PHASE_SEARCH, tone: "warning" };
+  }
+  const chunkMatch = s.match(/retrieved\s+(\d+)\s+chunk/);
+  if (chunkMatch) {
+    const n = chunkMatch[1];
+    return { label: `Found ${n} relevant passage${n === "1" ? "" : "s"} from your document.`, phase: PHASE_SEARCH, tone: "info" };
+  }
+  if (s.includes("retrying") || s.includes("retry") || s.includes("higher top_k") || s.includes("increasing top_k")) {
+    return { label: "Trying a deeper search for better results…", phase: PHASE_SEARCH, tone: "warning" };
+  }
+  if (s.includes("max retries") || s.includes("max retry")) {
+    return { label: "Could not find strong matches — generating the best possible answer…", phase: PHASE_GENERATE, tone: "warning" };
+  }
+  if (s.includes("retrieval") && s.includes("finish")) {
+    return { label: "Document search complete.", phase: PHASE_SEARCH, tone: "info" };
+  }
+
+  /* ── Generation phase ── */
+  if (s.includes("generating") || s.includes("llm") || s.includes("language model") || s.includes("generating answer")) {
+    return { label: "Generating your answer…", phase: PHASE_GENERATE, tone: "info" };
+  }
+  if (s.includes("validat") && !s.includes("writing")) {
+    return { label: "Reviewing the answer for accuracy…", phase: PHASE_GENERATE, tone: "info" };
+  }
+  if (s.includes("reflection") && s.includes("accepted")) {
+    return { label: "Answer looks good — finalizing…", phase: PHASE_GENERATE, tone: "success" };
+  }
+  if (s.includes("reflection") && (s.includes("rejected") || s.includes("retry"))) {
+    return { label: "Improving the answer quality…", phase: PHASE_GENERATE, tone: "warning" };
+  }
+  if (s.includes("generation") && s.includes("retry")) {
+    return { label: "Refining the answer with better context…", phase: PHASE_GENERATE, tone: "info" };
+  }
+
+  /* ── Done phase ── */
+  if (s.includes("writing experiment") || s.includes("saving") || s.includes("experiment log")) {
+    return { label: "Saving your results…", phase: PHASE_DONE, tone: "info" };
+  }
+  if (s.includes("completed") || s.includes("finished") || s.includes("done")) {
+    return { label: "All done!", phase: PHASE_DONE, tone: "success" };
+  }
+
+  /* ── Suppress purely technical noise ── */
+  if (
+    s.includes("token") ||
+    s.includes("experiment_id") ||
+    s.includes("experiment id") ||
+    s.includes("agent trace") ||
+    s.includes("validator output") ||
+    /\[faiss\]|\[chroma\]|\[pgvector\]|\[pinecone\]/i.test(raw) ||
+    /project_id=\d+/.test(s) ||
+    /file_id=\d+/.test(s)
+  ) {
+    return null; // suppress — don't show this line
+  }
+
+  /* ── Fallback: clean up and show ── */
+  // Strip technical prefixes like "[faiss]", "[QUERY]", "project_id=6"
+  let cleaned = raw
+    .replace(/\[faiss\]|\[chroma\]|\[pgvector\]|\[pinecone\]/gi, "")
+    .replace(/project_id=\d+,?\s*/gi, "")
+    .replace(/file_id=\d+,?\s*/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  if (!cleaned) return null;
+  // Capitalise first letter
+  cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  return { label: cleaned, phase: PHASE_SEARCH, tone: "info" };
+};
 
 const buildQueryActivityMessages = ({ response, targetFile }) => {
   const results =
@@ -1205,7 +1355,7 @@ const buildSharedPipelineConfig = (workspace) => {
     },
     llm: {
       provider: "openai",
-      model: "gpt-4o-mini",
+      model: workspace?.selectedLlmModel || "gpt-4o-mini",
       temperature: 0.2,
     },
     self_reflection: {
@@ -1729,6 +1879,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const [uploadRightActiveSection, setUploadRightActiveSection] = useState("pipeline");
   const [uploadSidebarControlOpen, setUploadSidebarControlOpen] = useState(false);
   const [hasUnreadPipelineSuccess, setHasUnreadPipelineSuccess] = useState(false);
+  const [pipelineSuccessModalOpen, setPipelineSuccessModalOpen] = useState(false);
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const modelDropdownRef = useRef(null);
   const uploadSidebarControlRef = useRef(null);
   const previousExecutionStatusRef = useRef("idle");
   const [chatPanelOffset, setChatPanelOffset] = useState(420);
@@ -1861,6 +2014,18 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [uploadSidebarControlOpen]);
+
+  /* close model dropdown on outside click */
+  useEffect(() => {
+    if (!modelDropdownOpen) return undefined;
+    const onPointerDown = (event) => {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target)) {
+        setModelDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [modelDropdownOpen]);
 
   useEffect(() => {
     setChatGreeting(getGreeting());
@@ -2828,6 +2993,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const handleStartQuery = () => {
     if (!activeWorkspace?.query.trim() || !activeProjectId) return;
     const submittedQuery = activeWorkspace.query.trim();
+
+    // Guard: file must be processed before querying
+    if (!hasSelectedProcessedFile) {
+      showToast({
+        title: "Query",
+        variant: "warning",
+        message: "Process the selected file first before asking a question.",
+      });
+      return;
+    }
     const agentModeOn = (activeWorkspace?.queryConfigurations || []).includes("agent");
     const hasRetrievalSelection =
       Array.isArray(activeWorkspace?.retrievalStrategies) &&
@@ -2913,18 +3088,17 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         const response = await queryApi.runQuery(payload, {
           onProgress: ({ id, message }) => {
             progressSeq += 1;
-            const lineId = `${String(id || "step")}-${progressSeq}`;
+            const transformed = transformProgressMessage(String(message || ""));
+            if (!transformed) return; // suppress technical noise
             updateActiveWorkspace((current) => {
-              if (current.phase !== "query-processing") {
-                return current;
-              }
-              const prev = current.queryActivity?.messages || [];
+              if (current.phase !== "query-processing") return current;
               return {
                 ...current,
                 queryActivity: {
                   visible: true,
                   status: "running",
-                  messages: [...prev, createActivityMessage(lineId, String(message || ""))],
+                  // Always a single-item array — replace, never append
+                  messages: [createActivityMessage(`step-${progressSeq}`, transformed.label, transformed.tone)],
                 },
               };
             });
@@ -3184,8 +3358,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     messages: [],
   };
   const isQueryInFlight = activeWorkspace?.phase === "query-processing";
-  const isChatInputDisabled =
-    !hasSelectedFile || !hasSelectedProcessedFile || isQueryInFlight;
+  const isChatInputDisabled = !hasSelectedFile || isQueryInFlight;
 
   useEffect(() => {
     const prevStatus = previousExecutionStatusRef.current;
@@ -3224,20 +3397,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         icon: "notifications",
         pulse: hasUnreadPipelineSuccess,
         onClick: () => {
-          setHasUnreadPipelineSuccess(false);
           if (hasUnreadPipelineSuccess) {
-            showToast({
-              title: "Notifications",
-              variant: "success",
-              message: "Pipeline completed successfully.",
-            });
-            return;
+            setHasUnreadPipelineSuccess(false);
+            setPipelineSuccessModalOpen(true);
           }
-          showToast({
-            title: "Notifications",
-            variant: "info",
-            message: "No new notifications",
-          });
+          // no-op when there's nothing new — don't show any toast
         },
       },
       {
@@ -3263,7 +3427,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
             : router.push(ROUTE_PATHS.METRICS),
       },
     ],
-    [activeProject, hasUnreadPipelineSuccess, router, showToast],
+    [activeProject, hasUnreadPipelineSuccess, router, setPipelineSuccessModalOpen],
   );
 
   const topNavbarBreadcrumbItems = useMemo(() => {
@@ -3562,6 +3726,83 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         breadcrumbItems={topNavbarBreadcrumbItems}
         endSlot={topNavbarEndSlot}
       />
+
+      {/* ── Pipeline success notification modal ── */}
+      <AnimatePresence>
+        {pipelineSuccessModalOpen && (
+          <motion.div
+            className={styles.pipelineNotifOverlay}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            onClick={() => setPipelineSuccessModalOpen(false)}
+          >
+            <motion.div
+              className={styles.pipelineNotifCard}
+              initial={{ opacity: 0, scale: 0.92, y: -16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: -16 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* close */}
+              <button
+                type="button"
+                className={styles.pipelineNotifClose}
+                onClick={() => setPipelineSuccessModalOpen(false)}
+                aria-label="Close notification"
+              >
+                <X size={16} />
+              </button>
+
+              {/* icon */}
+              <div className={styles.pipelineNotifIcon}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+              </div>
+
+              {/* text */}
+              <h3 className={styles.pipelineNotifTitle}>Pipeline completed</h3>
+              <p className={styles.pipelineNotifDesc}>
+                Your document has been processed successfully — chunked, embedded, and stored in the vector database. It&apos;s ready to query.
+              </p>
+
+              {/* file name if available */}
+              {activeWorkspace?.execution?.fileName && (
+                <div className={styles.pipelineNotifFile}>
+                  <FileText size={13} />
+                  <span>{activeWorkspace.execution.fileName}</span>
+                </div>
+              )}
+
+              {/* actions */}
+              <div className={styles.pipelineNotifActions}>
+                <button
+                  type="button"
+                  className={styles.pipelineNotifAskBtn}
+                  onClick={() => {
+                    setPipelineSuccessModalOpen(false);
+                    router.push(workspaceQueryUrl(activeProjectId));
+                  }}
+                >
+                  <MessageSquare size={15} />
+                  Ask Query
+                </button>
+                <button
+                  type="button"
+                  className={styles.pipelineNotifDismissBtn}
+                  onClick={() => setPipelineSuccessModalOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className={styles.workspaceShell}>
         <AppWorkspaceRail
           onProjects={handleRailProjects}
@@ -3739,13 +3980,28 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           })}
         >
           {workspaceMode === "query" && (
-            <header className={styles.workspaceHeader}>
-              <div className={styles.workspaceHeaderContent}>
-                <h1 className={styles.workspaceTitle}>
-                  {activeProject.name}
-                  <span className={styles.workspaceCategory}>{activeProject.category}</span>
-                </h1>
-              </div>
+            <header className={styles.chatContextBar}>
+              <span className={styles.chatContextProject}>{activeProject.name}</span>
+              {activeProject.projectCode && (
+                <span className={styles.chatContextCode}>{activeProject.projectCode}</span>
+              )}
+              {activeProject.category && (
+                <>
+                  <span className={styles.chatContextSep} aria-hidden>·</span>
+                  <span className={styles.chatContextCategory}>{activeProject.category}</span>
+                </>
+              )}
+              {hasSelectedFile && (
+                <>
+                  <span className={styles.chatContextSep} aria-hidden>·</span>
+                  <span className={styles.chatContextFilePill}>
+                    <span className={styles.chatContextFileDot} />
+                    {activeWorkspace.files.find(
+                      (f) => String(f.fileId) === activeWorkspaceFileId,
+                    )?.name ?? "Document"}
+                  </span>
+                </>
+              )}
             </header>
           )}
 
@@ -4576,17 +4832,17 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
               {workspaceMode === "query" && (
                 <div className={styles.chatPanelShell}>
+
+                  {/* ── Welcome subtitle ── */}
                   {showChatWelcome && (
                     <div className={styles.chatWelcomeShell}>
-                      <div className={styles.chatWelcomeHeadingBlock}>
-                        <h2 className={styles.chatWelcomeTitle}>{chatGreeting}</h2>
-                        <p className={styles.chatWelcomeSubtitle}>
-                          Ask questions, summarize uploaded files, or explore ideas from your document set.
-                        </p>
-                      </div>
+                      <p className={styles.chatWelcomeSubtitle}>
+                        Ask questions, summarize uploaded files, or explore ideas from your document set.
+                      </p>
                     </div>
                   )}
 
+                  {/* ── Conversation area ── */}
                   <div className={styles.workspaceCenterStage}>
                     {activeWorkspace.visibleLines.length > 0 && (
                       <div className={styles.statusList}>
@@ -4596,84 +4852,103 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                       </div>
                     )}
 
-                    {(activeWorkspace.conversation || []).map((entry) => (
-                      <div key={entry.id} className={styles.conversationBlock}>
-                        <div className={styles.queryLine}>{entry.query}</div>
-                        {(entry.responseVariants || []).map((variant, index) => (
-                          <motion.div
-                            key={`${entry.id}-${variant.db}-${variant.experimentId || index}`}
-                            initial={{ opacity: 0, y: 16 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className={styles.responseBlock}
-                          >
-                            <div className={styles.responseTextBlock}>
-                              <div className={styles.chatMessageLabel}>
-                                Response-{index + 1}
-                              </div>
-                              <p>{variant.response}</p>
-                              {variant.usedStrategies?.length > 0 && (
-                                <button
-                                  type="button"
-                                  className={styles.techniqueButton}
-                                  onClick={() =>
-                                    setTechniqueOverlay({
-                                      title: `Response-${index + 1}`,
-                                      strategies: variant.usedStrategies,
-                                    })
-                                  }
-                                >
-                                  Techniques used
-                                </button>
-                              )}
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
-                    ))}
+                    {(activeWorkspace.conversation || []).map((entry) => {
+                      // Extract timestamp from entry.id (format: "timestamp-randomstring")
+                      const entryTs = Number(String(entry.id).split("-")[0]);
+                      const entryTime = Number.isFinite(entryTs) && entryTs > 0
+                        ? new Date(entryTs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                        : null;
 
+                      return (
+                        <div key={entry.id} className={styles.conversationBlock}>
+
+                          {/* User bubble with timestamp */}
+                          <div className={styles.userMessageRow}>
+                            <div className={styles.userBubbleWrap}>
+                              {entryTime && (
+                                <span className={styles.userBubbleTime}>{entryTime}</span>
+                              )}
+                              <div className={styles.userBubble}>{entry.query}</div>
+                            </div>
+                          </div>
+
+                          {/* AI responses — with markdown rendering */}
+                          {(entry.responseVariants || []).map((variant, index) => (
+                            <motion.div
+                              key={`${entry.id}-${variant.db}-${variant.experimentId || index}`}
+                              initial={{ opacity: 0, y: 12 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                              className={styles.aiMessageRow}
+                            >
+                              <span className={styles.aiAvatarDot} aria-hidden />
+                              <div className={styles.aiResponseCard}>
+                                <div className={styles.aiResponseText}>
+                                  {renderMarkdown(variant.response)}
+                                </div>
+                                {variant.usedStrategies?.length > 0 && (
+                                  <button
+                                    type="button"
+                                    className={styles.techniqueChip}
+                                    onClick={() =>
+                                      setTechniqueOverlay({
+                                        title: `Response-${index + 1}`,
+                                        strategies: variant.usedStrategies,
+                                      })
+                                    }
+                                  >
+                                    Techniques used ↗
+                                  </button>
+                                )}
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      );
+                    })}
+
+                    {/* In-flight user bubble */}
                     {activeWorkspace.submittedQuery && (
-                      <div className={styles.queryLine}>{activeWorkspace.submittedQuery}</div>
+                      <div className={styles.userMessageRow}>
+                        <div className={styles.userBubble}>{activeWorkspace.submittedQuery}</div>
+                      </div>
                     )}
 
+                    {/* Processing glass card */}
                     {queryActivityState.visible && activeWorkspace.phase === "query-processing" && (
-                      <div className={styles.queryActivityStack}>
-                        {queryActivityState.messages.map((message, messageIndex) => (
-                          <p
-                            key={`${message.id}-${messageIndex}`}
-                            className={classNames(styles.queryActivityLine, {
-                              [styles.queryActivityLineSuccess]: message.tone === "success",
-                              [styles.queryActivityLineWarning]: message.tone === "warning",
-                              [styles.queryActivityLineError]: message.tone === "error",
-                            })}
-                          >
-                            {message.text}
-                          </p>
-                        ))}
+                      <div className={styles.aiMessageRow}>
+                        <span className={styles.aiAvatarDot} aria-hidden />
+                        <div className={styles.queryActivityStack}>
+                          <div className={styles.queryActivityGlass}>
+                            <span className={styles.queryActivityGlassShimmer} aria-hidden />
+                            <p className={styles.queryActivityLabel}>
+                              Analyzing your documents
+                              <span className={styles.queryActivityLabelDot} />
+                              <span className={styles.queryActivityLabelDot} />
+                              <span className={styles.queryActivityLabelDot} />
+                            </p>
+                            <p
+                              key={queryActivityState.messages[0]?.id ?? "idle"}
+                              className={classNames(styles.queryActivityLiveText, {
+                                [styles.queryActivityLiveTextWarning]:
+                                  queryActivityState.messages[0]?.tone === "warning",
+                                [styles.queryActivityLiveTextError]:
+                                  queryActivityState.messages[0]?.tone === "error",
+                              })}
+                            >
+                              {queryActivityState.messages[0]?.text ?? "Starting analysis…"}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
 
+                  {/* ── Input dock ── */}
                   <div className={styles.queryDock}>
-                    <div className={styles.queryDockHeader}>
-                      <div className={styles.queryDockLabel}>Chat input</div>
+                    <div className={styles.chatInputBar}>
 
-                    </div>
-                    <div className={classNames(styles.queryInputShell, styles.queryInputShellHero)}>
-                      <button
-                        type="button"
-                        className={classNames(styles.queryAgentModeBadge, {
-                          [styles.queryAgentModeBadgeActive]: queryAgentModeEnabled,
-                        })}
-                        onClick={() => toggleWorkspaceValue("queryConfigurations", "agent")}
-                        aria-pressed={queryAgentModeEnabled}
-                        title={
-                          queryAgentModeEnabled
-                            ? "Turn off Agent mode (retrieval strategy picks re-enabled)"
-                            : "Turn on Agent mode (meta-retriever; retrieval strategy picks disabled)"
-                        }
-                      >
-                        Agent mode
-                      </button>
+                      {/* Text input — takes all available space */}
                       <Input
                         ref={queryInputRef}
                         value={activeWorkspace.query}
@@ -4685,27 +4960,109 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                           }))
                         }
                         onKeyDown={(event) => {
-                          if (isChatInputDisabled) {
-                            return;
-                          }
-                          if (event.key === "Enter") {
-                            handleStartQuery();
-                          }
+                          if (isChatInputDisabled) return;
+                          if (event.key === "Enter") handleStartQuery();
                         }}
                         placeholder={
                           isChatInputDisabled
                             ? isQueryInFlight
                               ? "Waiting for the model to finish…"
-                              : hasSelectedFile
-                                ? "Process the selected file to enable chat"
-                                : "Select an uploaded file to enable chat"
-                            : "How can I help you today?"
+                              : "Select an uploaded file to enable chat"
+                            : !hasSelectedProcessedFile
+                              ? "Process the selected file first, then ask your question…"
+                              : "Ask anything about your document…"
                         }
                         className={classNames(styles.queryInput, styles.queryInputHero, {
                           [styles.queryInputDisabled]: isChatInputDisabled,
                         })}
                       />
 
+                      {/* Divider */}
+                      <span className={styles.chatInputDivider} aria-hidden />
+
+                      {/* Model selector dropdown — right side */}
+                      <div className={styles.modelDropdownWrap} ref={modelDropdownRef}>
+                        <button
+                          type="button"
+                          className={styles.modelSelectorBtn}
+                          onClick={() => setModelDropdownOpen((v) => !v)}
+                          title="Select model"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" />
+                          </svg>
+                          <span>{activeWorkspace.selectedLlmModel ?? "gpt-4o-mini"}</span>
+                          <svg
+                            width="10" height="10" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                            aria-hidden
+                            style={{ transform: modelDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 180ms ease" }}
+                          >
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+
+                        {modelDropdownOpen && (
+                          <div className={styles.modelDropdownMenu}>
+                            {[
+                              { value: "gpt-4o-mini", label: "GPT-4o mini", desc: "Fast & efficient" },
+                              { value: "gpt-4.1", label: "GPT-4.1", desc: "Latest generation" },
+                              { value: "gpt-4o", label: "GPT-4o", desc: "Most capable" },
+                            ].map((m) => (
+                              <button
+                                key={m.value}
+                                type="button"
+                                className={classNames(styles.modelDropdownItem, {
+                                  [styles.modelDropdownItemActive]:
+                                    (activeWorkspace.selectedLlmModel ?? "gpt-4o-mini") === m.value,
+                                })}
+                                onClick={() => {
+                                  updateActiveWorkspace((current) => ({
+                                    ...current,
+                                    selectedLlmModel: m.value,
+                                  }));
+                                  setModelDropdownOpen(false);
+                                }}
+                              >
+                                <span className={styles.modelDropdownItemLabel}>{m.label}</span>
+                                <span className={styles.modelDropdownItemDesc}>{m.desc}</span>
+                                {(activeWorkspace.selectedLlmModel ?? "gpt-4o-mini") === m.value && (
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={styles.modelDropdownItemCheck} aria-hidden>
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Divider */}
+                      <span className={styles.chatInputDivider} aria-hidden />
+
+                      {/* Agent toggle — right side */}
+                      <button
+                        type="button"
+                        className={styles.agentToggleWrap}
+                        onClick={() => toggleWorkspaceValue("queryConfigurations", "agent")}
+                        aria-pressed={queryAgentModeEnabled}
+                        title={queryAgentModeEnabled ? "Turn off Agent mode" : "Turn on Agent mode"}
+                      >
+                        <span className={styles.agentToggleLabel}>Agent</span>
+                        <span className={classNames(styles.agentToggleTrack, {
+                          [styles.agentToggleTrackOn]: queryAgentModeEnabled,
+                        })}>
+                          <span className={classNames(styles.agentToggleThumb, {
+                            [styles.agentToggleThumbOn]: queryAgentModeEnabled,
+                          })} />
+                        </span>
+                      </button>
+
+                      {/* Divider */}
+                      <span className={styles.chatInputDivider} aria-hidden />
+
+                      {/* Send button */}
                       <Button
                         className={classNames(styles.querySendButton, styles.querySendButtonHero)}
                         onClick={handleStartQuery}
@@ -4716,23 +5073,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                       </Button>
                     </div>
                   </div>
-
-                  {hasSelectedFile && (
-                    <div className={styles.querySelectedFileMeta}>
-                      <span className={styles.querySelectedFileCode}>
-                        {activeWorkspace.files.find(
-                          (file) => String(file.fileId) === activeWorkspaceFileId,
-                        )?.fileCode || "FILE"}
-                      </span>
-                      <span className={styles.querySelectedFileName}>
-                        {
-                          activeWorkspace.files.find(
-                            (file) => String(file.fileId) === activeWorkspaceFileId,
-                          )?.name
-                        }
-                      </span>
-                    </div>
-                  )}
 
                 </div>
               )}
