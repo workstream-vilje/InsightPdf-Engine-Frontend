@@ -543,3 +543,136 @@
     flex: 1 1 auto;
   }
 }
+/* Add this to make utility bar filters display in a single row */
+.utilityBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  background: #ffffff;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 2px solid #0a0a0a;
+  box-shadow: 4px 4px 0 rgba(10, 10, 10, 0.12);
+  flex-shrink: 0;
+  flex-wrap: nowrap; /* Prevent wrapping to multiple lines */
+  overflow-x: auto; /* Allow horizontal scroll if needed on very narrow screens */
+  gap: 12px;
+}
+
+/* Ensure utilityLeft stays in one line */
+.utilityLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap; /* Keep search and project select in one row */
+  flex: 1;
+  min-width: 0;
+}
+
+/* Adjust search box to not take too much space */
+.searchBox {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0; /* Prevent shrinking */
+}
+
+.searchInput {
+  height: 36px;
+  width: 220px; /* Fixed width instead of min */
+  background: #ffffff;
+  border: 2px solid #0a0a0a;
+  border-radius: 6px;
+  padding: 0 12px 0 34px;
+  font-size: 0.78rem;
+  color: #0a0a0a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Project select with fixed width */
+.projectSelect {
+  height: 36px;
+  width: 200px; /* Fixed width */
+  padding: 0 10px;
+  background: #ffffff;
+  border: 2px solid #0a0a0a;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #0a0a0a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Optional: Add a wrapper for the right side if needed */
+.utilityRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* Ensure page header has proper spacing */
+.pageHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 20px;
+  margin-bottom: 18px;
+  flex-shrink: 0;
+}
+
+/* Make sure buttons don't wrap */
+.pageHeaderLeft {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 18px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+/* Responsive behavior - on smaller screens, allow horizontal scroll */
+@media (max-width: 900px) {
+  .utilityBar {
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  
+  .utilityLeft {
+    min-width: min-content;
+  }
+  
+  .searchInput {
+    width: 180px;
+  }
+  
+  .projectSelect {
+    width: 160px;
+  }
+}
+
+/* For very small screens, reduce padding */
+@media (max-width: 768px) {
+  .logsShell {
+    padding: 16px 18px 20px;
+  }
+  
+  .utilityBar {
+    padding: 10px 12px;
+  }
+  
+  .searchInput {
+    width: 150px;
+  }
+  
+  .projectSelect {
+    width: 140px;
+  }
+}

@@ -61,6 +61,7 @@ export const createWorkspaceState = () => ({
   responseVisible: false,
   responseVariants: [],
   experimentId: null,
+  agentReport: null,
   visibleLines: [],
   activeRightSection: "response",
   queryActivity: {
@@ -99,6 +100,7 @@ export const createWorkspaceState = () => ({
   conversation: [],
   usedStrategies: [],
   allowedTechniques: null,
+  selectedLlmModel: "gpt-4o-mini",
 });
 
 export const INITIAL_PROJECTS = [];

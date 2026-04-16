@@ -118,11 +118,7 @@
 }
 
 body {
-  background:
-    radial-gradient(circle at top left, rgba(var(--sky), 0.25), transparent 28%),
-    radial-gradient(circle at top right, rgba(var(--primary), 0.12), transparent 24%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(240, 249, 255, 0.75)),
-    rgb(var(--background));
+  background: rgb(var(--background));
   color: rgb(var(--foreground));
   font-family: var(--font-sans);
   font-size: var(--text-base);

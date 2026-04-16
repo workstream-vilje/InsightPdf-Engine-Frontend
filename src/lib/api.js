@@ -11,3 +11,9 @@ export async function getExperimentLogs(experimentId) {
   const data = await httpClient.get(path);
   return Array.isArray(data?.logs) ? data.logs : [];
 }
+
+export async function getExperimentAgentReportById(experimentId) {
+  const path = `/experiments/${encodeURIComponent(String(experimentId))}/agent-report`;
+  const data = await httpClient.get(path);
+  return data.report;
+}

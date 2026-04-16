@@ -56,7 +56,7 @@ import {
   getScopedStorageKey,
   getStoredUserProfile,
 } from "@/services/auth";
-import { getExperimentPerformanceById } from "@/lib/api";
+import { getExperimentAgentReportById, getExperimentPerformanceById } from "@/lib/api";
 import {
   DATA_EXTRACTION_OPTIONS,
   DEFAULT_QUALITY_METRICS,
@@ -294,6 +294,59 @@ function UploadPipelineOutputCard({
   );
 }
 
+/** Lightweight inline markdown → React nodes (no library).
+ *  Handles: **bold**, *italic*, numbered lists, line breaks.
+ */
+function renderMarkdown(text) {
+  if (!text) return null;
+  const lines = String(text).split("\n");
+  const nodes = [];
+  let key = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      nodes.push(<br key={key++} />);
+      continue;
+    }
+
+    // Parse inline bold/italic within a line
+    const parseInline = (str) => {
+      const parts = [];
+      // split on **bold** or *italic*
+      const regex = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
+      let last = 0;
+      let m;
+      let k = 0;
+      while ((m = regex.exec(str)) !== null) {
+        if (m.index > last) parts.push(str.slice(last, m.index));
+        if (m[0].startsWith("**")) {
+          parts.push(<strong key={k++}>{m[2]}</strong>);
+        } else {
+          parts.push(<em key={k++}>{m[3]}</em>);
+        }
+        last = m.index + m[0].length;
+      }
+      if (last < str.length) parts.push(str.slice(last));
+      return parts;
+    };
+
+    // Numbered list item: "1. text" or "1) text"
+    const listMatch = trimmed.match(/^(\d+)[.)]\s+(.+)$/);
+    if (listMatch) {
+      nodes.push(
+        <div key={key++} className={styles.aiResponseListItem}>
+          <span className={styles.aiResponseListNum}>{listMatch[1]}.</span>
+          <span>{parseInline(listMatch[2])}</span>
+        </div>
+      );
+    } else {
+      nodes.push(<span key={key++} className={styles.aiResponseLine}>{parseInline(trimmed)}</span>);
+    }
+  }
+  return nodes;
+}
+
 const AppWorkspaceRail = ({
   onProjects,
   onSettings,
@@ -385,11 +438,11 @@ const pruneWorkspaceDataForFiles = (workspace, backendFileIds) => {
 
   const responseVariants = fileStillExists
     ? (workspace?.responseVariants || []).filter((variant) => {
-        if (variant?.fileId != null) {
-          return allowedIds.has(String(variant.fileId));
-        }
-        return true;
-      })
+      if (variant?.fileId != null) {
+        return allowedIds.has(String(variant.fileId));
+      }
+      return true;
+    })
     : [];
 
   return {
@@ -400,6 +453,7 @@ const pruneWorkspaceDataForFiles = (workspace, backendFileIds) => {
     retrievedChunks: fileStillExists ? workspace?.retrievedChunks || [] : [],
     usedStrategies: fileStillExists ? workspace?.usedStrategies || [] : [],
     experimentId: fileStillExists ? workspace?.experimentId || null : null,
+    agentReport: fileStillExists ? workspace?.agentReport || null : null,
     submittedQuery: fileStillExists ? workspace?.submittedQuery || "" : "",
     queryActivity: fileStillExists
       ? workspace?.queryActivity || { visible: false, status: "idle", messages: [] }
@@ -422,6 +476,28 @@ const mapUploadedFileToWorkspaceFile = (file, category) => ({
   pages: file?.pages_count ?? file?.pagesCount ?? file?.pages ?? null,
   allowedTechniques: file?.allowed_techniques || null,
   processed: Boolean(file?.allowed_techniques),
+});
+
+const sanitizeWorkspaceQueryState = (workspace) => ({
+  ...workspace,
+  phase:
+    workspace?.phase === "query-processing" || workspace?.phase === "query-complete"
+      ? "query-ready"
+      : workspace?.phase,
+  submittedQuery: "",
+  response: "",
+  responseVisible: false,
+  responseVariants: [],
+  experimentId: null,
+  agentReport: null,
+  visibleLines: [],
+  retrievedChunks: [],
+  queryActivity: {
+    visible: false,
+    status: "idle",
+    messages: [],
+  },
+  conversation: [],
 });
 
 /** One row per backend file id; first occurrence wins (order-stable). */
@@ -551,23 +627,23 @@ const buildExecutionRuns = ({
           },
           ...(embeddingLabel
             ? [
-                {
-                  id: `run-${index + 1}-embedding`,
-                  status: "completed",
-                  message: `Embedding completed for '${fileName}'. Generated ${formatNumber(chunkCount)} embeddings with provider '${embeddingProvider}' and model '${embeddingModel}'.`,
-                  countLabel: formatExecutionCountLabel(chunkCount, "embeddings"),
-                },
-              ]
+              {
+                id: `run-${index + 1}-embedding`,
+                status: "completed",
+                message: `Embedding completed for '${fileName}'. Generated ${formatNumber(chunkCount)} embeddings with provider '${embeddingProvider}' and model '${embeddingModel}'.`,
+                countLabel: formatExecutionCountLabel(chunkCount, "embeddings"),
+              },
+            ]
             : []),
           ...(backends.length > 0
             ? [
-                {
-                  id: `run-${index + 1}-vector-store`,
-                  status: "completed",
-                  message: `Vector store completed for '${fileName}'. Stored ${formatNumber(storedVectors)} vectors in backend(s): ${backends.join(", ")}.`,
-                  countLabel: formatExecutionCountLabel(storedVectors, "vectors"),
-                },
-              ]
+              {
+                id: `run-${index + 1}-vector-store`,
+                status: "completed",
+                message: `Vector store completed for '${fileName}'. Stored ${formatNumber(storedVectors)} vectors in backend(s): ${backends.join(", ")}.`,
+                countLabel: formatExecutionCountLabel(storedVectors, "vectors"),
+              },
+            ]
             : []),
         ],
       };
@@ -589,47 +665,47 @@ const buildExecutionRuns = ({
             ? failed && activeStageIndex === 0
               ? "failed"
               : activeStageIndex > 0
-              ? "completed"
-              : "active"
+                ? "completed"
+                : "active"
             : "pending",
         message: `Chunking '${fileName}' with '${configuredSplitters[0] || "recursive"}'.`,
         countLabel: null,
       },
       ...(configuredEmbedding
         ? [
-            {
-              id: `run-${runIndex + 1}-embedding`,
-              status:
-                runIndex === 0
-                  ? failed && activeStageIndex === 1
-                    ? "failed"
-                    : activeStageIndex > 1
+          {
+            id: `run-${runIndex + 1}-embedding`,
+            status:
+              runIndex === 0
+                ? failed && activeStageIndex === 1
+                  ? "failed"
+                  : activeStageIndex > 1
                     ? "completed"
                     : activeStageIndex === 1
-                    ? "active"
-                    : "pending"
-                  : "pending",
-              message: `Generating embeddings with '${configuredEmbedding}'.`,
-              countLabel: null,
-            },
-          ]
+                      ? "active"
+                      : "pending"
+                : "pending",
+            message: `Generating embeddings with '${configuredEmbedding}'.`,
+            countLabel: null,
+          },
+        ]
         : []),
       ...(configuredVectorStores.length > 0
         ? [
-            {
-              id: `run-${runIndex + 1}-vector-store`,
-              status:
-                runIndex === 0
-                  ? failed && activeStageIndex === 2
-                    ? "failed"
-                    : activeStageIndex === 2
+          {
+            id: `run-${runIndex + 1}-vector-store`,
+            status:
+              runIndex === 0
+                ? failed && activeStageIndex === 2
+                  ? "failed"
+                  : activeStageIndex === 2
                     ? "active"
                     : "pending"
-                  : "pending",
-              message: `Storing vectors in backend(s): ${configuredVectorStores.join(", ")}.`,
-              countLabel: null,
-            },
-          ]
+                : "pending",
+            message: `Storing vectors in backend(s): ${configuredVectorStores.join(", ")}.`,
+            countLabel: null,
+          },
+        ]
         : []),
     ],
   }));
@@ -658,12 +734,12 @@ const buildExecutionSummary = ({ response, targetFile, workspace }) => {
     embedding: primaryData?.embedding || null,
     vector_store: primaryData?.vector_store
       ? {
-          stores: vectorStores.map((store) => ({
-            backend: store?.backend || null,
-            collection_name: store?.collection_name || store?.collection || null,
-            vectors_stored: Number(store?.vectors_stored || 0),
-          })),
-        }
+        stores: vectorStores.map((store) => ({
+          backend: store?.backend || null,
+          collection_name: store?.collection_name || store?.collection || null,
+          vectors_stored: Number(store?.vectors_stored || 0),
+        })),
+      }
       : null,
     chunks: {
       total: chunkTotal,
@@ -805,8 +881,8 @@ const buildBatchExecutionSummary = ({ responses, files, workspace }) => {
       embeddingLabels.length === 1
         ? embeddingLabels[0]
         : embeddingLabels.length > 1
-        ? `${embeddingLabels.length} embedding configs`
-        : null,
+          ? `${embeddingLabels.length} embedding configs`
+          : null,
     vectorBackends,
     vectorsStored,
     processingTime,
@@ -998,8 +1074,8 @@ function IngestionReportMetricsDl({ active }) {
           {active.metricsIncomplete
             ? "—"
             : active.processingTimeSeconds > 0
-            ? `${Number(active.processingTimeSeconds).toFixed(2)}s`
-            : "—"}
+              ? `${Number(active.processingTimeSeconds).toFixed(2)}s`
+              : "—"}
         </dd>
       </div>
       <div>
@@ -1048,15 +1124,112 @@ const createActivityMessage = (id, text, tone = "info") => ({
   id,
   text,
   tone,
+  raw: text,
 });
+
+/* ─────────────────────────────────────────────
+   Transform raw backend log strings into
+   human-readable, friendly progress messages.
+   Returns { label, phase, tone }
+───────────────────────────────────────────── */
+const PHASE_UNDERSTAND = "understand";
+const PHASE_SEARCH = "search";
+const PHASE_GENERATE = "generate";
+const PHASE_DONE = "done";
+
+const transformProgressMessage = (raw) => {
+  const s = String(raw || "").toLowerCase().trim();
+
+  /* ── Understanding phase ── */
+  if (s.includes("starting rag query") || s.includes("start query")) {
+    return { label: "Understanding your question…", phase: PHASE_UNDERSTAND, tone: "info" };
+  }
+  if (s.includes("embedding the question") || s.includes("embed query") || s.includes("embedding query")) {
+    return { label: "Analyzing your question to find the best matches…", phase: PHASE_UNDERSTAND, tone: "info" };
+  }
+
+  /* ── Search phase ── */
+  if (s.includes("searching") || s.includes("searching faiss") || s.includes("searching chroma") || s.includes("searching pgvector") || s.includes("searching pinecone")) {
+    return { label: "Searching through your documents…", phase: PHASE_SEARCH, tone: "info" };
+  }
+  if (/retrieved\s+0\s+chunk/.test(s) || s.includes("no relevant chunks")) {
+    return { label: "No strong matches yet — trying a deeper search…", phase: PHASE_SEARCH, tone: "warning" };
+  }
+  const chunkMatch = s.match(/retrieved\s+(\d+)\s+chunk/);
+  if (chunkMatch) {
+    const n = chunkMatch[1];
+    return { label: `Found ${n} relevant passage${n === "1" ? "" : "s"} from your document.`, phase: PHASE_SEARCH, tone: "info" };
+  }
+  if (s.includes("retrying") || s.includes("retry") || s.includes("higher top_k") || s.includes("increasing top_k")) {
+    return { label: "Trying a deeper search for better results…", phase: PHASE_SEARCH, tone: "warning" };
+  }
+  if (s.includes("max retries") || s.includes("max retry")) {
+    return { label: "Could not find strong matches — generating the best possible answer…", phase: PHASE_GENERATE, tone: "warning" };
+  }
+  if (s.includes("retrieval") && s.includes("finish")) {
+    return { label: "Document search complete.", phase: PHASE_SEARCH, tone: "info" };
+  }
+
+  /* ── Generation phase ── */
+  if (s.includes("generating") || s.includes("llm") || s.includes("language model") || s.includes("generating answer")) {
+    return { label: "Generating your answer…", phase: PHASE_GENERATE, tone: "info" };
+  }
+  if (s.includes("validat") && !s.includes("writing")) {
+    return { label: "Reviewing the answer for accuracy…", phase: PHASE_GENERATE, tone: "info" };
+  }
+  if (s.includes("reflection") && s.includes("accepted")) {
+    return { label: "Answer looks good — finalizing…", phase: PHASE_GENERATE, tone: "success" };
+  }
+  if (s.includes("reflection") && (s.includes("rejected") || s.includes("retry"))) {
+    return { label: "Improving the answer quality…", phase: PHASE_GENERATE, tone: "warning" };
+  }
+  if (s.includes("generation") && s.includes("retry")) {
+    return { label: "Refining the answer with better context…", phase: PHASE_GENERATE, tone: "info" };
+  }
+
+  /* ── Done phase ── */
+  if (s.includes("writing experiment") || s.includes("saving") || s.includes("experiment log")) {
+    return { label: "Saving your results…", phase: PHASE_DONE, tone: "info" };
+  }
+  if (s.includes("completed") || s.includes("finished") || s.includes("done")) {
+    return { label: "All done!", phase: PHASE_DONE, tone: "success" };
+  }
+
+  /* ── Suppress purely technical noise ── */
+  if (
+    s.includes("token") ||
+    s.includes("experiment_id") ||
+    s.includes("experiment id") ||
+    s.includes("agent trace") ||
+    s.includes("validator output") ||
+    /\[faiss\]|\[chroma\]|\[pgvector\]|\[pinecone\]/i.test(raw) ||
+    /project_id=\d+/.test(s) ||
+    /file_id=\d+/.test(s)
+  ) {
+    return null; // suppress — don't show this line
+  }
+
+  /* ── Fallback: clean up and show ── */
+  // Strip technical prefixes like "[faiss]", "[QUERY]", "project_id=6"
+  let cleaned = raw
+    .replace(/\[faiss\]|\[chroma\]|\[pgvector\]|\[pinecone\]/gi, "")
+    .replace(/project_id=\d+,?\s*/gi, "")
+    .replace(/file_id=\d+,?\s*/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  if (!cleaned) return null;
+  // Capitalise first letter
+  cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  return { label: cleaned, phase: PHASE_SEARCH, tone: "info" };
+};
 
 const buildQueryActivityMessages = ({ response, targetFile }) => {
   const results =
     Array.isArray(response?.comparison_results) && response.comparison_results.length > 0
       ? response.comparison_results
       : response
-      ? [response]
-      : [];
+        ? [response]
+        : [];
   const messages = [];
 
   if (results.length > 1) {
@@ -1205,7 +1378,7 @@ const buildSharedPipelineConfig = (workspace) => {
     },
     llm: {
       provider: "openai",
-      model: "gpt-4o-mini",
+      model: workspace?.selectedLlmModel || "gpt-4o-mini",
       temperature: 0.2,
     },
     self_reflection: {
@@ -1309,23 +1482,23 @@ const coerceAllowedTechniquesArray = (value) => (Array.isArray(value) ? value : 
 const buildVariantStrategiesSummary = (workspace, result, allowedTechniques = null) => {
   const persistedStrategies = allowedTechniques
     ? [
-        {
-          label: "Splitter",
-          value: coerceAllowedTechniquesArray(allowedTechniques?.splitters).join(", "),
-        },
-        {
-          label: "Extraction",
-          value: coerceAllowedTechniquesArray(allowedTechniques?.data_extraction_methods).join(
-            ", ",
-          ),
-        },
-        {
-          label: "Embedding",
-          value: coerceAllowedTechniquesArray(allowedTechniques?.embeddings)
-            .map((item) => `${item.provider}/${item.model}`)
-            .join(", "),
-        },
-      ].filter((item) => item.value)
+      {
+        label: "Splitter",
+        value: coerceAllowedTechniquesArray(allowedTechniques?.splitters).join(", "),
+      },
+      {
+        label: "Extraction",
+        value: coerceAllowedTechniquesArray(allowedTechniques?.data_extraction_methods).join(
+          ", ",
+        ),
+      },
+      {
+        label: "Embedding",
+        value: coerceAllowedTechniquesArray(allowedTechniques?.embeddings)
+          .map((item) => `${item.provider}/${item.model}`)
+          .join(", "),
+      },
+    ].filter((item) => item.value)
     : buildUsedStrategiesSummary(workspace).filter((item) => item.label !== "Vector DB");
 
   const vectorDb = result?.db || result?.vector_db || null;
@@ -1504,8 +1677,8 @@ function UploadProjectFilesList({
             ? "Selected / Processed"
             : "Selected"
           : isProcessed
-          ? "Processed"
-          : "Ready";
+            ? "Processed"
+            : "Ready";
         return uploadFilesViewMode === "grid" ? (
           <button
             key={file.id}
@@ -1520,8 +1693,8 @@ function UploadProjectFilesList({
                   String(file.fileId) === String(current.selectedFileId)
                     ? null
                     : file.fileId != null
-                    ? Number(file.fileId)
-                    : null,
+                      ? Number(file.fileId)
+                      : null,
               }))
             }
           >
@@ -1598,8 +1771,8 @@ function UploadProjectFilesList({
                   String(file.fileId) === String(current.selectedFileId)
                     ? null
                     : file.fileId != null
-                    ? Number(file.fileId)
-                    : null,
+                      ? Number(file.fileId)
+                      : null,
               }))
             }
             aria-pressed={String(file.fileId) === activeWorkspaceFileId}
@@ -1614,30 +1787,35 @@ function UploadProjectFilesList({
               </p>
             </div>
             <div className={styles.uploadFileRowActions}>
-              {showReportBtn && (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  className={styles.uploadFileReportTag}
-                  title="View ingestion report"
-                  onClick={(e) => {
+              {/* Report always reserves space — hidden via CSS when not available, no layout shift */}
+              <span
+                role="button"
+                tabIndex={showReportBtn ? 0 : -1}
+                className={classNames(styles.uploadFileReportTag, {
+                  [styles.uploadFileReportTagHidden]: !showReportBtn,
+                })}
+                title="View ingestion report"
+                aria-hidden={!showReportBtn}
+                onClick={(e) => {
+                  if (!showReportBtn) return;
+                  e.stopPropagation();
+                  onOpenFileReport(fileReport);
+                }}
+                onKeyDown={(e) => {
+                  if (!showReportBtn) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
                     e.stopPropagation();
                     onOpenFileReport(fileReport);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onOpenFileReport(fileReport);
-                    }
-                  }}
-                >
-                  Report
-                </span>
-              )}
+                  }
+                }}
+              >
+                Report
+              </span>
               <span
                 className={classNames(styles.fileStatusBadge, styles.uploadFileStatusPill, {
                   [styles.fileStatusBadgeActive]: isSelected,
+                  [styles.fileStatusBadgeSelected]: isSelected,
                 })}
               >
                 {statusLabel}
@@ -1724,6 +1902,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const [uploadRightActiveSection, setUploadRightActiveSection] = useState("pipeline");
   const [uploadSidebarControlOpen, setUploadSidebarControlOpen] = useState(false);
   const [hasUnreadPipelineSuccess, setHasUnreadPipelineSuccess] = useState(false);
+  const [pipelineSuccessModalOpen, setPipelineSuccessModalOpen] = useState(false);
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const modelDropdownRef = useRef(null);
   const uploadSidebarControlRef = useRef(null);
   const previousExecutionStatusRef = useRef("idle");
   const [chatPanelOffset, setChatPanelOffset] = useState(420);
@@ -1733,11 +1914,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const [historyEntries, setHistoryEntries] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [isAgentReportOpen, setIsAgentReportOpen] = useState(false);
+  const [agentReportLoading, setAgentReportLoading] = useState(false);
+  const [agentReportError, setAgentReportError] = useState("");
   const fileInputRef = useRef(null);
   const queryInputRef = useRef(null);
   const workspaceContentRef = useRef(null);
   const timersRef = useRef([]);
   const hasHydratedRef = useRef(false);
+  const activeQueryAbortRef = useRef(null);
+  const activeQueryRequestIdRef = useRef(0);
   const projectFilesListSyncPromiseRef = useRef(null);
   const prevActiveProjectIdRef = useRef(null);
   const initialProjectIdRef = useRef(initialProjectId);
@@ -1777,11 +1963,39 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     activeWorkspace?.experimentId ||
     activeWorkspace?.experiment_id ||
     null;
+  const agentReportRows = useMemo(() => {
+    const report = activeWorkspace?.agentReport || null;
+    if (!report) return [];
+    return [
+      ["Enabled", report.enabled],
+      ["Expansion Room", report.expansion_room],
+      ["Required Vector DB", report.required_vector_db],
+      ["Selected Vector DB", report.selected_vector_db],
+      ["Backend Cost", report.backend_cost],
+      ["Selected Backend Cost", report.selected_backend_cost],
+      ["Original Query", report.original_query],
+      ["Query Complexity", report.query_complexity],
+      ["Search Type", report.search_type],
+      ["Subsequent Decision", report.subsequent_decision],
+      ["Retrieved Chunks", report.retrieved_chunks],
+      ["Error Message", report.error_message],
+      ["Duration (ms)", report.duration_ms],
+      ["Backend Decision", report.backend_decision],
+      ["Suggested Query", report.suggested_query],
+      ["Feedback", report.feedback],
+    ];
+  }, [activeWorkspace?.agentReport]);
 
   useEffect(() => {
     if (selectedPerformanceResponseIndex < performanceResponseVariants.length) return;
     setSelectedPerformanceResponseIndex(0);
   }, [performanceResponseVariants.length, selectedPerformanceResponseIndex]);
+
+  useEffect(() => {
+    setIsAgentReportOpen(false);
+    setAgentReportLoading(false);
+    setAgentReportError("");
+  }, [activeProjectId, experimentId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1857,6 +2071,18 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [uploadSidebarControlOpen]);
 
+  /* close model dropdown on outside click */
+  useEffect(() => {
+    if (!modelDropdownOpen) return undefined;
+    const onPointerDown = (event) => {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target)) {
+        setModelDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [modelDropdownOpen]);
+
   useEffect(() => {
     setChatGreeting(getGreeting());
   }, []);
@@ -1926,7 +2152,10 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         const parsedWorkspaces = JSON.parse(storedWorkspaces);
         if (parsedWorkspaces && typeof parsedWorkspaces === "object") {
           const normalized = Object.fromEntries(
-            Object.entries(parsedWorkspaces).map(([key, value]) => [String(key), value]),
+            Object.entries(parsedWorkspaces).map(([key, value]) => [
+              String(key),
+              sanitizeWorkspaceQueryState(value),
+            ]),
           );
           setProjectWorkspaces(normalized);
         }
@@ -2000,11 +2229,26 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     if (typeof window === "undefined" || !hasHydratedRef.current) return;
     const currentUserId = getCurrentUserId();
     if (!currentUserId) return;
+    const sanitizedWorkspaces = Object.fromEntries(
+      Object.entries(projectWorkspaces).map(([key, value]) => [
+        key,
+        sanitizeWorkspaceQueryState(value),
+      ]),
+    );
     window.localStorage.setItem(
       getScopedStorageKey("rag-canvas-workspaces", currentUserId),
-      JSON.stringify(projectWorkspaces),
+      JSON.stringify(sanitizedWorkspaces),
     );
   }, [projectWorkspaces]);
+
+  useEffect(
+    () => () => {
+      activeQueryRequestIdRef.current += 1;
+      activeQueryAbortRef.current?.abort();
+      activeQueryAbortRef.current = null;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (initialProjectId == null || initialProjectId === "") {
@@ -2265,9 +2509,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       setHistoryEntries([]);
       setHistoryError(
         error?.message ||
-          error?.payload?.message ||
-          error?.payload?.detail ||
-          "Failed to load experiment history",
+        error?.payload?.message ||
+        error?.payload?.detail ||
+        "Failed to load experiment history",
       );
     } finally {
       setHistoryLoading(false);
@@ -2427,19 +2671,19 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     selectedFiles.forEach((file) => formData.append("files", file));
     setIsUploadingFiles(true);
 
-      updateActiveWorkspace((current) => ({
-        ...current,
-        phase: "ingestion-setup",
-        visibleLines: [],
-        response: "",
-        responseVisible: false,
-        activeRightSection: "response",
-        queryActivity: {
-          visible: false,
-          status: "idle",
-          messages: [],
-        },
-      }));
+    updateActiveWorkspace((current) => ({
+      ...current,
+      phase: "ingestion-setup",
+      visibleLines: [],
+      response: "",
+      responseVisible: false,
+      activeRightSection: "response",
+      queryActivity: {
+        visible: false,
+        status: "idle",
+        messages: [],
+      },
+    }));
 
     try {
       const projectKnownLocally = projects.some(
@@ -2823,6 +3067,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const handleStartQuery = () => {
     if (!activeWorkspace?.query.trim() || !activeProjectId) return;
     const submittedQuery = activeWorkspace.query.trim();
+
+    // Guard: file must be processed before querying
+    if (!hasSelectedProcessedFile) {
+      showToast({
+        title: "Query",
+        variant: "warning",
+        message: "Process the selected file first before asking a question.",
+      });
+      return;
+    }
     const agentModeOn = (activeWorkspace?.queryConfigurations || []).includes("agent");
     const hasRetrievalSelection =
       Array.isArray(activeWorkspace?.retrievalStrategies) &&
@@ -2867,6 +3121,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     }
 
     const runQuery = async () => {
+      activeQueryRequestIdRef.current += 1;
+      const requestId = activeQueryRequestIdRef.current;
+      activeQueryAbortRef.current?.abort();
+      const controller = new AbortController();
+      activeQueryAbortRef.current = controller;
+
       clearTimers();
       updateActiveWorkspace((current) => ({
         ...current,
@@ -2874,9 +3134,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         query: "",
         submittedQuery,
         visibleLines: [],
-        response: "",
-        responseVisible: false,
-        responseVariants: [],
         activeRightSection: "response",
         queryActivity: {
           visible: false,
@@ -2906,25 +3163,27 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
         let progressSeq = 0;
         const response = await queryApi.runQuery(payload, {
+          signal: controller.signal,
           onProgress: ({ id, message }) => {
+            if (requestId !== activeQueryRequestIdRef.current) return;
             progressSeq += 1;
-            const lineId = `${String(id || "step")}-${progressSeq}`;
+            const transformed = transformProgressMessage(String(message || ""));
+            if (!transformed) return; // suppress technical noise
             updateActiveWorkspace((current) => {
-              if (current.phase !== "query-processing") {
-                return current;
-              }
-              const prev = current.queryActivity?.messages || [];
+              if (current.phase !== "query-processing") return current;
               return {
                 ...current,
                 queryActivity: {
                   visible: true,
                   status: "running",
-                  messages: [...prev, createActivityMessage(lineId, String(message || ""))],
+                  // Always a single-item array — replace, never append
+                  messages: [createActivityMessage(`step-${progressSeq}`, transformed.label, transformed.tone)],
                 },
               };
             });
           },
         });
+        if (requestId !== activeQueryRequestIdRef.current) return;
         const results =
           Array.isArray(response?.comparison_results) && response.comparison_results.length > 0
             ? response.comparison_results
@@ -2951,6 +3210,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
               experimentId: result?.experiment_id || null,
               fileId: targetFile.fileId,
               db: result?.db || result?.retrieval || "Default",
+              agentEnabled: Boolean(result?.agent?.enabled),
               response: savedResponse?.response || result?.answer || "",
               chunks: savedResponse?.chunks || result?.chunks || [],
               qualityMetrics: buildRagasQualityMetrics(result),
@@ -2972,10 +3232,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         });
 
         clearTimers();
+        if (requestId !== activeQueryRequestIdRef.current) return;
 
         updateActiveWorkspace((current) => ({
           ...current,
           experimentId: primaryVariant?.experimentId || current?.experimentId || null,
+          agentReport: null,
           phase: "query-complete",
           submittedQuery: "",
           response: finalAnswer,
@@ -3008,6 +3270,26 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         }));
       } catch (error) {
         clearTimers();
+        if (requestId !== activeQueryRequestIdRef.current) return;
+        if (error?.name === "AbortError") {
+          updateActiveWorkspace((current) => ({
+            ...current,
+            phase: "query-ready",
+            submittedQuery: "",
+            queryActivity: {
+              visible: true,
+              status: "error",
+              messages: [
+                createActivityMessage(
+                  "query-cancelled",
+                  "Query request was interrupted.",
+                  "warning",
+                ),
+              ],
+            },
+          }));
+          return;
+        }
         const message = formatWorkspaceApiError(error, "Failed to run query");
         showToast({
           title: "Query",
@@ -3018,14 +3300,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           ...current,
           phase: "query-ready",
           submittedQuery: "",
-          response: "",
-          responseVisible: false,
           queryActivity: {
             visible: true,
             status: "error",
             messages: [createActivityMessage("query-error", message, "error")],
           },
         }));
+      } finally {
+        if (requestId === activeQueryRequestIdRef.current) {
+          activeQueryAbortRef.current = null;
+        }
       }
     };
 
@@ -3042,13 +3326,13 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     () =>
       activeWorkspaceFileId
         ? activeWorkspace?.files?.find((file) => String(file?.fileId) === activeWorkspaceFileId) ||
-          null
+        null
         : null,
     [activeWorkspace?.files, activeWorkspaceFileId],
   );
   const hasSelectedFile = Boolean(
     activeWorkspaceFileId &&
-      activeWorkspace?.files?.some((file) => String(file?.fileId) === activeWorkspaceFileId),
+    activeWorkspace?.files?.some((file) => String(file?.fileId) === activeWorkspaceFileId),
   );
   const hasUploadedFiles = Boolean(
     activeWorkspace?.files?.some((file) => file?.fileId != null),
@@ -3064,10 +3348,10 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     executionState.status === "running"
       ? "Running"
       : executionState.status === "error"
-      ? "Failed"
-      : executionState.status === "success"
-      ? "Completed"
-      : "Idle";
+        ? "Failed"
+        : executionState.status === "success"
+          ? "Completed"
+          : "Idle";
   const ingestionFileReports = useMemo(
     () => mergeIngestionFileReports(executionState.details, activeWorkspace?.files),
     [executionState.details, activeWorkspace?.files],
@@ -3204,12 +3488,72 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     router.push(ROUTE_PATHS.SETTINGS);
   }, [router]);
 
-  const handleRailLogout = useCallback(() => {
+  const handleRailLogout = useCallback(async () => {
+    // 1. Call backend logout — this clears the HttpOnly cookies (access_token, refresh_token, csrf_token)
+    try {
+      const { buildUrl } = await import("@/services/axios");
+      const { getCsrfToken } = await import("@/services/auth");
+      await fetch(buildUrl("/auth/logout"), {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "X-CSRF-Token": getCsrfToken() || "",
+        },
+      });
+    } catch {
+      // Even if the backend call fails, clear frontend state and redirect
+    }
+
+    // 2. Clear all frontend state (user profile + any stale token keys)
     clearAuthSession();
+
+    // 3. Redirect to login
     if (typeof window !== "undefined") {
-      window.location.href = ROUTE_PATHS.AUTH_LOGIN;
+      window.location.replace(ROUTE_PATHS.AUTH_LOGIN);
     }
   }, []);
+
+  const handleOpenAgentReport = useCallback(async (targetExperimentId = null) => {
+    const resolvedExperimentId = targetExperimentId || experimentId;
+    if (!resolvedExperimentId) {
+      setAgentReportError("Run a query in agent mode to view the stored report.");
+      setIsAgentReportOpen(true);
+      return;
+    }
+
+    setIsAgentReportOpen(true);
+
+    // Use cached report if it's for the same experiment
+    if (
+      activeWorkspace?.agentReport &&
+      String(activeWorkspace?.experimentId || activeWorkspace?.experiment_id || "") ===
+      String(resolvedExperimentId)
+    ) {
+      setAgentReportError("");
+      return;
+    }
+
+    setAgentReportLoading(true);
+    setAgentReportError("");
+    try {
+      const report = await getExperimentAgentReportById(resolvedExperimentId);
+      updateActiveWorkspace((current) => ({
+        ...current,
+        experimentId: resolvedExperimentId,
+        agentReport: report,
+      }));
+    } catch (error) {
+      setAgentReportError(error?.message || "Failed to load agent report.");
+    } finally {
+      setAgentReportLoading(false);
+    }
+  }, [
+    activeWorkspace?.agentReport,
+    activeWorkspace?.experimentId,
+    activeWorkspace?.experiment_id,
+    experimentId,
+    updateActiveWorkspace,
+  ]);
 
   const topNavbarActions = useMemo(
     () => [
@@ -3219,20 +3563,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         icon: "notifications",
         pulse: hasUnreadPipelineSuccess,
         onClick: () => {
-          setHasUnreadPipelineSuccess(false);
           if (hasUnreadPipelineSuccess) {
-            showToast({
-              title: "Notifications",
-              variant: "success",
-              message: "Pipeline completed successfully.",
-            });
-            return;
+            setHasUnreadPipelineSuccess(false);
+            setPipelineSuccessModalOpen(true);
           }
-          showToast({
-            title: "Notifications",
-            variant: "info",
-            message: "No new notifications",
-          });
+          // no-op when there's nothing new — don't show any toast
         },
       },
       {
@@ -3242,8 +3577,8 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         onClick: () =>
           activeProject
             ? router.push(
-                `${ROUTE_PATHS.HISTORY}?project=${activeProject.id}&name=${encodeURIComponent(activeProject.name)}&category=${encodeURIComponent(activeProject.category)}`,
-              )
+              `${ROUTE_PATHS.HISTORY}?project=${activeProject.id}&name=${encodeURIComponent(activeProject.name)}&category=${encodeURIComponent(activeProject.category)}`,
+            )
             : router.push(ROUTE_PATHS.HISTORY),
       },
       {
@@ -3253,12 +3588,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         onClick: () =>
           activeProject
             ? router.push(
-                `${ROUTE_PATHS.METRICS}?project=${activeProject.id}&name=${encodeURIComponent(activeProject.name)}&category=${encodeURIComponent(activeProject.category)}`,
-              )
+              `${ROUTE_PATHS.METRICS}?project=${activeProject.id}&name=${encodeURIComponent(activeProject.name)}&category=${encodeURIComponent(activeProject.category)}`,
+            )
             : router.push(ROUTE_PATHS.METRICS),
       },
     ],
-    [activeProject, hasUnreadPipelineSuccess, router, showToast],
+    [activeProject, hasUnreadPipelineSuccess, router, setPipelineSuccessModalOpen],
   );
 
   const topNavbarBreadcrumbItems = useMemo(() => {
@@ -3325,11 +3660,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   if (!activeProject || !activeWorkspace) {
     return (
       <div className={styles.workspaceWithTopNav}>
-      <TopNavbar
-        userProfile={userProfile}
-        actions={[]}
-        breadcrumbItems={topNavbarBreadcrumbItems}
-      />
+        <TopNavbar
+          userProfile={userProfile}
+          actions={[]}
+          breadcrumbItems={topNavbarBreadcrumbItems}
+        />
         <div className={styles.workspaceShell}>
           <AppWorkspaceRail
             onProjects={handleRailProjects}
@@ -3557,6 +3892,83 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         breadcrumbItems={topNavbarBreadcrumbItems}
         endSlot={topNavbarEndSlot}
       />
+
+      {/* ── Pipeline success notification modal ── */}
+      <AnimatePresence>
+        {pipelineSuccessModalOpen && (
+          <motion.div
+            className={styles.pipelineNotifOverlay}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            onClick={() => setPipelineSuccessModalOpen(false)}
+          >
+            <motion.div
+              className={styles.pipelineNotifCard}
+              initial={{ opacity: 0, scale: 0.92, y: -16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: -16 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* close */}
+              <button
+                type="button"
+                className={styles.pipelineNotifClose}
+                onClick={() => setPipelineSuccessModalOpen(false)}
+                aria-label="Close notification"
+              >
+                <X size={16} />
+              </button>
+
+              {/* icon */}
+              <div className={styles.pipelineNotifIcon}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+              </div>
+
+              {/* text */}
+              <h3 className={styles.pipelineNotifTitle}>Pipeline completed</h3>
+              <p className={styles.pipelineNotifDesc}>
+                Your document has been processed successfully — chunked, embedded, and stored in the vector database. It&apos;s ready to query.
+              </p>
+
+              {/* file name if available */}
+              {activeWorkspace?.execution?.fileName && (
+                <div className={styles.pipelineNotifFile}>
+                  <FileText size={13} />
+                  <span>{activeWorkspace.execution.fileName}</span>
+                </div>
+              )}
+
+              {/* actions */}
+              <div className={styles.pipelineNotifActions}>
+                <button
+                  type="button"
+                  className={styles.pipelineNotifAskBtn}
+                  onClick={() => {
+                    setPipelineSuccessModalOpen(false);
+                    router.push(workspaceQueryUrl(activeProjectId));
+                  }}
+                >
+                  <MessageSquare size={15} />
+                  Ask Query
+                </button>
+                <button
+                  type="button"
+                  className={styles.pipelineNotifDismissBtn}
+                  onClick={() => setPipelineSuccessModalOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className={styles.workspaceShell}>
         <AppWorkspaceRail
           onProjects={handleRailProjects}
@@ -3564,168 +3976,168 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           onLogout={handleRailLogout}
         />
         {workspaceMode === "upload" && (
-        <aside className={styles.workspaceQuerySidebar}>
-          <div className={styles.workspaceContextSidebarInner}>
-            <section className={styles.sidebarPane}>
-              <div className={styles.sidebarGroupTitle}>Upload techniques</div>
-              <div className={styles.sidebarPaneScroll}>
-                <SidebarSection
-                  icon={Blocks}
-                  title="Chunk Length"
-                  description="Same control pattern as current UI"
-                  expanded
-                >
-                  <div className={styles.chunkControl}>
-                    <Input
-                      type="number"
-                      value={activeWorkspace.chunkLength}
-                      onChange={(event) =>
-                        updateActiveWorkspace((current) => ({
-                          ...current,
-                          chunkLength: Number(event.target.value || 0),
-                        }))
-                      }
+          <aside className={styles.workspaceQuerySidebar}>
+            <div className={styles.workspaceContextSidebarInner}>
+              <section className={styles.sidebarPane}>
+                <div className={styles.sidebarGroupTitle}>Upload techniques</div>
+                <div className={styles.sidebarPaneScroll}>
+                  <SidebarSection
+                    icon={Blocks}
+                    title="Chunk Length"
+                    description="Same control pattern as current UI"
+                    expanded
+                  >
+                    <div className={styles.chunkControl}>
+                      <Input
+                        type="number"
+                        value={activeWorkspace.chunkLength}
+                        onChange={(event) =>
+                          updateActiveWorkspace((current) => ({
+                            ...current,
+                            chunkLength: Number(event.target.value || 0),
+                          }))
+                        }
+                      />
+                      <Slider
+                        value={[activeWorkspace.chunkLength]}
+                        onValueChange={([nextValue]) =>
+                          updateActiveWorkspace((current) => ({
+                            ...current,
+                            chunkLength: nextValue,
+                          }))
+                        }
+                        min={100}
+                        max={4000}
+                        step={100}
+                      />
+                    </div>
+                  </SidebarSection>
+
+                  <SidebarSection
+                    icon={Database}
+                    title="Data Extraction"
+                    description="Select multiple extractors"
+                    expanded
+                  >
+                    <MultiSelectChips
+                      options={DATA_EXTRACTION_OPTIONS}
+                      selectedValues={activeWorkspace.dataExtraction}
+                      onToggle={(value) => toggleWorkspaceValue("dataExtraction", value)}
                     />
-                    <Slider
-                      value={[activeWorkspace.chunkLength]}
-                      onValueChange={([nextValue]) =>
-                        updateActiveWorkspace((current) => ({
-                          ...current,
-                          chunkLength: nextValue,
-                        }))
-                      }
-                      min={100}
-                      max={4000}
-                      step={100}
+                  </SidebarSection>
+
+                  <SidebarSection
+                    icon={FileText}
+                    title="Text Processing"
+                    description="Select multiple extractors"
+                    expanded
+                  >
+                    <MultiSelectChips
+                      options={TEXT_PROCESSING_OPTIONS}
+                      selectedValues={activeWorkspace.textProcessing}
+                      onToggle={(value) => toggleWorkspaceValue("textProcessing", value)}
                     />
-                  </div>
-                </SidebarSection>
+                  </SidebarSection>
 
-                <SidebarSection
-                  icon={Database}
-                  title="Data Extraction"
-                  description="Select multiple extractors"
-                  expanded
-                >
-                  <MultiSelectChips
-                    options={DATA_EXTRACTION_OPTIONS}
-                    selectedValues={activeWorkspace.dataExtraction}
-                    onToggle={(value) => toggleWorkspaceValue("dataExtraction", value)}
-                  />
-                </SidebarSection>
+                  <SidebarSection
+                    icon={Sparkles}
+                    title="Embedding Model"
+                    description="Select multiple embedding models"
+                    expanded
+                  >
+                    <MultiSelectChips
+                      options={EMBEDDING_OPTIONS}
+                      selectedValues={activeWorkspace.embeddingModels}
+                      onToggle={(value) => toggleWorkspaceValue("embeddingModels", value)}
+                    />
+                  </SidebarSection>
 
-                <SidebarSection
-                  icon={FileText}
-                  title="Text Processing"
-                  description="Select multiple extractors"
-                  expanded
-                >
-                  <MultiSelectChips
-                    options={TEXT_PROCESSING_OPTIONS}
-                    selectedValues={activeWorkspace.textProcessing}
-                    onToggle={(value) => toggleWorkspaceValue("textProcessing", value)}
-                  />
-                </SidebarSection>
-
-                <SidebarSection
-                  icon={Sparkles}
-                  title="Embedding Model"
-                  description="Select multiple embedding models"
-                  expanded
-                >
-                  <MultiSelectChips
-                    options={EMBEDDING_OPTIONS}
-                    selectedValues={activeWorkspace.embeddingModels}
-                    onToggle={(value) => toggleWorkspaceValue("embeddingModels", value)}
-                  />
-                </SidebarSection>
-
-                <SidebarSection
-                  icon={FolderKanban}
-                  title="Vector Store"
-                  description="Select multiple vector stores"
-                  expanded
-                >
-                  <MultiSelectChips
-                    options={VECTOR_STORE_OPTIONS}
-                    selectedValues={activeWorkspace.vectorStores}
-                    onToggle={(value) => toggleWorkspaceValue("vectorStores", value)}
-                  />
-                </SidebarSection>
-              </div>
-            </section>
-          </div>
-        </aside>
+                  <SidebarSection
+                    icon={FolderKanban}
+                    title="Vector Store"
+                    description="Select multiple vector stores"
+                    expanded
+                  >
+                    <MultiSelectChips
+                      options={VECTOR_STORE_OPTIONS}
+                      selectedValues={activeWorkspace.vectorStores}
+                      onToggle={(value) => toggleWorkspaceValue("vectorStores", value)}
+                    />
+                  </SidebarSection>
+                </div>
+              </section>
+            </div>
+          </aside>
         )}
 
         {workspaceMode === "query" && (
-        <aside className={styles.workspaceQuerySidebar}>
-          <div className={styles.workspaceContextSidebarInner}>
-            <section className={styles.sidebarPane}>
-              <div className={styles.sidebarGroupTitle}>Query techniques</div>
-              <div className={styles.sidebarPaneScroll}>
-                <SidebarSection
-                  icon={Database}
-                  title="Retrieved Strategy"
-                  description={
-                    queryAgentModeEnabled
-                      ? "Shown for reference while Agent mode is on (use Agent mode in the chat bar)"
-                      : "Select multiple retrieval strategies"
-                  }
-                  expanded
-                >
-                  <MultiSelectChips
-                    options={RETRIEVAL_STRATEGY_OPTIONS}
-                    selectedValues={activeWorkspace.retrievalStrategies}
-                    onToggle={(value) => toggleWorkspaceValue("retrievalStrategies", value)}
-                    disabled={queryAgentModeEnabled}
-                  />
-                </SidebarSection>
+          <aside className={styles.workspaceQuerySidebar}>
+            <div className={styles.workspaceContextSidebarInner}>
+              <section className={styles.sidebarPane}>
+                <div className={styles.sidebarGroupTitle}>Query techniques</div>
+                <div className={styles.sidebarPaneScroll}>
+                  <SidebarSection
+                    icon={Database}
+                    title="Retrieved Strategy"
+                    description={
+                      queryAgentModeEnabled
+                        ? "Shown for reference while Agent mode is on (use Agent mode in the chat bar)"
+                        : "Select multiple retrieval strategies"
+                    }
+                    expanded
+                  >
+                    <MultiSelectChips
+                      options={RETRIEVAL_STRATEGY_OPTIONS}
+                      selectedValues={activeWorkspace.retrievalStrategies}
+                      onToggle={(value) => toggleWorkspaceValue("retrievalStrategies", value)}
+                      disabled={queryAgentModeEnabled}
+                    />
+                  </SidebarSection>
 
 
 
-                <SidebarSection
-                  icon={FolderKanban}
-                  title="Vector DB"
-                  description="Only techniques selected during file processing"
-                  expanded
-                >
-                  <MultiSelectChips
-                    options={allowedVectorStoreOptions}
-                    selectedValues={activeWorkspace.vectorStores}
-                    onToggle={(value) => toggleWorkspaceValue("vectorStores", value)}
-                  />
-                </SidebarSection>
+                  <SidebarSection
+                    icon={FolderKanban}
+                    title="Vector DB"
+                    description="Only techniques selected during file processing"
+                    expanded
+                  >
+                    <MultiSelectChips
+                      options={allowedVectorStoreOptions}
+                      selectedValues={activeWorkspace.vectorStores}
+                      onToggle={(value) => toggleWorkspaceValue("vectorStores", value)}
+                    />
+                  </SidebarSection>
 
-                <SidebarSection
-                  icon={Sparkles}
-                  title="Embedding"
-                  description="Only techniques selected during file processing"
-                  expanded
-                >
-                  <MultiSelectChips
-                    options={allowedEmbeddingOptions}
-                    selectedValues={activeWorkspace.embeddingModels}
-                    onToggle={(value) => toggleWorkspaceValue("embeddingModels", value)}
-                  />
-                </SidebarSection>
+                  <SidebarSection
+                    icon={Sparkles}
+                    title="Embedding"
+                    description="Only techniques selected during file processing"
+                    expanded
+                  >
+                    <MultiSelectChips
+                      options={allowedEmbeddingOptions}
+                      selectedValues={activeWorkspace.embeddingModels}
+                      onToggle={(value) => toggleWorkspaceValue("embeddingModels", value)}
+                    />
+                  </SidebarSection>
 
-                <SidebarSection
-                  icon={MessageSquare}
-                  title="Query Configuration"
-                  description="Ragas and LangSmith (Agent mode is in the chat bar)"
-                  expanded
-                >
-                  <MultiSelectChips
-                    options={QUERY_CONFIGURATION_SIDEBAR_OPTIONS}
-                    selectedValues={activeWorkspace.queryConfigurations || []}
-                    onToggle={(value) => toggleWorkspaceValue("queryConfigurations", value)}
-                  />
-                </SidebarSection>
-              </div>
-            </section>
-          </div>
-        </aside>
+                  <SidebarSection
+                    icon={MessageSquare}
+                    title="Query Configuration"
+                    description="Ragas and LangSmith (Agent mode is in the chat bar)"
+                    expanded
+                  >
+                    <MultiSelectChips
+                      options={QUERY_CONFIGURATION_SIDEBAR_OPTIONS}
+                      selectedValues={activeWorkspace.queryConfigurations || []}
+                      onToggle={(value) => toggleWorkspaceValue("queryConfigurations", value)}
+                    />
+                  </SidebarSection>
+                </div>
+              </section>
+            </div>
+          </aside>
         )}
 
         <main
@@ -3733,118 +4145,122 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
             [styles.workspaceMainUpload]: workspaceMode === "upload",
           })}
         >
-        {workspaceMode === "query" && (
-        <header className={styles.workspaceHeader}>
-          <div className={styles.workspaceHeaderContent}>
-            <h1 className={styles.workspaceTitle}>
-              {activeProject.name}
-              <span className={styles.workspaceCategory}>{activeProject.category}</span>
-            </h1>
-          </div>
-        </header>
-        )}
-
-        <section
-          className={classNames(styles.workspaceCanvas, {
-            [styles.workspaceCanvasUpload]: workspaceMode === "upload",
-          })}
-        >
-          {workspaceMode === "upload" && (
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf"
-            multiple
-            hidden
-            onChange={handleFileUpload}
-          />
+          {workspaceMode === "query" && (
+            <header className={styles.chatContextBar}>
+              <span className={styles.chatContextProject}>{activeProject.name}</span>
+              {activeProject.projectCode && (
+                <span className={styles.chatContextCode}>{activeProject.projectCode}</span>
+              )}
+              {activeProject.category && (
+                <>
+                  <span className={styles.chatContextSep} aria-hidden>·</span>
+                  <span className={styles.chatContextCategory}>{activeProject.category}</span>
+                </>
+              )}
+              {hasSelectedFile && (
+                <>
+                  <span className={styles.chatContextSep} aria-hidden>·</span>
+                  <span className={styles.chatContextFilePill}>
+                    <span className={styles.chatContextFileDot} />
+                    {activeWorkspace.files.find(
+                      (f) => String(f.fileId) === activeWorkspaceFileId,
+                    )?.name ?? "Document"}
+                  </span>
+                </>
+              )}
+            </header>
           )}
 
-          <div
-            ref={workspaceContentRef}
-            className={classNames(styles.workspaceContentLayout, {
-              [styles.workspaceContentLayoutSingleColumn]:
-                workspaceMode === "upload" || workspaceMode === "query",
+          <section
+            className={classNames(styles.workspaceCanvas, {
+              [styles.workspaceCanvasUpload]: workspaceMode === "upload",
             })}
-            style={{
-              "--chat-panel-offset":
-                chatPanelOffset > 0 ? `${chatPanelOffset}px` : "0px",
-            }}
           >
             {workspaceMode === "upload" && (
-            <section className={styles.uploadWorkspace}>
-              <div className={styles.uploadWorkspaceColumn}>
-                <div className={styles.uploadWorkspaceFixedTop}>
-                <header className={styles.uploadWorkspaceIntroCompact}>
-                  <h2 className={styles.uploadWorkspaceHeadlineCompact}>Upload &amp; run pipeline</h2>
-                  <p className={styles.uploadWorkspaceLeadCompact}>
-                    Configure strategies in the sidebar → upload PDFs → run pipeline. Status and logs appear
-                    in <strong>Pipeline output</strong> below after each run.
-                  </p>
-                </header>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf"
+                multiple
+                hidden
+                onChange={handleFileUpload}
+              />
+            )}
 
-                <div className={classNames(styles.uploadStepCard, styles.uploadStepCardCompact, styles.uploadStepCardNoBadge)}>
-                  <div className={styles.uploadStepBody}>
-                    <div className={styles.uploadStepTitleRow}>
-                      <h3 className={styles.uploadStepTitle}>Upload files</h3>
-                      <span className={styles.uploadStepHint}>Multipart API</span>
-                    </div>
-                    <button
-                      type="button"
-                      className={styles.uploadDropzoneProCompact}
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isUploadingFiles}
-                    >
-                      <div className={styles.uploadDropzoneProIcon}>
-                        <Upload size={20} strokeWidth={2} />
-                      </div>
-                      <div className={styles.uploadDropzoneProText}>
-                        <p className={styles.uploadDropzoneProTitle}>
-                          {isUploadingFiles ? "Uploading…" : "Browse PDFs or drop here"}
+            <div
+              ref={workspaceContentRef}
+              className={classNames(styles.workspaceContentLayout, {
+                [styles.workspaceContentLayoutSingleColumn]:
+                  workspaceMode === "upload" || workspaceMode === "query",
+              })}
+              style={{
+                "--chat-panel-offset":
+                  chatPanelOffset > 0 ? `${chatPanelOffset}px` : "0px",
+              }}
+            >
+              {workspaceMode === "upload" && (
+                <section className={styles.uploadWorkspace}>
+                  <div className={styles.uploadWorkspaceColumn}>
+                    <div className={styles.uploadWorkspaceFixedTop}>
+                      <header className={styles.uploadWorkspaceIntroCompact}>
+                        <h2 className={styles.uploadWorkspaceHeadlineCompact}>Upload &amp; run pipeline</h2>
+                        <p className={styles.uploadWorkspaceLeadCompact}>
+                          Configure strategies in the sidebar → upload PDFs → run pipeline. Status and logs appear
+                          in <strong>Pipeline output</strong> below after each run.
                         </p>
-                        <p className={styles.uploadDropzoneProSub}>
-                          {isUploadingFiles
-                            ? "Do not close this tab."
-                            : "Multiple files supported."}
-                        </p>
-                      </div>
-                    </button>
-                    {isUploadingFiles && (
-                      <div className={styles.uploadTimeline}>
-                        <div className={styles.uploadTimelineBar}>
-                          <div className={styles.uploadTimelineIndeterminate} />
+                      </header>
+
+                      <div className={classNames(styles.uploadStepCard, styles.uploadStepCardCompact, styles.uploadStepCardNoBadge)}>
+                        <div className={styles.uploadStepBody}>
+                          <div className={styles.uploadStepTitleRow}>
+                            <h3 className={styles.uploadStepTitle}>Upload files</h3>
+                            <span className={styles.uploadStepHint}>Multipart API</span>
+                          </div>
+                          <button
+                            type="button"
+                            className={styles.uploadDropzoneProCompact}
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isUploadingFiles}
+                          >
+                            <div className={styles.uploadDropzoneProIcon}>
+                              <Upload size={20} strokeWidth={2} />
+                            </div>
+                            <div className={styles.uploadDropzoneProText}>
+                              <p className={styles.uploadDropzoneProTitle}>
+                                {isUploadingFiles ? "Uploading…" : "Browse PDFs or drop here"}
+                              </p>
+                              <p className={styles.uploadDropzoneProSub}>
+                                {isUploadingFiles
+                                  ? "Do not close this tab."
+                                  : "Multiple files supported."}
+                              </p>
+                            </div>
+                          </button>
+                          {isUploadingFiles && (
+                            <div className={styles.uploadTimeline}>
+                              <div className={styles.uploadTimelineBar}>
+                                <div className={styles.uploadTimelineIndeterminate} />
+                              </div>
+                              <p className={styles.uploadTimelineCaption}>Uploading…</p>
+                            </div>
+                          )}
                         </div>
-                        <p className={styles.uploadTimelineCaption}>Uploading…</p>
                       </div>
-                    )}
-                  </div>
-                </div>
-                </div>
+                    </div>
 
-                <div className={classNames(styles.uploadStepCard, styles.uploadStepCardFilesGrow, styles.uploadStepCardNoBadge)}>
-                  <div className={classNames(styles.uploadStepBody, styles.uploadStepBodyGrow)}>
-                    <div className={styles.uploadFilesSectionHeader}>
-                      <div className={styles.uploadFilesSectionHeading}>
-                        <h3 className={styles.uploadStepTitle}>Files in this project</h3>
-                        <span className={styles.uploadStepHint}>
-                          {activeWorkspace.files.length > 0
-                            ? `${activeWorkspace.files.length} file${activeWorkspace.files.length === 1 ? "" : "s"}`
-                            : "None yet"}
-                        </span>
-                      </div>
-                      <div className={styles.uploadFilesSectionActions}>
-                        {(ingestionFileReports.length > 0 || hasSelectedFile) && (
-                          <div className={styles.uploadFilesReportLogsRow}>
-                            {ingestionFileReports.length > 0 && (
-                              <button
-                                type="button"
-                                className={styles.reportLogsHeaderButton}
-                                title="View report logs for all files with metrics"
-                                onClick={openIngestionReportLogsPage}
-                              >
-                                Report logs
-                              </button>
-                            )}
+                    <div className={classNames(styles.uploadStepCard, styles.uploadStepCardFilesGrow, styles.uploadStepCardNoBadge)}>
+                      <div className={classNames(styles.uploadStepBody, styles.uploadStepBodyGrow)}>
+                        <div className={styles.uploadFilesSectionHeader}>
+                          <div className={styles.uploadFilesSectionHeading}>
+                            <h3 className={styles.uploadStepTitle}>Files in this project</h3>
+                            <span className={styles.uploadStepHint}>
+                              {activeWorkspace.files.length > 0
+                                ? `${activeWorkspace.files.length} file${activeWorkspace.files.length === 1 ? "" : "s"}`
+                                : "None yet"}
+                            </span>
+                          </div>
+                          <div className={styles.uploadFilesSectionActions}>
+                            {/* Clear selection — always first in the row */}
                             {hasSelectedFile && (
                               <button
                                 type="button"
@@ -3862,27 +4278,243 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                                 Clear selection
                               </button>
                             )}
+                            {ingestionFileReports.length > 0 && (
+                              <div className={styles.uploadFilesReportLogsRow}>
+                                <button
+                                  type="button"
+                                  className={styles.reportLogsHeaderButton}
+                                  title="View report logs for all files with metrics"
+                                  onClick={openIngestionReportLogsPage}
+                                >
+                                  Report logs
+                                </button>
+                              </div>
+                            )}
+                            {activeWorkspace.files.length > 0 && (
+                              <>
+                                {activeWorkspace.files.some((f) => f?.fileId != null) && (
+                                  <button
+                                    type="button"
+                                    className={styles.uploadFilesDeleteAllButton}
+                                    title="Delete all files in this project"
+                                    onClick={() => {
+                                      setDeleteAllFilesConfirmInput("");
+                                      setDeleteAllFilesModalOpen(true);
+                                    }}
+                                  >
+                                    <Trash2 size={14} strokeWidth={2} aria-hidden />
+                                    <span>
+                                      Delete all (
+                                      {activeWorkspace.files.filter((f) => f?.fileId != null).length})
+                                    </span>
+                                  </button>
+                                )}
+                                <div className={styles.uploadViewSwitch} role="group" aria-label="File layout">
+                                  <button
+                                    type="button"
+                                    className={classNames(styles.uploadViewButton, {
+                                      [styles.uploadViewButtonActive]: uploadFilesViewMode === "grid",
+                                    })}
+                                    onClick={() => setUploadFilesViewMode("grid")}
+                                    title="Grid"
+                                  >
+                                    <Grid2x2 size={16} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={classNames(styles.uploadViewButton, {
+                                      [styles.uploadViewButtonActive]: uploadFilesViewMode === "list",
+                                    })}
+                                    onClick={() => setUploadFilesViewMode("list")}
+                                    title="List"
+                                  >
+                                    <List size={16} />
+                                  </button>
+                                </div>
+                                <button
+                                  type="button"
+                                  className={styles.uploadFilesExpandPrimaryButton}
+                                  title="Open full-page files and pipeline views"
+                                  onClick={() => {
+                                    setUploadExpandedPanel("files");
+                                    setUploadFilesExpandedOpen(true);
+                                  }}
+                                >
+                                  <Maximize2 size={16} strokeWidth={2} aria-hidden />
+                                  Expand
+                                </button>
+                              </>
+                            )}
                           </div>
-                        )}
-                        {activeWorkspace.files.length > 0 && (
-                          <>
-                            {activeWorkspace.files.some((f) => f?.fileId != null) && (
+                        </div>
+                        <div className={styles.headerFilesContainer}>
+                          <UploadProjectFilesList
+                            files={activeWorkspace.files}
+                            uploadFilesViewMode={uploadFilesViewMode}
+                            activeWorkspaceFileId={activeWorkspaceFileId}
+                            ingestionFileReports={ingestionFileReports}
+                            updateActiveWorkspace={updateActiveWorkspace}
+                            onOpenFileReport={openIngestionReportForFile}
+                            setWorkspaceFilePendingDelete={setWorkspaceFilePendingDelete}
+                            setDeleteWorkspaceFileNameInput={setDeleteWorkspaceFileNameInput}
+                            regionClassName={styles.uploadFilesScrollRegion}
+                            emptyClassName={styles.emptyFilesStatePro}
+                            emptyMessage="No files yet. Upload PDFs in the area above."
+                            isLoadingFiles={workspaceMode === "upload" && isProjectFilesSyncing}
+                            fileSkeletonCount={fileSkeletonCount}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={styles.uploadWorkspacePipelineSection}>
+                      {executionState.visible && (
+                        <UploadPipelineOutputCard
+                          executionState={executionState}
+                          executionStatusLabel={executionStatusLabel}
+                          executionSummaryItems={executionSummaryItems}
+                          selectedWorkspaceFile={selectedWorkspaceFile}
+                          updateActiveWorkspace={updateActiveWorkspace}
+                          variant="inline"
+                          onExpand={() => {
+                            setUploadExpandedPanel("pipeline");
+                            setUploadFilesExpandedOpen(true);
+                          }}
+                        />
+                      )}
+
+                    </div>
+
+                    <div className={styles.pipelineFooter}>
+                      <Button
+                        type="button"
+                        size="lg"
+                        className={styles.pipelineRunButton}
+                        onClick={handleStartIngestion}
+                        disabled={
+                          isPending ||
+                          isProcessingFiles ||
+                          !hasUploadedFiles ||
+                          activeWorkspace.selectedFileId == null ||
+                          hasSelectedProcessedFile
+                        }
+                      >
+                        <PlayCircle size={20} />
+                        {isProcessingFiles ? "Pipeline running..." : "Run selected file"}
+                      </Button>
+                      <p className={styles.pipelineCtaHintLatin}>
+                        Select one file, then run chunk to embed to vector store before chat.
+                      </p>
+                      {!hasUploadedFiles && (
+                        <p className={styles.pipelineCtaNote}>Upload at least one PDF first.</p>
+                      )}
+                      {hasUploadedFiles && activeWorkspace.selectedFileId == null && (
+                        <p className={styles.pipelineCtaNote}>Select one file to process.</p>
+                      )}
+                      {hasSelectedProcessedFile && (
+                        <p className={styles.pipelineCtaNote}>Selected file is already processed. Start Your Chat.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {uploadFilesExpandedOpen && activeWorkspace.files.length > 0 && (
+                    <div
+                      className={styles.uploadFilesExpandedFullPage}
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="upload-files-expanded-title"
+                    >
+                      <header className={styles.uploadFilesExpandedFullPageHeader}>
+                        <button
+                          type="button"
+                          className={styles.uploadFilesExpandedBack}
+                          onClick={() => setUploadFilesExpandedOpen(false)}
+                        >
+                          <ArrowLeft size={18} strokeWidth={2} aria-hidden />
+                          Back
+                        </button>
+                        <div className={styles.uploadFilesExpandedHeaderTitles}>
+                          <h2 id="upload-files-expanded-title" className={styles.uploadFilesExpandedTitle}>
+                            Files in this project
+                          </h2>
+                          <p className={styles.uploadFilesExpandedSubtitle}>
+                            {activeWorkspace.files.length} file
+                            {activeWorkspace.files.length === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                        <div className={styles.uploadFilesExpandedHeaderActions}>
+                          {/* Show only the OTHER tab — not both side by side */}
+                          <div className={styles.uploadExpandedPanelTabs} role="tablist" aria-label="Expanded sections">
+                            {uploadExpandedPanel === "files" ? (
                               <button
                                 type="button"
-                                className={styles.uploadFilesDeleteAllButton}
-                                title="Delete all files in this project"
-                                onClick={() => {
-                                  setDeleteAllFilesConfirmInput("");
-                                  setDeleteAllFilesModalOpen(true);
-                                }}
+                                role="tab"
+                                aria-selected={false}
+                                className={styles.uploadExpandedPanelTab}
+                                onClick={() => setUploadExpandedPanel("pipeline")}
                               >
-                                <Trash2 size={14} strokeWidth={2} aria-hidden />
-                                <span>
-                                  Delete all (
-                                  {activeWorkspace.files.filter((f) => f?.fileId != null).length})
-                                </span>
+                                Pipeline execution
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                role="tab"
+                                aria-selected={false}
+                                className={styles.uploadExpandedPanelTab}
+                                onClick={() => setUploadExpandedPanel("files")}
+                              >
+                                Files
                               </button>
                             )}
+                          </div>
+                          {/* Clear selection — always first, before Report logs */}
+                          {uploadExpandedPanel === "files" && hasSelectedFile && (
+                            <button
+                              type="button"
+                              className={classNames(
+                                styles.fileSelectionClearButton,
+                                styles.uploadFilesClearNextToReport,
+                              )}
+                              onClick={() =>
+                                updateActiveWorkspace((current) => ({
+                                  ...current,
+                                  selectedFileId: null,
+                                }))
+                              }
+                            >
+                              Clear selection
+                            </button>
+                          )}
+                          {uploadExpandedPanel === "files" && ingestionFileReports.length > 0 && (
+                            <div className={styles.uploadFilesReportLogsRow}>
+                              <button
+                                type="button"
+                                className={styles.reportLogsHeaderButton}
+                                title="View report logs for all files with metrics"
+                                onClick={openIngestionReportLogsPage}
+                              >
+                                Report logs
+                              </button>
+                            </div>
+                          )}
+                          {activeWorkspace.files.some((f) => f?.fileId != null) && (
+                            <button
+                              type="button"
+                              className={styles.uploadFilesDeleteAllButton}
+                              title="Delete all files in this project"
+                              onClick={() => {
+                                setDeleteAllFilesConfirmInput("");
+                                setDeleteAllFilesModalOpen(true);
+                              }}
+                            >
+                              <Trash2 size={14} strokeWidth={2} aria-hidden />
+                              <span>
+                                Delete all (
+                                {activeWorkspace.files.filter((f) => f?.fileId != null).length})
+                              </span>
+                            </button>
+                          )}
+                          {uploadExpandedPanel === "files" && (
                             <div className={styles.uploadViewSwitch} role="group" aria-label="File layout">
                               <button
                                 type="button"
@@ -3905,1007 +4537,1004 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                                 <List size={16} />
                               </button>
                             </div>
-                            <button
-                              type="button"
-                              className={styles.uploadFilesExpandPrimaryButton}
-                              title="Open full-page files and pipeline views"
-                              onClick={() => {
-                                setUploadExpandedPanel("files");
-                                setUploadFilesExpandedOpen(true);
-                              }}
-                            >
-                              <Maximize2 size={16} strokeWidth={2} aria-hidden />
-                              Expand
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className={styles.headerFilesContainer}>
-                      <UploadProjectFilesList
-                        files={activeWorkspace.files}
-                        uploadFilesViewMode={uploadFilesViewMode}
-                        activeWorkspaceFileId={activeWorkspaceFileId}
-                        ingestionFileReports={ingestionFileReports}
-                        updateActiveWorkspace={updateActiveWorkspace}
-                        onOpenFileReport={openIngestionReportForFile}
-                        setWorkspaceFilePendingDelete={setWorkspaceFilePendingDelete}
-                        setDeleteWorkspaceFileNameInput={setDeleteWorkspaceFileNameInput}
-                        regionClassName={styles.uploadFilesScrollRegion}
-                        emptyClassName={styles.emptyFilesStatePro}
-                        emptyMessage="No files yet. Upload PDFs in the area above."
-                        isLoadingFiles={workspaceMode === "upload" && isProjectFilesSyncing}
-                        fileSkeletonCount={fileSkeletonCount}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className={styles.uploadWorkspacePipelineSection}>
-                {executionState.visible && (
-                  <UploadPipelineOutputCard
-                    executionState={executionState}
-                    executionStatusLabel={executionStatusLabel}
-                    executionSummaryItems={executionSummaryItems}
-                    selectedWorkspaceFile={selectedWorkspaceFile}
-                    updateActiveWorkspace={updateActiveWorkspace}
-                    variant="inline"
-                    onExpand={() => {
-                      setUploadExpandedPanel("pipeline");
-                      setUploadFilesExpandedOpen(true);
-                    }}
-                  />
-                )}
-
-                </div>
-
-                <div className={styles.pipelineFooter}>
-                  <Button
-                    type="button"
-                    size="lg"
-                    className={styles.pipelineRunButton}
-                    onClick={handleStartIngestion}
-                    disabled={
-                      isPending ||
-                      isProcessingFiles ||
-                      !hasUploadedFiles ||
-                      activeWorkspace.selectedFileId == null ||
-                      hasSelectedProcessedFile
-                    }
-                  >
-                    <PlayCircle size={20} />
-                    {isProcessingFiles ? "Pipeline running..." : "Run selected file"}
-                  </Button>
-                  <p className={styles.pipelineCtaHintLatin}>
-                    Select one file, then run chunk to embed to vector store before chat.
-                  </p>
-                  {!hasUploadedFiles && (
-                    <p className={styles.pipelineCtaNote}>Upload at least one PDF first.</p>
-                  )}
-                  {hasUploadedFiles && activeWorkspace.selectedFileId == null && (
-                    <p className={styles.pipelineCtaNote}>Select one file to process.</p>
-                  )}
-                  {hasSelectedProcessedFile && (
-                    <p className={styles.pipelineCtaNote}>Selected file is already processed. Start Your Chat.</p>
-                  )}
-                </div>
-              </div>
-
-              {uploadFilesExpandedOpen && activeWorkspace.files.length > 0 && (
-                <div
-                  className={styles.uploadFilesExpandedFullPage}
-                  role="dialog"
-                  aria-modal="true"
-                  aria-labelledby="upload-files-expanded-title"
-                >
-                  <header className={styles.uploadFilesExpandedFullPageHeader}>
-                    <button
-                      type="button"
-                      className={styles.uploadFilesExpandedBack}
-                      onClick={() => setUploadFilesExpandedOpen(false)}
-                    >
-                      <ArrowLeft size={18} strokeWidth={2} aria-hidden />
-                      Back
-                    </button>
-                    <div className={styles.uploadFilesExpandedHeaderTitles}>
-                      <h2 id="upload-files-expanded-title" className={styles.uploadFilesExpandedTitle}>
-                        Files in this project
-                      </h2>
-                      <p className={styles.uploadFilesExpandedSubtitle}>
-                        {activeWorkspace.files.length} file
-                        {activeWorkspace.files.length === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                    <div className={styles.uploadFilesExpandedHeaderActions}>
-                      <div className={styles.uploadExpandedPanelTabs} role="tablist" aria-label="Expanded sections">
-                        <button
-                          type="button"
-                          role="tab"
-                          aria-selected={uploadExpandedPanel === "files"}
-                          className={classNames(styles.uploadExpandedPanelTab, {
-                            [styles.uploadExpandedPanelTabActive]: uploadExpandedPanel === "files",
-                          })}
-                          onClick={() => setUploadExpandedPanel("files")}
-                        >
-                          Files
-                        </button>
-                        <button
-                          type="button"
-                          role="tab"
-                          aria-selected={uploadExpandedPanel === "pipeline"}
-                          className={classNames(styles.uploadExpandedPanelTab, {
-                            [styles.uploadExpandedPanelTabActive]: uploadExpandedPanel === "pipeline",
-                          })}
-                          onClick={() => setUploadExpandedPanel("pipeline")}
-                        >
-                          Pipeline execution
-                        </button>
-                      </div>
-                      {uploadExpandedPanel === "files" &&
-                        (ingestionFileReports.length > 0 || hasSelectedFile) && (
-                          <div className={styles.uploadFilesReportLogsRow}>
-                            {ingestionFileReports.length > 0 && (
-                              <button
-                                type="button"
-                                className={styles.reportLogsHeaderButton}
-                                title="View report logs for all files with metrics"
-                                onClick={openIngestionReportLogsPage}
-                              >
-                                Report logs
-                              </button>
-                            )}
-                            {hasSelectedFile && (
-                              <button
-                                type="button"
-                                className={classNames(
-                                  styles.fileSelectionClearButton,
-                                  styles.uploadFilesClearNextToReport,
-                                )}
-                                onClick={() =>
-                                  updateActiveWorkspace((current) => ({
-                                    ...current,
-                                    selectedFileId: null,
-                                  }))
-                                }
-                              >
-                                Clear selection
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      {activeWorkspace.files.some((f) => f?.fileId != null) && (
-                      <button
-                        type="button"
-                        className={styles.uploadFilesDeleteAllButton}
-                        title="Delete all files in this project"
-                        onClick={() => {
-                          setDeleteAllFilesConfirmInput("");
-                          setDeleteAllFilesModalOpen(true);
-                        }}
-                      >
-                        <Trash2 size={14} strokeWidth={2} aria-hidden />
-                        <span>
-                          Delete all (
-                          {activeWorkspace.files.filter((f) => f?.fileId != null).length})
-                        </span>
-                      </button>
-                      )}
-                      {uploadExpandedPanel === "files" && (
-                      <div className={styles.uploadViewSwitch} role="group" aria-label="File layout">
-                        <button
-                          type="button"
-                          className={classNames(styles.uploadViewButton, {
-                            [styles.uploadViewButtonActive]: uploadFilesViewMode === "grid",
-                          })}
-                          onClick={() => setUploadFilesViewMode("grid")}
-                          title="Grid"
-                        >
-                          <Grid2x2 size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          className={classNames(styles.uploadViewButton, {
-                            [styles.uploadViewButtonActive]: uploadFilesViewMode === "list",
-                          })}
-                          onClick={() => setUploadFilesViewMode("list")}
-                          title="List"
-                        >
-                          <List size={16} />
-                        </button>
-                      </div>
-                      )}
-                    </div>
-                  </header>
-                  <div className={styles.uploadFilesExpandedFullPageBody}>
-                    {uploadExpandedPanel === "files" ? (
-                      <UploadProjectFilesList
-                        files={activeWorkspace.files}
-                        uploadFilesViewMode={uploadFilesViewMode}
-                        activeWorkspaceFileId={activeWorkspaceFileId}
-                        ingestionFileReports={ingestionFileReports}
-                        updateActiveWorkspace={updateActiveWorkspace}
-                        onOpenFileReport={openIngestionReportForFile}
-                        setWorkspaceFilePendingDelete={setWorkspaceFilePendingDelete}
-                        setDeleteWorkspaceFileNameInput={setDeleteWorkspaceFileNameInput}
-                        regionClassName={styles.uploadFilesExpandedScroll}
-                        emptyClassName={styles.emptyFilesStatePro}
-                        emptyMessage="No files."
-                        isLoadingFiles={workspaceMode === "upload" && isProjectFilesSyncing}
-                        fileSkeletonCount={fileSkeletonCount}
-                      />
-                    ) : (
-                      <div className={styles.uploadExpandedPipelinePage}>
-                        {!executionState.visible &&
-                          (executionState.status === "success" || executionState.status === "error") && (
-                            <div
-                              className={classNames(styles.executionCollapsedBar, {
-                                [styles.executionCollapsedBarSuccess]: executionState.status === "success",
-                                [styles.executionCollapsedBarError]: executionState.status === "error",
-                              })}
-                            >
-                              <div className={styles.executionCollapsedBarText}>
-                                <span className={styles.executionCollapsedBarLabel}>Last pipeline run</span>
-                                <span
-                                  className={classNames(styles.executionCollapsedBarStatus, {
-                                    [styles.executionCollapsedBarStatusError]:
-                                      executionState.status === "error",
-                                    [styles.executionCollapsedBarStatusSuccess]:
-                                      executionState.status === "success",
-                                  })}
-                                >
-                                  {executionStatusLabel}
-                                </span>
-                                {executionState.message ? (
-                                  <span className={styles.executionCollapsedBarMessage}>
-                                    {executionState.message}
-                                  </span>
-                                ) : null}
-                              </div>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className={styles.executionShowOutputButton}
-                                onClick={() =>
-                                  updateActiveWorkspace((current) => ({
-                                    ...current,
-                                    execution: {
-                                      ...current.execution,
-                                      visible: true,
-                                    },
-                                  }))
-                                }
-                              >
-                                Show output
-                              </Button>
-                            </div>
                           )}
-
-                        {hasUploadPipelineOutput ? (
-                          <UploadPipelineOutputCard
-                            executionState={executionState}
-                            executionStatusLabel={executionStatusLabel}
-                            executionSummaryItems={executionSummaryItems}
-                            selectedWorkspaceFile={selectedWorkspaceFile}
+                        </div>
+                      </header>
+                      <div className={styles.uploadFilesExpandedFullPageBody}>
+                        {uploadExpandedPanel === "files" ? (
+                          <UploadProjectFilesList
+                            files={activeWorkspace.files}
+                            uploadFilesViewMode={uploadFilesViewMode}
+                            activeWorkspaceFileId={activeWorkspaceFileId}
+                            ingestionFileReports={ingestionFileReports}
                             updateActiveWorkspace={updateActiveWorkspace}
-                            variant="modal"
+                            onOpenFileReport={openIngestionReportForFile}
+                            setWorkspaceFilePendingDelete={setWorkspaceFilePendingDelete}
+                            setDeleteWorkspaceFileNameInput={setDeleteWorkspaceFileNameInput}
+                            regionClassName={styles.uploadFilesExpandedScroll}
+                            emptyClassName={styles.emptyFilesStatePro}
+                            emptyMessage="No files."
+                            isLoadingFiles={workspaceMode === "upload" && isProjectFilesSyncing}
+                            fileSkeletonCount={fileSkeletonCount}
                           />
                         ) : (
-                          <div className={styles.uploadExpandedEmptyState}>
-                            Run pipeline to view execution progress and reports.
+                          <div className={styles.uploadExpandedPipelinePage}>
+                            {!executionState.visible &&
+                              (executionState.status === "success" || executionState.status === "error") && (
+                                <div
+                                  className={classNames(styles.executionCollapsedBar, {
+                                    [styles.executionCollapsedBarSuccess]: executionState.status === "success",
+                                    [styles.executionCollapsedBarError]: executionState.status === "error",
+                                  })}
+                                >
+                                  <div className={styles.executionCollapsedBarText}>
+                                    <span className={styles.executionCollapsedBarLabel}>Last pipeline run</span>
+                                    <span
+                                      className={classNames(styles.executionCollapsedBarStatus, {
+                                        [styles.executionCollapsedBarStatusError]:
+                                          executionState.status === "error",
+                                        [styles.executionCollapsedBarStatusSuccess]:
+                                          executionState.status === "success",
+                                      })}
+                                    >
+                                      {executionStatusLabel}
+                                    </span>
+                                    {executionState.message ? (
+                                      <span className={styles.executionCollapsedBarMessage}>
+                                        {executionState.message}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className={styles.executionShowOutputButton}
+                                    onClick={() =>
+                                      updateActiveWorkspace((current) => ({
+                                        ...current,
+                                        execution: {
+                                          ...current.execution,
+                                          visible: true,
+                                        },
+                                      }))
+                                    }
+                                  >
+                                    Show output
+                                  </Button>
+                                </div>
+                              )}
+
+                            {hasUploadPipelineOutput ? (
+                              <UploadPipelineOutputCard
+                                executionState={executionState}
+                                executionStatusLabel={executionStatusLabel}
+                                executionSummaryItems={executionSummaryItems}
+                                selectedWorkspaceFile={selectedWorkspaceFile}
+                                updateActiveWorkspace={updateActiveWorkspace}
+                                variant="modal"
+                              />
+                            ) : (
+                              <div className={styles.uploadExpandedEmptyState}>
+                                Run pipeline to view execution progress and reports.
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {ingestionReportOpen && ingestionReportMode === "logs" && (
-                <div
-                  className={styles.reportFullPage}
-                  role="dialog"
-                  aria-modal="true"
-                  aria-labelledby="report-full-page-title"
-                >
-                  <header className={styles.reportFullPageHeader}>
-                    <button
-                      type="button"
-                      className={styles.reportFullPageBack}
-                      onClick={() => setIngestionReportOpen(false)}
-                    >
-                      <ArrowLeft size={18} strokeWidth={2} aria-hidden />
-                      Back
-                    </button>
-                    <div className={styles.reportFullPageHeaderCenter}>
-                      <h1 id="report-full-page-title" className={styles.reportFullPageTitle}>
-                        Report logs
-                      </h1>
-                      <p className={styles.reportFullPageSubtitle}>
-                        {ingestionReportTableRows.length} file
-                        {ingestionReportTableRows.length === 1 ? "" : "s"}
-                      </p>
                     </div>
-                    <button
-                      type="button"
-                      className={styles.reportFullPageExport}
-                      onClick={handleExportIngestionReportCsv}
-                      disabled={
-                        ingestionReportTableRows.length === 0 || ingestionReportViewLoading
-                      }
-                    >
-                      Export CSV
-                    </button>
-                  </header>
-                  <main className={styles.reportFullPageMain}>
-                    {ingestionReportViewLoading ? (
-                      <div className={styles.reportFullPageSkeleton} aria-hidden>
-                        {Array.from({ length: 8 }).map((_, rowIdx) => (
-                          <div key={rowIdx} className={styles.reportFullPageSkeletonRow}>
-                            {Array.from({ length: 10 }).map((__, colIdx) => (
-                              <div key={colIdx} className={styles.reportFullPageSkeletonCell} />
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    ) : ingestionReportTableRows.length === 0 ? (
-                      <div className={styles.reportFullPageEmpty}>
-                        <p className={styles.reportFullPageEmptyTitle}>No report data</p>
-                        <p className={styles.reportFullPageEmptyHint}>
-                          Run the pipeline on a file to generate ingestion metrics, then open this view
-                          again.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className={styles.reportFullPageTableWrap}>
-                        <table className={styles.reportFullPageTable}>
-                          <thead>
-                            <tr>
-                              <th>File name</th>
-                              <th>File code</th>
-                              <th>Pages</th>
-                              <th>Size</th>
-                              <th>Category</th>
-                              <th>Total chunks</th>
-                              <th>Vectors stored</th>
-                              <th>Processing time</th>
-                              <th>Embedding</th>
-                              <th>Vector backends</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {ingestionReportTableRows.map((rep) => {
-                              const wf = getWorkspaceFileForReport(rep, activeWorkspace?.files);
-                              const pages = wf
-                                ? wf.pages ?? wf.pagesCount ?? wf.pages_count ?? "—"
-                                : "—";
-                              return (
-                                <tr key={rep.id}>
-                                  <td>{rep.fileName}</td>
-                                  <td>{rep.fileCode || "—"}</td>
-                                  <td>{pages}</td>
-                                  <td>{wf?.size ?? "—"}</td>
-                                  <td>{wf?.category ?? "—"}</td>
-                                  <td>
-                                    {rep.metricsIncomplete ? "—" : formatNumber(rep.chunkCount)}
-                                  </td>
-                                  <td>
-                                    {rep.metricsIncomplete ? "—" : formatNumber(rep.vectorsStored)}
-                                  </td>
-                                  <td>
-                                    {rep.metricsIncomplete
-                                      ? "—"
-                                      : rep.processingTimeSeconds > 0
-                                      ? `${Number(rep.processingTimeSeconds).toFixed(2)}s`
-                                      : "—"}
-                                  </td>
-                                  <td>{rep.embeddingLabel}</td>
-                                  <td>
-                                    {rep.backends?.length ? rep.backends.join(", ") : "—"}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </main>
-                </div>
-              )}
+                  )}
 
-              {ingestionReportOpen &&
-                ingestionReportMode === "single" &&
-                ingestionFileReports.length > 0 && (
-                  <div
-                    className={styles.ingestionReportBackdrop}
-                    role="presentation"
-                    onClick={() => setIngestionReportOpen(false)}
-                  >
+                  {ingestionReportOpen && ingestionReportMode === "logs" && (
                     <div
+                      className={styles.reportFullPage}
                       role="dialog"
                       aria-modal="true"
-                      aria-labelledby="ingestion-report-single-title"
-                      className={styles.ingestionReportModal}
-                      onClick={(e) => e.stopPropagation()}
+                      aria-labelledby="report-full-page-title"
                     >
-                      <div className={styles.ingestionReportModalHeader}>
-                        <h2
-                          id="ingestion-report-single-title"
-                          className={styles.ingestionReportModalTitle}
-                        >
-                          Ingestion report
-                        </h2>
+                      <header className={styles.reportFullPageHeader}>
                         <button
                           type="button"
-                          className={styles.ingestionReportClose}
+                          className={styles.reportFullPageBack}
                           onClick={() => setIngestionReportOpen(false)}
-                          aria-label="Close"
                         >
-                          <X size={18} />
+                          <ArrowLeft size={18} strokeWidth={2} aria-hidden />
+                          Back
                         </button>
+                        <div className={styles.reportFullPageHeaderCenter}>
+                          <h1 id="report-full-page-title" className={styles.reportFullPageTitle}>
+                            Report logs
+                          </h1>
+                          <p className={styles.reportFullPageSubtitle}>
+                            {ingestionReportTableRows.length} file
+                            {ingestionReportTableRows.length === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className={styles.reportFullPageExport}
+                          onClick={handleExportIngestionReportCsv}
+                          disabled={
+                            ingestionReportTableRows.length === 0 || ingestionReportViewLoading
+                          }
+                        >
+                          Export CSV
+                        </button>
+                      </header>
+                      <main className={styles.reportFullPageMain}>
+                        {ingestionReportViewLoading ? (
+                          <div className={styles.reportFullPageSkeleton} aria-hidden>
+                            {Array.from({ length: 8 }).map((_, rowIdx) => (
+                              <div key={rowIdx} className={styles.reportFullPageSkeletonRow}>
+                                {Array.from({ length: 10 }).map((__, colIdx) => (
+                                  <div key={colIdx} className={styles.reportFullPageSkeletonCell} />
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        ) : ingestionReportTableRows.length === 0 ? (
+                          <div className={styles.reportFullPageEmpty}>
+                            <p className={styles.reportFullPageEmptyTitle}>No report data</p>
+                            <p className={styles.reportFullPageEmptyHint}>
+                              Run the pipeline on a file to generate ingestion metrics, then open this view
+                              again.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className={styles.reportFullPageTableWrap}>
+                            <table className={styles.reportFullPageTable}>
+                              <thead>
+                                <tr>
+                                  <th>File name</th>
+                                  <th>File code</th>
+                                  <th>Pages</th>
+                                  <th>Size</th>
+                                  <th>Category</th>
+                                  <th>Total chunks</th>
+                                  <th>Vectors stored</th>
+                                  <th>Processing time</th>
+                                  <th>Embedding</th>
+                                  <th>Vector backends</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {ingestionReportTableRows.map((rep) => {
+                                  const wf = getWorkspaceFileForReport(rep, activeWorkspace?.files);
+                                  const pages = wf
+                                    ? wf.pages ?? wf.pagesCount ?? wf.pages_count ?? "—"
+                                    : "—";
+                                  return (
+                                    <tr key={rep.id}>
+                                      <td>{rep.fileName}</td>
+                                      <td>{rep.fileCode || "—"}</td>
+                                      <td>{pages}</td>
+                                      <td>{wf?.size ?? "—"}</td>
+                                      <td>{wf?.category ?? "—"}</td>
+                                      <td>
+                                        {rep.metricsIncomplete ? "—" : formatNumber(rep.chunkCount)}
+                                      </td>
+                                      <td>
+                                        {rep.metricsIncomplete ? "—" : formatNumber(rep.vectorsStored)}
+                                      </td>
+                                      <td>
+                                        {rep.metricsIncomplete
+                                          ? "—"
+                                          : rep.processingTimeSeconds > 0
+                                            ? `${Number(rep.processingTimeSeconds).toFixed(2)}s`
+                                            : "—"}
+                                      </td>
+                                      <td>{rep.embeddingLabel}</td>
+                                      <td>
+                                        {rep.backends?.length ? rep.backends.join(", ") : "—"}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </main>
+                    </div>
+                  )}
+
+                  {ingestionReportOpen &&
+                    ingestionReportMode === "single" &&
+                    ingestionFileReports.length > 0 && (
+                      <div
+                        className={styles.ingestionReportBackdrop}
+                        role="presentation"
+                        onClick={() => setIngestionReportOpen(false)}
+                      >
+                        <div
+                          role="dialog"
+                          aria-modal="true"
+                          aria-labelledby="ingestion-report-single-title"
+                          className={styles.ingestionReportModal}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className={styles.ingestionReportModalHeader}>
+                            <h2
+                              id="ingestion-report-single-title"
+                              className={styles.ingestionReportModalTitle}
+                            >
+                              Ingestion report
+                            </h2>
+                            <button
+                              type="button"
+                              className={styles.ingestionReportClose}
+                              onClick={() => setIngestionReportOpen(false)}
+                              aria-label="Close"
+                            >
+                              <X size={18} />
+                            </button>
+                          </div>
+                          <p className={styles.ingestionReportModalIntro}>
+                            File details and ingestion metrics for this file only.
+                          </p>
+                          {(() => {
+                            const activeId =
+                              ingestionReportSelectedId ?? String(ingestionFileReports[0]?.id ?? "");
+                            const active =
+                              ingestionFileReports.find((r) => String(r.id) === String(activeId)) ||
+                              ingestionFileReports[0] ||
+                              null;
+                            if (!active) return null;
+                            const workspaceFile = getWorkspaceFileForReport(
+                              active,
+                              activeWorkspace?.files,
+                            );
+                            return (
+                              <div className={styles.ingestionReportBody}>
+                                <IngestionFileDetailsSection
+                                  workspaceFile={workspaceFile}
+                                  variant="single"
+                                />
+                                <div className={styles.ingestionReportCard}>
+                                  <h4 className={styles.ingestionReportFileDetailsTitle}>
+                                    Ingestion metrics
+                                  </h4>
+                                  <IngestionReportMetricsDl active={active} />
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
                       </div>
-                      <p className={styles.ingestionReportModalIntro}>
-                        File details and ingestion metrics for this file only.
-                      </p>
-                      {(() => {
-                        const activeId =
-                          ingestionReportSelectedId ?? String(ingestionFileReports[0]?.id ?? "");
-                        const active =
-                          ingestionFileReports.find((r) => String(r.id) === String(activeId)) ||
-                          ingestionFileReports[0] ||
-                          null;
-                        if (!active) return null;
-                        const workspaceFile = getWorkspaceFileForReport(
-                          active,
-                          activeWorkspace?.files,
-                        );
-                        return (
-                          <div className={styles.ingestionReportBody}>
-                            <IngestionFileDetailsSection
-                              workspaceFile={workspaceFile}
-                              variant="single"
-                            />
-                            <div className={styles.ingestionReportCard}>
-                              <h4 className={styles.ingestionReportFileDetailsTitle}>
-                                Ingestion metrics
-                              </h4>
-                              <IngestionReportMetricsDl active={active} />
+                    )}
+
+                  <AnimatePresence>
+                    {workspaceFilePendingDelete && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className={classNames(styles.modalOverlay, styles.workspaceFileDeleteOverlay)}
+                        onClick={() => {
+                          if (deletingWorkspaceFileId) return;
+                          setWorkspaceFilePendingDelete(null);
+                          setDeleteWorkspaceFileNameInput("");
+                        }}
+                      >
+                        <motion.section
+                          initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                          className={styles.deleteModal}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <div className={styles.createModalHeader}>
+                            <div>
+                              <h2 className={styles.createModalTitle}>Delete file</h2>
+                              <p className={styles.createModalSubtitle}>
+                                This removes the file from the project. Type the exact file name to confirm.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              className={styles.modalCloseButton}
+                              onClick={() => {
+                                if (deletingWorkspaceFileId) return;
+                                setWorkspaceFilePendingDelete(null);
+                                setDeleteWorkspaceFileNameInput("");
+                              }}
+                              aria-label="Close"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                          <div className={styles.createModalBody}>
+                            <div className={styles.deleteModalContent}>
+                              <p className={styles.deleteWarningText}>
+                                Type the full file name below to confirm deletion (example:{" "}
+                                <strong>{workspaceFilePendingDelete.name}</strong>).
+                              </p>
+                              <label className={styles.formField}>
+                                <span className={styles.modalFieldLabel}>File name confirmation</span>
+                                <Input
+                                  value={deleteWorkspaceFileNameInput}
+                                  onChange={(event) => setDeleteWorkspaceFileNameInput(event.target.value)}
+                                  placeholder={workspaceFilePendingDelete.name}
+                                  className={styles.modalInput}
+                                  autoComplete="off"
+                                />
+                              </label>
                             </div>
                           </div>
-                        );
-                      })()}
+                          <div className={styles.createModalActions}>
+                            <div className={styles.deleteModalActions}>
+                              <Button
+                                variant="outline"
+                                className={styles.deleteCancelButton}
+                                onClick={() => {
+                                  if (deletingWorkspaceFileId) return;
+                                  setWorkspaceFilePendingDelete(null);
+                                  setDeleteWorkspaceFileNameInput("");
+                                }}
+                                disabled={Boolean(deletingWorkspaceFileId)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                className={styles.deleteProjectCta}
+                                onClick={handleDeleteWorkspaceFile}
+                                disabled={
+                                  deletingWorkspaceFileId != null ||
+                                  deleteWorkspaceFileNameInput.trim() !==
+                                  String(workspaceFilePendingDelete.name || "").trim()
+                                }
+                              >
+                                {deletingWorkspaceFileId != null ? "Deleting…" : "Delete file"}
+                              </Button>
+                            </div>
+                          </div>
+                        </motion.section>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <AnimatePresence>
+                    {deleteAllFilesModalOpen && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className={classNames(styles.modalOverlay, styles.deleteAllFilesOverlay)}
+                        onClick={() => {
+                          if (isDeletingAllFiles) return;
+                          setDeleteAllFilesModalOpen(false);
+                          setDeleteAllFilesConfirmInput("");
+                        }}
+                      >
+                        <motion.section
+                          initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                          className={styles.deleteModal}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <div className={styles.createModalHeader}>
+                            <div>
+                              <h2 className={styles.createModalTitle}>Delete all files</h2>
+                              <p className={styles.createModalSubtitle}>
+                                This permanently removes every file from this project. Chat and pipeline data
+                                tied to these files may be affected. This cannot be undone.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              className={styles.modalCloseButton}
+                              onClick={() => {
+                                if (isDeletingAllFiles) return;
+                                setDeleteAllFilesModalOpen(false);
+                                setDeleteAllFilesConfirmInput("");
+                              }}
+                              aria-label="Close"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                          <div className={styles.createModalBody}>
+                            <div className={styles.deleteModalContent}>
+                              <p className={styles.deleteWarningText}>
+                                You are about to delete{" "}
+                                <strong>
+                                  {activeWorkspace.files.filter((f) => f?.fileId != null).length ||
+                                    activeWorkspace.files.length}{" "}
+                                  file
+                                  {(activeWorkspace.files.filter((f) => f?.fileId != null).length ||
+                                    activeWorkspace.files.length) === 1
+                                    ? ""
+                                    : "s"}
+                                </strong>
+                                . Type <strong>{DELETE_ALL_FILES_CONFIRM_PHRASE}</strong> to confirm you want
+                                to remove all of them completely.
+                              </p>
+                              <label className={styles.formField}>
+                                <span className={styles.modalFieldLabel}>Confirmation</span>
+                                <Input
+                                  value={deleteAllFilesConfirmInput}
+                                  onChange={(event) => setDeleteAllFilesConfirmInput(event.target.value)}
+                                  placeholder={DELETE_ALL_FILES_CONFIRM_PHRASE}
+                                  className={styles.modalInput}
+                                  autoComplete="off"
+                                />
+                              </label>
+                            </div>
+                          </div>
+                          <div className={styles.createModalActions}>
+                            <div className={styles.deleteModalActions}>
+                              <Button
+                                variant="outline"
+                                className={styles.deleteCancelButton}
+                                onClick={() => {
+                                  if (isDeletingAllFiles) return;
+                                  setDeleteAllFilesModalOpen(false);
+                                  setDeleteAllFilesConfirmInput("");
+                                }}
+                                disabled={isDeletingAllFiles}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                className={styles.deleteProjectCta}
+                                onClick={handleDeleteAllWorkspaceFiles}
+                                disabled={
+                                  isDeletingAllFiles ||
+                                  deleteAllFilesConfirmInput.trim() !== DELETE_ALL_FILES_CONFIRM_PHRASE ||
+                                  activeWorkspace.files.filter((f) => f?.fileId != null).length === 0
+                                }
+                              >
+                                {isDeletingAllFiles ? "Deleting…" : "Delete all files"}
+                              </Button>
+                            </div>
+                          </div>
+                        </motion.section>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </section>
+              )}
+
+              {workspaceMode === "query" && (
+                <div className={styles.chatPanelShell}>
+
+                  {/* ── Welcome subtitle ── */}
+                  {showChatWelcome && (
+                    <div className={styles.chatWelcomeShell}>
+                      <p className={styles.chatWelcomeSubtitle}>
+                        Ask questions, summarize uploaded files, or explore ideas from your document set.
+                      </p>
                     </div>
-                  </div>
-                )}
+                  )}
 
-              <AnimatePresence>
-                {workspaceFilePendingDelete && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className={classNames(styles.modalOverlay, styles.workspaceFileDeleteOverlay)}
-                    onClick={() => {
-                      if (deletingWorkspaceFileId) return;
-                      setWorkspaceFilePendingDelete(null);
-                      setDeleteWorkspaceFileNameInput("");
-                    }}
-                  >
-                    <motion.section
-                      initial={{ opacity: 0, y: 12, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 12, scale: 0.98 }}
-                      className={styles.deleteModal}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className={styles.createModalHeader}>
-                        <div>
-                          <h2 className={styles.createModalTitle}>Delete file</h2>
-                          <p className={styles.createModalSubtitle}>
-                            This removes the file from the project. Type the exact file name to confirm.
-                          </p>
+                  {/* ── Conversation area ── */}
+                  <div className={styles.workspaceCenterStage}>
+                    {activeWorkspace.visibleLines.length > 0 && (
+                      <div className={styles.statusList}>
+                        {activeWorkspace.visibleLines.map((line) => (
+                          <TypedLine key={line.id} text={line.text} />
+                        ))}
+                      </div>
+                    )}
+
+                    {(activeWorkspace.conversation || []).map((entry) => {
+                      // Timestamp from entry.id (format: "timestamp-randomstring")
+                      const entryTs = Number(String(entry.id).split("-")[0]);
+                      const entryTime = Number.isFinite(entryTs) && entryTs > 0
+                        ? new Date(entryTs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                        : null;
+
+                      return (
+                        <div key={entry.id} className={styles.conversationBlock}>
+
+                          {/* User bubble with timestamp */}
+                          <div className={styles.userMessageRow}>
+                            <div className={styles.userBubbleWrap}>
+                              {entryTime && (
+                                <span className={styles.userBubbleTime}>{entryTime}</span>
+                              )}
+                              <div className={styles.userBubble}>{entry.query}</div>
+                            </div>
+                          </div>
+
+                          {/* AI responses — markdown + avatar dot */}
+                          {(entry.responseVariants || []).map((variant, index) => (
+                            <motion.div
+                              key={`${entry.id}-${variant.db}-${variant.experimentId || index}`}
+                              initial={{ opacity: 0, y: 12 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                              className={styles.aiMessageRow}
+                            >
+                              <span className={styles.aiAvatarDot} aria-hidden />
+                              <div className={styles.aiResponseCard}>
+                                <div className={styles.aiResponseText}>
+                                  {renderMarkdown(variant.response)}
+                                </div>
+                                <div className={styles.responseCardActions}>
+                                  {variant.usedStrategies?.length > 0 && (
+                                    <button
+                                      type="button"
+                                      className={styles.techniqueChip}
+                                      onClick={() =>
+                                        setTechniqueOverlay({
+                                          title: `Response-${index + 1}`,
+                                          strategies: variant.usedStrategies,
+                                        })
+                                      }
+                                    >
+                                      Techniques used ↗
+                                    </button>
+                                  )}
+                                  {variant.agentEnabled && (
+                                    <button
+                                      type="button"
+                                      className={styles.techniqueChip}
+                                      onClick={() => handleOpenAgentReport(variant.experimentId)}
+                                    >
+                                      Agent report ↗
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </motion.div>
+                          ))}
                         </div>
+                      );
+                    })}
+
+                    {/* In-flight user bubble */}
+                    {activeWorkspace.submittedQuery && (
+                      <div className={styles.userMessageRow}>
+                        <div className={styles.userBubble}>{activeWorkspace.submittedQuery}</div>
+                      </div>
+                    )}
+
+                    {/* Processing glass card */}
+                    {queryActivityState.visible && activeWorkspace.phase === "query-processing" && (
+                      <div className={styles.aiMessageRow}>
+                        <span className={styles.aiAvatarDot} aria-hidden />
+                        <div className={styles.queryActivityStack}>
+                          <div className={styles.queryActivityGlass}>
+                            <span className={styles.queryActivityGlassShimmer} aria-hidden />
+                            <p className={styles.queryActivityLabel}>
+                              Analyzing your documents
+                              <span className={styles.queryActivityLabelDot} />
+                              <span className={styles.queryActivityLabelDot} />
+                              <span className={styles.queryActivityLabelDot} />
+                            </p>
+                            <p
+                              key={queryActivityState.messages[0]?.id ?? "idle"}
+                              className={classNames(styles.queryActivityLiveText, {
+                                [styles.queryActivityLiveTextWarning]:
+                                  queryActivityState.messages[0]?.tone === "warning",
+                                [styles.queryActivityLiveTextError]:
+                                  queryActivityState.messages[0]?.tone === "error",
+                              })}
+                            >
+                              {queryActivityState.messages[0]?.text ?? "Starting analysis…"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Input dock — floating bar, no label ── */}
+                  <div className={styles.queryDock}>
+                    <div className={styles.chatInputBar}>
+
+                      {/* Text input — takes all available space */}
+                      <Input
+                        ref={queryInputRef}
+                        value={activeWorkspace.query}
+                        disabled={isChatInputDisabled}
+                        onChange={(event) =>
+                          updateActiveWorkspace((current) => ({
+                            ...current,
+                            query: event.target.value,
+                          }))
+                        }
+                        onKeyDown={(event) => {
+                          if (isChatInputDisabled) return;
+                          if (event.key === "Enter") handleStartQuery();
+                        }}
+                        placeholder={
+                          isChatInputDisabled
+                            ? isQueryInFlight
+                              ? "Waiting for the model to finish…"
+                              : "Select an uploaded file to enable chat"
+                            : !hasSelectedProcessedFile
+                              ? "Process the selected file first, then ask your question…"
+                              : "Ask anything about your document…"
+                        }
+                        className={classNames(styles.queryInput, styles.queryInputHero, {
+                          [styles.queryInputDisabled]: isChatInputDisabled,
+                        })}
+                      />
+
+                      {/* Divider */}
+                      <span className={styles.chatInputDivider} aria-hidden />
+
+                      {/* Model selector dropdown */}
+                      <div className={styles.modelDropdownWrap} ref={modelDropdownRef}>
                         <button
                           type="button"
-                          className={styles.modalCloseButton}
-                          onClick={() => {
-                            if (deletingWorkspaceFileId) return;
-                            setWorkspaceFilePendingDelete(null);
-                            setDeleteWorkspaceFileNameInput("");
-                          }}
-                          aria-label="Close"
+                          className={styles.modelSelectorBtn}
+                          onClick={() => setModelDropdownOpen((v) => !v)}
+                          title="Select model"
                         >
-                          <X size={16} />
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" />
+                          </svg>
+                          <span>{activeWorkspace.selectedLlmModel ?? "gpt-4o-mini"}</span>
+                          <svg
+                            width="10" height="10" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                            aria-hidden
+                            style={{ transform: modelDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 180ms ease" }}
+                          >
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
                         </button>
-                      </div>
-                      <div className={styles.createModalBody}>
-                        <div className={styles.deleteModalContent}>
-                          <p className={styles.deleteWarningText}>
-                            Type the full file name below to confirm deletion (example:{" "}
-                            <strong>{workspaceFilePendingDelete.name}</strong>).
-                          </p>
-                          <label className={styles.formField}>
-                            <span className={styles.modalFieldLabel}>File name confirmation</span>
-                            <Input
-                              value={deleteWorkspaceFileNameInput}
-                              onChange={(event) => setDeleteWorkspaceFileNameInput(event.target.value)}
-                              placeholder={workspaceFilePendingDelete.name}
-                              className={styles.modalInput}
-                              autoComplete="off"
-                            />
-                          </label>
-                        </div>
-                      </div>
-                      <div className={styles.createModalActions}>
-                        <div className={styles.deleteModalActions}>
-                          <Button
-                            variant="outline"
-                            className={styles.deleteCancelButton}
-                            onClick={() => {
-                              if (deletingWorkspaceFileId) return;
-                              setWorkspaceFilePendingDelete(null);
-                              setDeleteWorkspaceFileNameInput("");
-                            }}
-                            disabled={Boolean(deletingWorkspaceFileId)}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            className={styles.deleteProjectCta}
-                            onClick={handleDeleteWorkspaceFile}
-                            disabled={
-                              deletingWorkspaceFileId != null ||
-                              deleteWorkspaceFileNameInput.trim() !==
-                                String(workspaceFilePendingDelete.name || "").trim()
-                            }
-                          >
-                            {deletingWorkspaceFileId != null ? "Deleting…" : "Delete file"}
-                          </Button>
-                        </div>
-                      </div>
-                    </motion.section>
-                  </motion.div>
-                )}
-              </AnimatePresence>
 
-              <AnimatePresence>
-                {deleteAllFilesModalOpen && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className={classNames(styles.modalOverlay, styles.deleteAllFilesOverlay)}
-                    onClick={() => {
-                      if (isDeletingAllFiles) return;
-                      setDeleteAllFilesModalOpen(false);
-                      setDeleteAllFilesConfirmInput("");
-                    }}
-                  >
-                    <motion.section
-                      initial={{ opacity: 0, y: 12, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 12, scale: 0.98 }}
-                      className={styles.deleteModal}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className={styles.createModalHeader}>
-                        <div>
-                          <h2 className={styles.createModalTitle}>Delete all files</h2>
-                          <p className={styles.createModalSubtitle}>
-                            This permanently removes every file from this project. Chat and pipeline data
-                            tied to these files may be affected. This cannot be undone.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          className={styles.modalCloseButton}
-                          onClick={() => {
-                            if (isDeletingAllFiles) return;
-                            setDeleteAllFilesModalOpen(false);
-                            setDeleteAllFilesConfirmInput("");
-                          }}
-                          aria-label="Close"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                      <div className={styles.createModalBody}>
-                        <div className={styles.deleteModalContent}>
-                          <p className={styles.deleteWarningText}>
-                            You are about to delete{" "}
-                            <strong>
-                              {activeWorkspace.files.filter((f) => f?.fileId != null).length ||
-                                activeWorkspace.files.length}{" "}
-                              file
-                              {(activeWorkspace.files.filter((f) => f?.fileId != null).length ||
-                                activeWorkspace.files.length) === 1
-                                ? ""
-                                : "s"}
-                            </strong>
-                            . Type <strong>{DELETE_ALL_FILES_CONFIRM_PHRASE}</strong> to confirm you want
-                            to remove all of them completely.
-                          </p>
-                          <label className={styles.formField}>
-                            <span className={styles.modalFieldLabel}>Confirmation</span>
-                            <Input
-                              value={deleteAllFilesConfirmInput}
-                              onChange={(event) => setDeleteAllFilesConfirmInput(event.target.value)}
-                              placeholder={DELETE_ALL_FILES_CONFIRM_PHRASE}
-                              className={styles.modalInput}
-                              autoComplete="off"
-                            />
-                          </label>
-                        </div>
-                      </div>
-                      <div className={styles.createModalActions}>
-                        <div className={styles.deleteModalActions}>
-                          <Button
-                            variant="outline"
-                            className={styles.deleteCancelButton}
-                            onClick={() => {
-                              if (isDeletingAllFiles) return;
-                              setDeleteAllFilesModalOpen(false);
-                              setDeleteAllFilesConfirmInput("");
-                            }}
-                            disabled={isDeletingAllFiles}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            className={styles.deleteProjectCta}
-                            onClick={handleDeleteAllWorkspaceFiles}
-                            disabled={
-                              isDeletingAllFiles ||
-                              deleteAllFilesConfirmInput.trim() !== DELETE_ALL_FILES_CONFIRM_PHRASE ||
-                              activeWorkspace.files.filter((f) => f?.fileId != null).length === 0
-                            }
-                          >
-                            {isDeletingAllFiles ? "Deleting…" : "Delete all files"}
-                          </Button>
-                        </div>
-                      </div>
-                    </motion.section>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </section>
-            )}
-
-            {workspaceMode === "query" && (
-            <div className={styles.chatPanelShell}>
-              {showChatWelcome && (
-                <div className={styles.chatWelcomeShell}>
-                  <div className={styles.chatWelcomeHeadingBlock}>
-                    <h2 className={styles.chatWelcomeTitle}>{chatGreeting}</h2>
-                    <p className={styles.chatWelcomeSubtitle}>
-                      Ask questions, summarize uploaded files, or explore ideas from your document set.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-            <div className={styles.workspaceCenterStage}>
-              {activeWorkspace.visibleLines.length > 0 && (
-                <div className={styles.statusList}>
-                  {activeWorkspace.visibleLines.map((line) => (
-                    <TypedLine key={line.id} text={line.text} />
-                  ))}
-                </div>
-              )}
-
-              {(activeWorkspace.conversation || []).map((entry) => (
-                <div key={entry.id} className={styles.conversationBlock}>
-                  <div className={styles.queryLine}>{entry.query}</div>
-                  {(entry.responseVariants || []).map((variant, index) => (
-                    <motion.div
-                      key={`${entry.id}-${variant.db}-${variant.experimentId || index}`}
-                      initial={{ opacity: 0, y: 16 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={styles.responseBlock}
-                    >
-                      <div className={styles.responseTextBlock}>
-                        <div className={styles.chatMessageLabel}>
-                          Response-{index + 1}
-                        </div>
-                        <p>{variant.response}</p>
-                        {variant.usedStrategies?.length > 0 && (
-                          <button
-                            type="button"
-                            className={styles.techniqueButton}
-                            onClick={() =>
-                              setTechniqueOverlay({
-                                title: `Response-${index + 1}`,
-                                strategies: variant.usedStrategies,
-                              })
-                            }
-                          >
-                            Techniques used
-                          </button>
+                        {modelDropdownOpen && (
+                          <div className={styles.modelDropdownMenu}>
+                            {[
+                              { value: "gpt-4o-mini", label: "GPT-4o mini", desc: "Fast & efficient" },
+                              { value: "gpt-4.1", label: "GPT-4.1", desc: "Latest generation" },
+                              { value: "gpt-4o", label: "GPT-4o", desc: "Most capable" },
+                            ].map((m) => (
+                              <button
+                                key={m.value}
+                                type="button"
+                                className={classNames(styles.modelDropdownItem, {
+                                  [styles.modelDropdownItemActive]:
+                                    (activeWorkspace.selectedLlmModel ?? "gpt-4o-mini") === m.value,
+                                })}
+                                onClick={() => {
+                                  updateActiveWorkspace((current) => ({
+                                    ...current,
+                                    selectedLlmModel: m.value,
+                                  }));
+                                  setModelDropdownOpen(false);
+                                }}
+                              >
+                                <span className={styles.modelDropdownItemLabel}>{m.label}</span>
+                                <span className={styles.modelDropdownItemDesc}>{m.desc}</span>
+                                {(activeWorkspace.selectedLlmModel ?? "gpt-4o-mini") === m.value && (
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={styles.modelDropdownItemCheck} aria-hidden>
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                )}
+                              </button>
+                            ))}
+                          </div>
                         )}
                       </div>
-                    </motion.div>
-                  ))}
-                </div>
-              ))}
 
-              {activeWorkspace.submittedQuery && (
-                <div className={styles.queryLine}>{activeWorkspace.submittedQuery}</div>
-              )}
+                      {/* Divider */}
+                      <span className={styles.chatInputDivider} aria-hidden />
 
-              {queryActivityState.visible && activeWorkspace.phase === "query-processing" && (
-                <div className={styles.queryActivityStack}>
-                  {queryActivityState.messages.map((message, messageIndex) => (
-                    <p
-                      key={`${message.id}-${messageIndex}`}
-                      className={classNames(styles.queryActivityLine, {
-                        [styles.queryActivityLineSuccess]: message.tone === "success",
-                        [styles.queryActivityLineWarning]: message.tone === "warning",
-                        [styles.queryActivityLineError]: message.tone === "error",
-                      })}
-                    >
-                      {message.text}
-                    </p>
-                  ))}
-                </div>
-              )}
-            </div>
+                      {/* Agent toggle */}
+                      <button
+                        type="button"
+                        className={styles.agentToggleWrap}
+                        onClick={() => toggleWorkspaceValue("queryConfigurations", "agent")}
+                        aria-pressed={queryAgentModeEnabled}
+                        title={queryAgentModeEnabled ? "Turn off Agent mode" : "Turn on Agent mode"}
+                      >
+                        <span className={styles.agentToggleLabel}>Agent</span>
+                        <span className={classNames(styles.agentToggleTrack, {
+                          [styles.agentToggleTrackOn]: queryAgentModeEnabled,
+                        })}>
+                          <span className={classNames(styles.agentToggleThumb, {
+                            [styles.agentToggleThumbOn]: queryAgentModeEnabled,
+                          })} />
+                        </span>
+                      </button>
 
-            <div className={styles.queryDock}>
-              <div className={styles.queryDockHeader}>
-                <div className={styles.queryDockLabel}>Chat input</div>
+                      {/* Divider */}
+                      <span className={styles.chatInputDivider} aria-hidden />
 
-              </div>
-              <div className={classNames(styles.queryInputShell, styles.queryInputShellHero)}>
-                <button
-                  type="button"
-                  className={classNames(styles.queryAgentModeBadge, {
-                    [styles.queryAgentModeBadgeActive]: queryAgentModeEnabled,
-                  })}
-                  onClick={() => toggleWorkspaceValue("queryConfigurations", "agent")}
-                  aria-pressed={queryAgentModeEnabled}
-                  title={
-                    queryAgentModeEnabled
-                      ? "Turn off Agent mode (retrieval strategy picks re-enabled)"
-                      : "Turn on Agent mode (meta-retriever; retrieval strategy picks disabled)"
-                  }
-                >
-                  Agent mode
-                </button>
-                <Input
-                  ref={queryInputRef}
-                  value={activeWorkspace.query}
-                  disabled={isChatInputDisabled}
-                  onChange={(event) =>
-                    updateActiveWorkspace((current) => ({
-                      ...current,
-                      query: event.target.value,
-                    }))
-                  }
-                  onKeyDown={(event) => {
-                    if (isChatInputDisabled) {
-                      return;
-                    }
-                    if (event.key === "Enter") {
-                      handleStartQuery();
-                    }
-                  }}
-                  placeholder={
-                    isChatInputDisabled
-                      ? isQueryInFlight
-                        ? "Waiting for the model to finish…"
-                        : hasSelectedFile
-                          ? "Process the selected file to enable chat"
-                          : "Select an uploaded file to enable chat"
-                      : "How can I help you today?"
-                  }
-                  className={classNames(styles.queryInput, styles.queryInputHero, {
-                    [styles.queryInputDisabled]: isChatInputDisabled,
-                  })}
-                />
-
-                <Button
-                  className={classNames(styles.querySendButton, styles.querySendButtonHero)}
-                  onClick={handleStartQuery}
-                  title={isQueryInFlight ? "Query in progress" : "Send query"}
-                  disabled={isChatInputDisabled}
-                >
-                  <Send size={16} />
-                </Button>
-              </div>
-            </div>
-
-            {hasSelectedFile && (
-              <div className={styles.querySelectedFileMeta}>
-                <span className={styles.querySelectedFileCode}>
-                  {activeWorkspace.files.find(
-                    (file) => String(file.fileId) === activeWorkspaceFileId,
-                  )?.fileCode || "FILE"}
-                </span>
-                <span className={styles.querySelectedFileName}>
-                  {
-                    activeWorkspace.files.find(
-                      (file) => String(file.fileId) === activeWorkspaceFileId,
-                    )?.name
-                  }
-                </span>
-              </div>
-            )}
-
-            </div>
-            )}
-          </div>
-        </section>
-
-        {techniqueOverlay && (
-          <div
-            className={styles.techniqueOverlayBackdrop}
-            onClick={() => setTechniqueOverlay(null)}
-          >
-            <div
-              className={styles.techniqueOverlayCard}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className={styles.techniqueOverlayHeader}>
-                <div className={styles.chatMessageLabel}>{techniqueOverlay.title}</div>
-                <button
-                  type="button"
-                  className={styles.techniqueOverlayClose}
-                  onClick={() => setTechniqueOverlay(null)}
-                >
-                  Close
-                </button>
-              </div>
-              <div className={styles.strategySummary}>
-                {techniqueOverlay.strategies.map((item) => (
-                  <div
-                    key={`${item.label}-${item.value}`}
-                    className={styles.strategyRow}
-                  >
-                    <span className={styles.strategyLabel}>{item.label}</span>
-                    <span className={styles.strategyValue}>{item.value}</span>
+                      {/* Send button */}
+                      <Button
+                        className={classNames(styles.querySendButton, styles.querySendButtonHero)}
+                        onClick={handleStartQuery}
+                        title={isQueryInFlight ? "Query in progress" : "Send query"}
+                        disabled={isChatInputDisabled}
+                      >
+                        <Send size={16} />
+                      </Button>
+                    </div>
                   </div>
-                ))}
+
+                </div>
+              )}
+            </div>
+          </section>
+
+          {techniqueOverlay && (
+            <div
+              className={styles.techniqueOverlayBackdrop}
+              onClick={() => setTechniqueOverlay(null)}
+            >
+              <div
+                className={styles.techniqueOverlayCard}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className={styles.techniqueOverlayHeader}>
+                  <div className={styles.chatMessageLabel}>{techniqueOverlay.title}</div>
+                  <button
+                    type="button"
+                    className={styles.techniqueOverlayClose}
+                    onClick={() => setTechniqueOverlay(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className={styles.strategySummary}>
+                  {techniqueOverlay.strategies.map((item) => (
+                    <div
+                      key={`${item.label}-${item.value}`}
+                      className={styles.strategyRow}
+                    >
+                      <span className={styles.strategyLabel}>{item.label}</span>
+                      <span className={styles.strategyValue}>{item.value}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {isAgentReportOpen && (
+            <div
+              className={styles.agentReportBackdrop}
+              role="presentation"
+              onClick={() => setIsAgentReportOpen(false)}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="agent-report-title"
+                className={styles.agentReportModal}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className={styles.agentReportHeader}>
+                  <div>
+                    <h2 id="agent-report-title" className={styles.agentReportTitle}>
+                      Agent report
+                    </h2>
+                    <p className={styles.agentReportIntro}>
+                      Stored agent and validator details for the current query.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.agentReportClose}
+                    onClick={() => setIsAgentReportOpen(false)}
+                    aria-label="Close"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className={styles.agentReportContent}>
+                  {agentReportLoading ? (
+                    <div className={styles.agentReportEmpty}>Loading report...</div>
+                  ) : agentReportError ? (
+                    <div className={styles.agentReportEmpty}>{agentReportError}</div>
+                  ) : agentReportRows.length === 0 ? (
+                    <div className={styles.agentReportEmpty}>No agent report available.</div>
+                  ) : (
+                    <div className={styles.agentReportGrid}>
+                      {agentReportRows.map(([label, value]) => (
+                        <div key={label} className={styles.agentReportItem}>
+                          <span className={styles.agentReportItemLabel}>{label}</span>
+                          <span className={styles.agentReportItemValue}>
+                            {value == null || value === ""
+                              ? "-"
+                              : typeof value === "object"
+                                ? JSON.stringify(value)
+                                : String(value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </main>
 
         {workspaceMode === "query" && (
-        <aside
-        className={classNames(styles.workspaceRightSidebar, {
-          [styles.workspaceRightSidebarExpanded]: queryRightSidebarWide,
-        })}
-        onMouseEnter={() => setIsQueryRightSidebarExpanded(true)}
-        onMouseLeave={() => {
-          if (!isQueryRightSidebarPinned) {
-            setIsQueryRightSidebarExpanded(false);
-          }
-        }}
-      >
-        <div className={styles.workspaceRightInner}>
-          <div className={styles.rightSidebarNav}>
-            {RIGHT_SIDEBAR_ITEMS.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.value}
-                  type="button"
-                  className={classNames(styles.rightSidebarButton, {
-                    [styles.rightSidebarButtonActive]:
-                      activeWorkspace.activeRightSection === item.value,
-                  })}
-                  onClick={() =>
-                    updateActiveWorkspace((current) => ({
-                      ...current,
-                      activeRightSection: item.value,
-                    }))
-                  }
-                >
-                  <Icon size={16} />
-                  {queryRightSidebarWide && <span>{item.label}</span>}
-                </button>
-              );
+          <aside
+            className={classNames(styles.workspaceRightSidebar, {
+              [styles.workspaceRightSidebarExpanded]: queryRightSidebarWide,
             })}
-          </div>
+            onMouseEnter={() => setIsQueryRightSidebarExpanded(true)}
+            onMouseLeave={() => {
+              if (!isQueryRightSidebarPinned) {
+                setIsQueryRightSidebarExpanded(false);
+              }
+            }}
+          >
+            <div className={styles.workspaceRightInner}>
+              <div className={styles.rightSidebarNav}>
+                {RIGHT_SIDEBAR_ITEMS.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      className={classNames(styles.rightSidebarButton, {
+                        [styles.rightSidebarButtonActive]:
+                          activeWorkspace.activeRightSection === item.value,
+                      })}
+                      onClick={() =>
+                        updateActiveWorkspace((current) => ({
+                          ...current,
+                          activeRightSection: item.value,
+                        }))
+                      }
+                    >
+                      <Icon size={16} />
+                      {queryRightSidebarWide && <span>{item.label}</span>}
+                    </button>
+                  );
+                })}
+              </div>
 
-          {queryRightSidebarWide && (
-            <div className={styles.rightSidebarPanels}>
-              {activeWorkspace.activeRightSection === "response" && (
-                <div className={styles.insightPanel}>
-                  <h3>Response</h3>
-                  <p>
-                    {activeWorkspace.responseVisible
-                      ? activeWorkspace.response
-                      : "The answer will appear here after query processing completes."}
-                  </p>
-                </div>
-              )}
-
-              {activeWorkspace.activeRightSection === "chunks" && (
-                <div className={styles.insightPanel}>
-                  <h3>Retrieved Chunks</h3>
-                  <div className={styles.chunkList}>
-                    {activeWorkspace.retrievedChunks.map((chunk, index) => (
-                      <div key={`${chunk.title}-${index}`} className={styles.chunkItem}>
-                        <div className={styles.chunkItemMeta}>
-                          <span>{chunk.title}</span>
-                          <span>{chunk.score.toFixed(2)}</span>
-                        </div>
-                        <p>{chunk.text}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {activeWorkspace.activeRightSection === "performance-legacy-disabled" && (
-                <div className={styles.insightPanel}>
-                  <h3>Execution Performance</h3>
-                  {perfLoading && <ExecutionPerformanceSkeletonGrid />}
-                  {perfError && <div>{perfError}</div>}
-                  {!perfLoading && !perfError && (
-                    <div className={styles.metricGrid}>
-                      {[
-                        { label: "Total Time", value: formatMs(perf?.totalTime), sub: "Response latency" },
-                        { label: "Embed Time", value: formatMs(perf?.embedTime), sub: "Vector encoding" },
-                        { label: "Retrieval", value: formatMs(perf?.retrievalTime), sub: "Chunk search" },
-                        { label: "LLM Gen", value: formatMs(perf?.llmGenTime), sub: "Token generation" },
-                        { label: "Tokens", value: formatNumber(perf?.totalTokens), sub: "Input + Output" },
-                        // Show cost exactly as returned by backend (no rounding/formatting)
-                        { label: "Cost", value: perf?.cost, sub: "Per query" },
-                      ].map((metric) => (
-                        <div key={metric.label} className={styles.metricCard}>
-                          <span>{metric.label}</span>
-                          <strong>{metric.value}</strong>
-                          <small>{metric.sub}</small>
-                        </div>
-                      ))}
+              {queryRightSidebarWide && (
+                <div className={styles.rightSidebarPanels}>
+                  {activeWorkspace.activeRightSection === "response" && (
+                    <div className={styles.insightPanel}>
+                      <h3>Response</h3>
+                      <p>
+                        {activeWorkspace.responseVisible
+                          ? activeWorkspace.response
+                          : "The answer will appear here after query processing completes."}
+                      </p>
                     </div>
                   )}
-                </div>
-              )}
 
-              {activeWorkspace.activeRightSection === "performance" && (
-                <div className={styles.insightPanel}>
-                  <div className={styles.performanceHeader}>
-                    <div>
-                      <h3>Execution Performance</h3>
-                      <p>Switch between responses to view their stored performance metrics.</p>
-                    </div>
-                    {performanceResponseVariants.length > 0 && (
-                      <div className={styles.performanceSelector}>
-                        {performanceResponseVariants.slice(0, 2).map((variant, index) => (
-                          <button
-                            key={variant?.experimentId || `response-${index}`}
-                            type="button"
-                            className={`${styles.performanceSelectorButton} ${
-                              index === selectedPerformanceResponseIndex
-                                ? styles.performanceSelectorButtonActive
-                                : ""
-                            }`}
-                            onClick={() => setSelectedPerformanceResponseIndex(index)}
-                          >
-                            Res-{index + 1}
-                          </button>
+                  {activeWorkspace.activeRightSection === "chunks" && (
+                    <div className={styles.insightPanel}>
+                      <h3>Retrieved Chunks</h3>
+                      <div className={styles.chunkList}>
+                        {activeWorkspace.retrievedChunks.map((chunk, index) => (
+                          <div key={`${chunk.title}-${index}`} className={styles.chunkItem}>
+                            <div className={styles.chunkItemMeta}>
+                              <span>{chunk.title}</span>
+                              <span>{chunk.score.toFixed(2)}</span>
+                            </div>
+                            <p>{chunk.text}</p>
+                          </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                  {perfLoading && <ExecutionPerformanceSkeletonGrid />}
-                  {perfError && <div>{perfError}</div>}
-                  {!perfLoading && !perfError && !perf && (
-                    <div>No stored rows found for this experiment yet.</div>
+                    </div>
                   )}
-                  {!perfLoading && !perfError && perf && (
-                    <div className={styles.performancePanel}>
-                      <div className={styles.metricGrid}>
-                        {latestPerformanceCards.map((metric) => (
-                          <div key={metric.label} className={styles.metricCard}>
-                            <span>{metric.label}</span>
-                            <strong>{metric.value}</strong>
-                            <small>{metric.sub}</small>
+
+                  {activeWorkspace.activeRightSection === "performance-legacy-disabled" && (
+                    <div className={styles.insightPanel}>
+                      <h3>Execution Performance</h3>
+                      {perfLoading && <ExecutionPerformanceSkeletonGrid />}
+                      {perfError && <div>{perfError}</div>}
+                      {!perfLoading && !perfError && (
+                        <div className={styles.metricGrid}>
+                          {[
+                            { label: "Total Time", value: formatMs(perf?.totalTime), sub: "Response latency" },
+                            { label: "Embed Time", value: formatMs(perf?.embedTime), sub: "Vector encoding" },
+                            { label: "Retrieval", value: formatMs(perf?.retrievalTime), sub: "Chunk search" },
+                            { label: "LLM Gen", value: formatMs(perf?.llmGenTime), sub: "Token generation" },
+                            { label: "Tokens", value: formatNumber(perf?.totalTokens), sub: "Input + Output" },
+                            // Show cost exactly as returned by backend (no rounding/formatting)
+                            { label: "Cost", value: perf?.cost, sub: "Per query" },
+                          ].map((metric) => (
+                            <div key={metric.label} className={styles.metricCard}>
+                              <span>{metric.label}</span>
+                              <strong>{metric.value}</strong>
+                              <small>{metric.sub}</small>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {activeWorkspace.activeRightSection === "performance" && (
+                    <div className={styles.insightPanel}>
+                      <div className={styles.performanceHeader}>
+                        <div>
+                          <h3>Execution Performance</h3>
+                          <p>Switch between responses to view their stored performance metrics.</p>
+                        </div>
+                        {performanceResponseVariants.length > 0 && (
+                          <div className={styles.performanceSelector}>
+                            {performanceResponseVariants.slice(0, 2).map((variant, index) => (
+                              <button
+                                key={variant?.experimentId || `response-${index}`}
+                                type="button"
+                                className={`${styles.performanceSelectorButton} ${index === selectedPerformanceResponseIndex
+                                  ? styles.performanceSelectorButtonActive
+                                  : ""
+                                  }`}
+                                onClick={() => setSelectedPerformanceResponseIndex(index)}
+                              >
+                                Res-{index + 1}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {perfLoading && <ExecutionPerformanceSkeletonGrid />}
+                      {perfError && <div>{perfError}</div>}
+                      {!perfLoading && !perfError && !perf && (
+                        <div>No stored rows found for this experiment yet.</div>
+                      )}
+                      {!perfLoading && !perfError && perf && (
+                        <div className={styles.performancePanel}>
+                          <div className={styles.metricGrid}>
+                            {latestPerformanceCards.map((metric) => (
+                              <div key={metric.label} className={styles.metricCard}>
+                                <span>{metric.label}</span>
+                                <strong>{metric.value}</strong>
+                                <small>{metric.sub}</small>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {activeWorkspace.activeRightSection === "history" && (
+                    <div className={styles.insightPanel}>
+                      <h3>Experiment History</h3>
+                      {historyLoading && <div>Loading history...</div>}
+                      {historyError && <div>{historyError}</div>}
+                      {!historyLoading && !historyError && historyEntries.length === 0 && (
+                        <div>No history data available for this project.</div>
+                      )}
+                      {!historyLoading && !historyError && historyEntries.length > 0 && (
+                        <div className={styles.metricGrid}>
+                          {historyEntries.map((entry) => (
+                            <div key={entry.id} className={styles.metricCard}>
+                              <span>{entry.id}</span>
+                              <strong>{entry.metrics?.accuracy ?? 0}%</strong>
+                              <small>{entry.date}</small>
+                              <small>Latency: {entry.metrics?.latency || "-"}</small>
+                              <small>Cost: {entry.metrics?.cost || "-"}</small>
+                              <small>Relevance: {entry.metrics?.relevance ?? 0}%</small>
+                              <small>DB: {entry.config?.db || "-"}</small>
+                              <small>Retrieval: {entry.config?.retrieval || "-"}</small>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {activeWorkspace.activeRightSection === "quality" && (
+                    <div className={styles.insightPanel}>
+                      <h3>Quality Metrics</h3>
+                      <div className={styles.qualityList}>
+                        {(activeWorkspace.qualityMetrics || DEFAULT_QUALITY_METRICS).map((metric) => (
+                          <div key={metric.label} className={styles.qualityRow}>
+                            <div className={styles.qualityHeader}>
+                              <span>{metric.label}</span>
+                              <strong>{Number(metric.value || 0).toFixed(1)}%</strong>
+                            </div>
+                            <div className={styles.qualityTrack}>
+                              <div
+                                className={styles.qualityBar}
+                                style={{ width: `${Number(metric.value || 0)}%` }}
+                              />
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -4913,79 +5542,28 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   )}
                 </div>
               )}
-
-              {activeWorkspace.activeRightSection === "history" && (
-                <div className={styles.insightPanel}>
-                  <h3>Experiment History</h3>
-                  {historyLoading && <div>Loading history...</div>}
-                  {historyError && <div>{historyError}</div>}
-                  {!historyLoading && !historyError && historyEntries.length === 0 && (
-                    <div>No history data available for this project.</div>
-                  )}
-                  {!historyLoading && !historyError && historyEntries.length > 0 && (
-                    <div className={styles.metricGrid}>
-                      {historyEntries.map((entry) => (
-                        <div key={entry.id} className={styles.metricCard}>
-                          <span>{entry.id}</span>
-                          <strong>{entry.metrics?.accuracy ?? 0}%</strong>
-                          <small>{entry.date}</small>
-                          <small>Latency: {entry.metrics?.latency || "-"}</small>
-                          <small>Cost: {entry.metrics?.cost || "-"}</small>
-                          <small>Relevance: {entry.metrics?.relevance ?? 0}%</small>
-                          <small>DB: {entry.config?.db || "-"}</small>
-                          <small>Retrieval: {entry.config?.retrieval || "-"}</small>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {activeWorkspace.activeRightSection === "quality" && (
-                <div className={styles.insightPanel}>
-                  <h3>Quality Metrics</h3>
-                  <div className={styles.qualityList}>
-                    {(activeWorkspace.qualityMetrics || DEFAULT_QUALITY_METRICS).map((metric) => (
-                      <div key={metric.label} className={styles.qualityRow}>
-                        <div className={styles.qualityHeader}>
-                          <span>{metric.label}</span>
-                          <strong>{Number(metric.value || 0).toFixed(1)}%</strong>
-                        </div>
-                        <div className={styles.qualityTrack}>
-                          <div
-                            className={styles.qualityBar}
-                            style={{ width: `${Number(metric.value || 0)}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <button
+                type="button"
+                className={styles.rightSidebarCollapseButton}
+                onClick={() => {
+                  const nextPinned = !isQueryRightSidebarPinned;
+                  setIsQueryRightSidebarPinned(nextPinned);
+                  setIsQueryRightSidebarExpanded(nextPinned);
+                }}
+                title={isQueryRightSidebarPinned ? "Collapse sidebar" : "Keep expanded"}
+              >
+                <ChevronRight
+                  size={15}
+                  className={classNames(styles.rightSidebarCollapseIcon, {
+                    [styles.rightSidebarCollapseIconOpen]: queryRightSidebarWide,
+                  })}
+                />
+                {queryRightSidebarWide && (
+                  <span>{isQueryRightSidebarPinned ? "Collapse" : "Pin open"}</span>
+                )}
+              </button>
             </div>
-          )}
-          <button
-            type="button"
-            className={styles.rightSidebarCollapseButton}
-            onClick={() => {
-              const nextPinned = !isQueryRightSidebarPinned;
-              setIsQueryRightSidebarPinned(nextPinned);
-              setIsQueryRightSidebarExpanded(nextPinned);
-            }}
-            title={isQueryRightSidebarPinned ? "Collapse sidebar" : "Keep expanded"}
-          >
-            <ChevronRight
-              size={15}
-              className={classNames(styles.rightSidebarCollapseIcon, {
-                [styles.rightSidebarCollapseIconOpen]: queryRightSidebarWide,
-              })}
-            />
-            {queryRightSidebarWide && (
-              <span>{isQueryRightSidebarPinned ? "Collapse" : "Pin open"}</span>
-            )}
-          </button>
-        </div>
-        </aside>
+          </aside>
         )}
 
         {workspaceMode === "upload" && (
