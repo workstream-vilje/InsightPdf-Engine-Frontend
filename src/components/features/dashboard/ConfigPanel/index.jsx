@@ -21,13 +21,13 @@ import styles from './styles.module.css';
 const customSelectStyles = {
   control: (base, state) => ({
     ...base,
-    background: 'rgba(var(--surface-1), 0.92)',
-    borderColor: state.isFocused ? 'rgb(var(--primary))' : 'rgba(var(--border), 0.9)',
+    background: 'rgba(15, 15, 20, 0.6)',
+    borderColor: state.isFocused ? 'rgb(var(--primary))' : 'rgba(255, 255, 255, 0.1)',
     borderRadius: '10px',
     padding: '1px 4px',
-    boxShadow: state.isFocused ? '0 0 0 1px rgba(var(--primary), 0.32)' : 'none',
+    boxShadow: state.isFocused ? '0 0 0 1px rgba(var(--primary), 0.3)' : 'none',
     '&:hover': {
-      borderColor: 'rgba(var(--primary), 0.7)',
+      borderColor: 'rgba(var(--primary), 0.5)',
     },
     minHeight: '36px',
     transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -36,11 +36,11 @@ const customSelectStyles = {
   }),
   menu: (base) => ({
     ...base,
-    background: 'rgb(var(--surface-1))',
+    background: '#0f0f14',
     backdropFilter: 'blur(20px)',
-    border: '1px solid rgba(var(--border), 0.85)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: '12px',
-    boxShadow: '0 20px 40px -10px rgba(173, 129, 148, 0.18)',
+    boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.6)',
     overflow: 'hidden',
     zIndex: 100,
     marginTop: '8px',
@@ -48,8 +48,8 @@ const customSelectStyles = {
   }),
   option: (base, state) => ({
     ...base,
-    background: state.isFocused ? 'rgba(var(--primary), 0.14)' : 'transparent',
-    color: state.isSelected ? 'rgb(var(--primary-foreground))' : 'rgba(var(--foreground), 0.88)',
+    background: state.isFocused ? 'rgba(var(--primary), 0.15)' : 'transparent',
+    color: state.isSelected ? 'rgb(var(--primary))' : 'rgba(255, 255, 255, 0.8)',
     padding: '10px 14px',
     fontSize: '0.75rem',
     fontWeight: state.isSelected ? '600' : '400',
@@ -94,24 +94,24 @@ const customSelectStyles = {
   }),
   placeholder: (base) => ({
     ...base,
-    color: 'rgba(var(--muted-foreground), 0.8)',
+    color: 'rgba(255, 255, 255, 0.4)',
     fontSize: '0.75rem',
     fontWeight: '500',
   }),
   singleValue: (base) => ({
     ...base,
-    color: 'rgb(var(--foreground))',
+    color: '#ffffff',
     fontSize: '0.75rem',
     fontWeight: '500',
   }),
   input: (base) => ({
     ...base,
-    color: 'rgb(var(--foreground))',
+    color: '#ffffff',
     fontSize: '0.75rem',
   }),
   dropdownIndicator: (base) => ({
     ...base,
-    color: 'rgba(var(--muted-foreground), 0.85)',
+    color: 'rgba(255, 255, 255, 0.4)',
     padding: '4px',
     '&:hover': {
       color: 'rgb(var(--primary))',
@@ -120,10 +120,10 @@ const customSelectStyles = {
   indicatorSeparator: () => ({ display: 'none' }),
   clearIndicator: (base) => ({
     ...base,
-    color: 'rgba(var(--muted-foreground), 0.85)',
+    color: 'rgba(255, 255, 255, 0.4)',
     padding: '4px',
     '&:hover': {
-      color: 'rgb(var(--destructive))',
+      color: '#ef4444',
     },
   }),
 };
@@ -138,7 +138,7 @@ const embeddingOptions = [
   { value: 'openai', label: 'OpenAI (text-embedding-3-small)' },
   { value: 'ollama', label: 'Ollama (nomic-embed)' },
 ];
-
+// C:\Users\vilje.dev19\Documents\RAG_pipeline\InsightPdf-Engine-Frontend\src\components\features\dashboard\ConfigPanel\index.jsx
 const llmOptions = [
   { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
   { value: 'llama3.2', label: 'Llama 3.2 (Ollama)' },
@@ -490,7 +490,7 @@ const ConfigPanel = ({ isCollapsed, setIsCollapsed, onConfigChange }) => {
             </div>
             <div className={styles.optionRow}>
               <div className={styles.optionInfo}>
-                <Label className={styles.optionLabel}>Quality Evaluation</Label>
+                <Label className={styles.optionLabel}>RAGAS Evaluation</Label>
                 <span className={styles.optionSub}>Automated quality metrics</span>
               </div>
               <Switch checked={true} />

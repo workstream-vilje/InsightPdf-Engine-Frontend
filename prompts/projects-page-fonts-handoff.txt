@@ -1,0 +1,167 @@
+Projects Page UI Handoff
+========================
+
+Purpose of this file
+--------------------
+This file exists as a quick handoff note for any future Codex/model session.
+If one model session ends and another session starts, this file should help the
+next model understand:
+
+1. Which fonts were chosen
+2. Why those fonts were chosen
+3. Where the reusable variables live
+4. Which files control the current projects page UI
+5. What should be preserved when making new UI changes
+
+
+Current design direction
+------------------------
+The projects landing page is being styled as a cleaner, more structured page
+that is closer to the screenshot references shared by the user.
+
+The user wanted:
+- frontend-only UI changes
+- no backend changes
+- no functionality changes
+- project page UI separated from generic components
+- reusable font and color variables
+
+
+Current projects page location
+------------------------------
+The current projects page UI is now split into these files:
+
+1. src/pages/projects_page/ProjectsPageView.jsx
+   Main view for the project listing page
+
+2. src/pages/projects_page/ProjectCard.jsx
+   Reusable project card used inside map() for backend project response data
+
+3. src/pages/projects_page/styles.module.css
+   Page-specific styles and reusable theme variables for this page
+
+4. src/Home/Projects.jsx
+   Still contains the full workspace logic and modal logic, but now imports
+   ProjectsPageView for the "no active project selected" state
+
+
+Font setup
+----------
+The font setup is defined in:
+
+1. src/app/layout.js
+2. src/app/globals.css
+
+Loaded fonts:
+- Urbanist
+- Manrope
+- JetBrains Mono
+
+Why these fonts were chosen:
+- Urbanist:
+  Used as the display font for headings/titles. It gives a more intentional,
+  product-style look and works well for the projects page headline and card titles.
+
+- Manrope:
+  Used as the body font. It is clean, readable, and softer than a heavy display font.
+  Good for inputs, metadata, labels, and general UI copy.
+
+- JetBrains Mono:
+  Used for code-like or technical metadata styles. Good for project identifiers,
+  badges, uppercase meta text, and anything that should feel developer-oriented.
+
+
+Reusable font variables
+-----------------------
+Defined in src/app/globals.css:
+
+- --font-display
+- --font-body
+- --font-code
+
+Current mapping:
+- --font-display -> Urbanist
+- --font-body -> Manrope
+- --font-code -> JetBrains Mono
+
+Also:
+- --font-sans uses --font-body
+- --font-mono uses --font-code
+
+This was done so future pages can reuse the same typography system without
+hardcoding font names everywhere.
+
+
+Reusable projects page theme variables
+--------------------------------------
+Defined in:
+src/pages/projects_page/styles.module.css
+
+They are declared under:
+:global(:root)
+
+Important variables:
+- --projects-page-bg
+- --projects-page-text
+- --projects-page-text-strong
+- --projects-page-text-muted
+- --projects-page-text-subtle
+- --projects-page-surface
+- --projects-page-surface-soft
+- --projects-page-border
+- --projects-page-divider
+- --projects-page-hover
+- --projects-page-accent
+- --projects-page-accent-hover
+- --projects-page-accent-soft
+- --projects-page-accent-text
+- --projects-page-shadow
+
+Font aliases for this page:
+- --projects-font-display
+- --projects-font-body
+- --projects-font-mono
+
+Reason:
+This keeps the projects page easy to theme later without rewriting every selector.
+
+
+Important behavior rule
+-----------------------
+Do not change backend behavior from this page styling work.
+
+The user explicitly requested:
+- only frontend UI changes
+- no backend edits
+- no functionality changes unless clearly requested
+
+So if future work continues on this page:
+- keep project create/open/delete flow unchanged unless the user asks
+- treat this work as visual refactoring only
+
+
+Current layout intent
+---------------------
+The current page was adjusted toward the reference screenshot with:
+- cleaner left/right margin
+- project title row
+- grid/list buttons beside the title
+- smaller project card size
+- separate page folder instead of generic component folder
+
+If a future model continues from here, it should refine this same direction
+instead of switching back to the larger hero-style layout that existed earlier.
+
+
+Recommendation for next model
+-----------------------------
+Before editing, read these files first:
+
+1. src/Home/Projects.jsx
+2. src/pages/projects_page/ProjectsPageView.jsx
+3. src/pages/projects_page/ProjectCard.jsx
+4. src/pages/projects_page/styles.module.css
+5. src/app/globals.css
+6. src/app/layout.js
+
+That is enough to understand the current typography and projects page structure.

@@ -1,119 +1,104 @@
-export const PROJECT_CATEGORIES = [
-  "Finance",
-  "Research",
-  "Legal",
-  "Operations",
-  "Product",
-];
-
-export const INITIAL_PROJECTS = [];
-
 export const DATA_EXTRACTION_OPTIONS = [
   { value: "pymupdf", label: "PyMuPDF" },
-  { value: "unstructured", label: "Unstructured.io" },
-  { value: "pdfplumber", label: "pdfplumber" },
+  { value: "unstructured", label: "Unstructured" },
+  { value: "pdfplumber", label: "PDFPlumber" },
 ];
 
 export const TEXT_PROCESSING_OPTIONS = [
-  { value: "recursive", label: "Recursive" },
-  { value: "semantic", label: "Semantic" },
-  { value: "token", label: "Token" },
-  { value: "fixed", label: "Fixed" },
+  { value: "recursive", label: "Recursive splitter" },
+  { value: "semantic", label: "Semantic splitter" },
+  { value: "token", label: "Token splitter" },
+  { value: "fixed", label: "Fixed-length splitter" },
 ];
 
 export const EMBEDDING_OPTIONS = [
-  { value: "openai", label: "OpenAI" },
-  { value: "text-embedding-3-large", label: "text-embedding-3-large" },
-  { value: "text-embedding-3-small", label: "text-embedding-3-small" },
-  { value: "ollama-nomic-embed", label: "Ollama (nomic-embed)" },
+  { value: "text-embedding-3-large", label: "OpenAI text-embedding-3-large" },
+  { value: "ollama-nomic-embed", label: "Ollama nomic-embed-text" },
 ];
 
 export const VECTOR_STORE_OPTIONS = [
-  { value: "chromadb", label: "ChromaDB" },
-  { value: "pgvector", label: "PGVector" },
   { value: "faiss", label: "FAISS" },
+  { value: "chromadb", label: "ChromaDB" },
+  { value: "pgvector", label: "PgVector" },
   { value: "pinecone", label: "Pinecone" },
 ];
 
 export const RETRIEVAL_STRATEGY_OPTIONS = [
-  { value: "semantic-similarity", label: "Semantic Similarity" },
-  { value: "hybrid", label: "Hybrid" },
-  { value: "mmr", label: "MMR" },
+  { value: "semantic-similarity", label: "Semantic similarity" },
+  { value: "hybrid-search", label: "Hybrid search" },
+  { value: "mmr", label: "MMR reranking" },
+  { value: "keyword-search", label: "Keyword search" },
+];
+
+export const QUERY_CONFIGURATION_OPTIONS = [
+  { value: "agent", label: "Agent" },
+  { value: "ragas", label: "Ragas" },
+  { value: "langsmith", label: "LangSmith" },
+];
+
+export const DEFAULT_QUALITY_METRICS = [
+  { label: "Answer relevance", score: 0.91 },
+  { label: "Groundedness", score: 0.89 },
+  { label: "Context precision", score: 0.87 },
+  { label: "Latency quality tradeoff", score: 0.84 },
 ];
 
 export const METRICS_NAV_ITEMS = [
   { value: "experiments", label: "Experiments" },
   { value: "comparison", label: "Comparison" },
   { value: "charts", label: "Charts" },
-  { value: "recommendation", label: "Recommendation" },
+  { value: "recommendation", label: "Recommendations" },
   { value: "profiles", label: "Profiles" },
 ];
 
-export const DEFAULT_RESPONSE =
-  "Revenue grew 23.4% year over year in Q4 2024, led by stronger enterprise demand and improved cloud services adoption. Gross margin also improved to 68.2%, indicating healthier unit economics across the uploaded reports.";
-
-export const DEFAULT_RETRIEVED_CHUNKS = [
-  {
-    title: "annual_report_2024.pdf",
-    page: 12,
-    score: 0.94,
-    text: "Revenue grew 23.4% year over year in Q4 2024, reaching $4.2B with stronger performance across enterprise accounts.",
-  },
-  {
-    title: "annual_report_2024.pdf",
-    page: 15,
-    score: 0.89,
-    text: "Cloud services expansion and enterprise renewals were the primary growth drivers, supported by better margin discipline.",
-  },
-  {
-    title: "board_summary.pdf",
-    page: 4,
-    score: 0.85,
-    text: "Leadership highlighted operational efficiency gains and improved gross margin from 64.8% to 68.2% year over year.",
-  },
-];
-
-export const DEFAULT_EXECUTION_METRICS = [
-  { label: "Total Time", value: "1.3s", sub: "Response latency" },
-  { label: "Embed Time", value: "0.2s", sub: "Vector encoding" },
-  { label: "Retrieval", value: "0.4s", sub: "Chunk search" },
-  { label: "LLM Gen", value: "0.7s", sub: "Token generation" },
-  { label: "Tokens", value: "2,847", sub: "Input + Output" },
-  { label: "Cost", value: "$0.014", sub: "Per query" },
-];
-
-export const DEFAULT_QUALITY_METRICS = [
-  { label: "Faithfulness", value: 92 },
-  { label: "Context Precision", value: 88 },
-  { label: "Context Recall", value: 85 },
-  { label: "Answer Relevance", value: 91 },
-];
-
-export const PROCESSING_LINES = [
-  "uploading ...",
-  "chunking ..",
-  "embedding ..",
-  "stored in vector successfully.",
-];
-
 export const createWorkspaceState = () => ({
+  phase: "ingestion-setup",
   files: [],
   selectedFileId: null,
-  chunkLength: 1000,
-  dataExtraction: ["pymupdf", "unstructured"],
-  textProcessing: "recursive",
-  embeddingModels: ["openai", "text-embedding-3-large"],
-  vectorStores: ["chromadb", "pgvector"],
-  retrievalStrategies: ["semantic-similarity"],
-  topK: "3",
   query: "",
-  visibleLines: [],
-  phase: "ingestion-setup",
+  submittedQuery: "",
   response: "",
   responseVisible: false,
+  responseVariants: [],
+  experimentId: null,
+  visibleLines: [],
   activeRightSection: "response",
-  retrievedChunks: DEFAULT_RETRIEVED_CHUNKS,
+  queryActivity: {
+    visible: false,
+    status: "idle",
+    messages: [],
+  },
+  execution: {
+    visible: false,
+    status: "idle",
+    stage: "idle",
+    message: "",
+    fileId: null,
+    fileCode: null,
+    fileName: "",
+    chunkCount: null,
+    previewCount: null,
+    embedding: null,
+    vectorBackends: [],
+    vectorsStored: null,
+    processingTime: null,
+    comparisonCount: 0,
+    detailsOpen: false,
+    details: null,
+    runs: [],
+  },
+  dataExtraction: ["pymupdf"],
+  textProcessing: ["recursive"],
+  embeddingModels: ["text-embedding-3-large"],
+  vectorStores: ["faiss"],
+  retrievalStrategies: ["semantic-similarity"],
+  queryConfigurations: [],
+  qualityMetrics: DEFAULT_QUALITY_METRICS,
+  chunkLength: 1000,
+  topK: 3,
+  conversation: [],
+  usedStrategies: [],
+  allowedTechniques: null,
 });
 
-export const getProjectById = (projectId) =>
-  INITIAL_PROJECTS.find((project) => project.id === projectId) ?? INITIAL_PROJECTS[0];
+export const INITIAL_PROJECTS = [];

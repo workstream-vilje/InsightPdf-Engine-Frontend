@@ -32,7 +32,7 @@ Button.displayName = 'Button';
 
 Button.propTypes = {
   className: PropTypes.string,
-  variant: PropTypes.oneOf(['default', 'outline', 'ghost', 'destructive']),
+  variant: PropTypes.oneOf(['default', 'outline', 'ghost', 'destructive', 'secondary', 'accent', 'subtle']),
   size: PropTypes.oneOf(['default', 'sm', 'lg', 'icon']),
   children: PropTypes.node,
 };

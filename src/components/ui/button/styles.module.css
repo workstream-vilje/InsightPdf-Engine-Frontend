@@ -2,14 +2,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: var(--spacing-2);
   border-radius: var(--radius-md);
-  font-family: var(--font-sans);
-  font-weight: var(--weight-medium);
+  font-family: var(--font-body);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
   white-space: nowrap;
   transition: all 0.2s ease;
   cursor: pointer;
   border: 1px solid transparent;
   outline: none;
+}
+
+.button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(var(--primary), 0.14);
 }
 
 .button:disabled {
@@ -28,8 +34,8 @@
 }
 
 .variant-outline {
-  background-color: transparent;
-  border-color: rgb(var(--border));
+  background-color: rgb(var(--surface-1));
+  border-color: rgba(var(--border), 0.9);
   color: rgb(var(--foreground));
 }
 
@@ -51,6 +57,34 @@
 .variant-destructive {
   background-color: rgb(var(--destructive));
   color: rgb(var(--destructive-foreground));
+}
+
+.variant-secondary {
+  background-color: rgba(var(--muted), 0.72);
+  color: rgb(var(--foreground));
+}
+
+.variant-secondary:hover {
+  background-color: rgba(var(--muted), 0.96);
+}
+
+.variant-accent {
+  background-color: rgba(var(--accent), 0.42);
+  color: rgb(var(--accent-foreground));
+}
+
+.variant-accent:hover {
+  background-color: rgba(var(--accent), 0.62);
+}
+
+.variant-subtle {
+  background-color: rgba(var(--surface-2), 0.84);
+  border-color: rgba(var(--border), 0.72);
+  color: rgb(var(--foreground));
+}
+
+.variant-subtle:hover {
+  background-color: rgba(var(--surface-2), 1);
 }
 
 /* Sizes */
@@ -75,4 +109,5 @@
 .size-icon {
   height: var(--spacing-9);
   width: var(--spacing-9);
+  padding: 0;
 }

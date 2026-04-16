@@ -1,0 +1,215 @@
+.topNav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: 54px;
+  border-bottom: 1px solid #ececec;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+}
+
+.leftArea {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  max-width: min(640px, calc(100vw - 280px));
+}
+
+.breadcrumbNav {
+  min-width: 0;
+  flex: 1;
+}
+
+.breadcrumbList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.breadcrumbItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.breadcrumbChevron {
+  flex-shrink: 0;
+  color: #a3a3a3;
+}
+
+.breadcrumbLink {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.breadcrumbLink:hover {
+  text-decoration: underline;
+}
+
+.breadcrumbCurrent {
+  color: #1f1f1f;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
+.brandDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #35c29b;
+}
+
+.orgText {
+  font-size: 0.85rem;
+  color: #2d2d2d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rightArea {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.endSlot {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.endSlot :global(button) {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 650;
+  gap: 6px;
+}
+
+.actionButton {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(var(--border), 0.78);
+  border-radius: 8px;
+  background: rgba(var(--surface-1), 0.9);
+  color: rgb(var(--projects-page-accent-text));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.actionButton:hover {
+  background: var(--projects-page-accent-soft);
+  border-color: rgba(var(--primary), 0.4);
+  color: rgb(var(--primary));
+}
+
+.actionPulseDot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 0 1px #fff;
+}
+
+.actionPulseRing {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  border: 2px solid rgba(34, 197, 94, 0.55);
+  animation: actionPulse 1.4s ease-out infinite;
+}
+
+@keyframes actionPulse {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.95;
+  }
+  70% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+.userCard {
+  height: 36px;
+  border: 1px solid #e7e7e7;
+  border-radius: 999px;
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 4px;
+}
+
+.userAvatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #141414;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.08;
+  min-width: 0;
+}
+
+.userInfo strong {
+  font-size: 0.74rem;
+  color: #1f1f1f;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.userInfo span {
+  font-size: 0.68rem;
+  color: #8b8b8b;
+  max-width: 170px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}

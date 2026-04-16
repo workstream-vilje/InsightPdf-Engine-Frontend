@@ -1,4 +1,5 @@
-import HistoryScreen from "@/screens/History";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import HistoryScreen from "@/features/history/components/History/History";
 
 export const metadata = {
   title: "History | Vilje Rag Canvas",
@@ -6,5 +7,9 @@ export const metadata = {
 };
 
 export default function HistoryPage() {
-  return <HistoryScreen />;
+  return (
+    <ProtectedRoute>
+      <HistoryScreen />
+    </ProtectedRoute>
+  );
 }

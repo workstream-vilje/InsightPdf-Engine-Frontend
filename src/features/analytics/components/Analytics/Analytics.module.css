@@ -1,0 +1,319 @@
+.metricsShell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+  padding: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(var(--sky), 0.22), transparent 22%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(239, 246, 255, 0.94)),
+    rgb(var(--background));
+}
+
+.metricsMain,
+.metricsSidebar,
+.metricsHeader,
+.panel,
+.chartCard,
+.recommendationCard,
+.profileCard {
+  border: 1px solid rgba(var(--border), 0.9);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(16px);
+}
+
+.metricsMain {
+  border-radius: 32px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow: auto;
+}
+
+.metricsHeader {
+  border-radius: 28px;
+  padding: 24px;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.backButton {
+  border: none;
+  background: rgba(var(--sky), 0.18);
+  color: rgb(var(--primary));
+  border-radius: 999px;
+  padding: 10px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  color: rgb(var(--muted-foreground));
+}
+
+.pageTitle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-weight: 800;
+  margin-top: 6px;
+}
+
+.categoryPill,
+.winnerBadge {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(var(--sky), 0.18);
+  color: rgb(var(--primary));
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.summaryCards {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.summaryCard {
+  min-width: 180px;
+  border-radius: 20px;
+  background: rgba(var(--surface-1), 0.95);
+  border: 1px solid rgba(var(--border), 0.7);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.summaryCard strong {
+  display: block;
+}
+
+.summaryCard span,
+.tableRow span,
+.comparisonCard p,
+.profileCard p,
+.recommendationCard p {
+  color: rgb(var(--muted-foreground));
+}
+
+.metricsContent,
+.chartStack,
+.chartGrid,
+.comparisonGrid,
+.profileList {
+  display: grid;
+  gap: 18px;
+}
+
+.metricsContent {
+  min-height: 0;
+}
+
+.metricsSidebar {
+  border-radius: 32px;
+  padding: 24px 18px;
+  position: sticky;
+  top: 18px;
+  height: calc(100vh - 36px);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sidebarNav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebarButton {
+  border: none;
+  background: rgba(var(--surface-1), 0.94);
+  color: rgb(var(--muted-foreground));
+  border-radius: 18px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.sidebarButton:hover {
+  transform: translateY(-1px);
+  background: rgba(var(--primary), 0.08);
+  color: rgb(var(--primary));
+}
+
+.sidebarButtonActive {
+  background: rgba(var(--primary), 0.1);
+  color: rgb(var(--primary));
+}
+
+.panel,
+.chartCard,
+.recommendationCard {
+  border-radius: 28px;
+  padding: 22px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.table {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tableHead,
+.tableRow {
+  display: grid;
+  grid-template-columns: 1.1fr repeat(4, 1fr) 0.7fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.tableHead {
+  color: rgb(var(--muted-foreground));
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tableRow {
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(var(--surface-1), 0.92);
+  border: 1px solid rgba(var(--border), 0.7);
+}
+
+.comparisonGrid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.comparisonCard,
+.profileCard {
+  border-radius: 22px;
+  padding: 18px;
+  border: 1px solid rgba(var(--border), 0.7);
+  background: rgba(var(--surface-1), 0.94);
+}
+
+.comparisonHeader,
+.profileCard {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.chartGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.chartScroller {
+  max-height: calc(100vh - 250px);
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
+}
+
+.chartStack {
+  gap: 16px;
+}
+
+.chartCard {
+  padding: 18px 18px 14px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.chartCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 24px 40px rgba(37, 99, 235, 0.12);
+  border-color: rgba(var(--primary), 0.28);
+}
+
+.chartCard :global(.recharts-wrapper) {
+  margin-top: 4px;
+}
+
+.recommendationCard {
+  background: linear-gradient(180deg, rgba(var(--primary), 0.08), rgba(var(--sky), 0.18));
+}
+
+.recommendationMetrics {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.recommendationMetrics span {
+  border-radius: 999px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.78);
+  color: rgb(var(--foreground));
+  font-weight: 700;
+}
+
+.profileList {
+  grid-template-columns: 1fr;
+}
+
+.profileCard {
+  align-items: center;
+}
+
+@media (max-width: 1180px) {
+  .metricsShell {
+    grid-template-columns: 1fr;
+  }
+
+  .metricsSidebar {
+    position: static;
+    height: auto;
+  }
+
+  .sidebarNav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .sidebarButton {
+    flex: 1 1 180px;
+  }
+
+  .chartGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .metricsShell {
+    padding: 12px;
+  }
+
+  .tableHead,
+  .tableRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
