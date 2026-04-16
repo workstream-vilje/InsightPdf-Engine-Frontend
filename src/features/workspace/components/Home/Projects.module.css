@@ -2455,6 +2455,16 @@
   color: rgb(var(--muted-foreground));
 }
 
+.uploadSidebarKvSkeleton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(var(--border), 0.22);
+  pointer-events: none;
+}
+
 .uploadSidebarTechniquesDl {
   margin: 0;
   font-size: 0.78rem;
@@ -4495,6 +4505,17 @@
 .metricCard small {
   color: rgb(var(--muted-foreground));
   font-size: 0.9rem;
+}
+
+.metricCardSkeleton {
+  border-radius: 18px;
+  background: rgba(var(--muted), 0.1);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 108px;
+  pointer-events: none;
 }
 
 .performanceSummaryGrid {

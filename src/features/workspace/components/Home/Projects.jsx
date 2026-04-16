@@ -19,6 +19,7 @@ import {
   FileText,
   FolderKanban,
   Grid2x2,
+  House,
   List,
   LogOut,
   MessageSquare,
@@ -36,9 +37,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import ProjectsPageView from "@/pages/projects_page/ProjectsPageView";
 import ProjectsPageSkeleton from "@/components/skeletons/ProjectsPageSkeleton";
 import UploadFilesSkeleton from "@/components/skeletons/UploadFilesSkeleton";
+import { SkeletonBlock, SkeletonLine } from "@/components/skeletons/SkeletonPrimitives";
 import TopNavbar from "@/components/common/top-navbar/TopNavbar";
+import { useToast } from "@/components/toast/ToastProvider";
 import { useFileListSkeletonCount } from "@/hooks/useFileListSkeletonCount";
 import { dedupeByKey } from "@/lib/collectionUtils";
+import { formatWorkspaceApiError } from "@/lib/formatWorkspaceApiError";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -91,6 +95,39 @@ const UPLOAD_RIGHT_SIDEBAR_ITEMS = [
   { value: "techniques", label: "Techniques", icon: Sparkles },
   { value: "files", label: "Files", icon: FolderKanban },
 ];
+
+const UPLOAD_PIPELINE_SIDEBAR_METRIC_PLACEHOLDERS = 6;
+
+function UploadPipelineSidebarSkeletonRows() {
+  return (
+    <>
+      {Array.from({ length: UPLOAD_PIPELINE_SIDEBAR_METRIC_PLACEHOLDERS }, (_, i) => (
+        <div key={`upload-pipeline-sk-${i}`} className={styles.uploadSidebarKvSkeleton} aria-hidden>
+          <SkeletonLine style={{ width: "46%", maxWidth: 112, height: 11 }} />
+          <SkeletonLine style={{ width: "32%", maxWidth: 76, height: 12 }} />
+        </div>
+      ))}
+    </>
+  );
+}
+
+const EXECUTION_PERFORMANCE_CARD_PLACEHOLDERS = 6;
+
+function ExecutionPerformanceSkeletonGrid() {
+  return (
+    <div className={styles.performancePanel}>
+      <div className={styles.metricGrid}>
+        {Array.from({ length: EXECUTION_PERFORMANCE_CARD_PLACEHOLDERS }, (_, i) => (
+          <div key={`perf-sk-${i}`} className={styles.metricCardSkeleton} aria-hidden>
+            <SkeletonLine style={{ width: "58%", maxWidth: 120, height: 10 }} />
+            <SkeletonBlock style={{ width: "72%", height: 26, borderRadius: 10, maxWidth: 140 }} />
+            <SkeletonLine style={{ width: "85%", maxWidth: 160, height: 9 }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** Same pipeline output card as the main upload column; reused in expanded files view. */
 function UploadPipelineOutputCard({
@@ -257,7 +294,14 @@ function UploadPipelineOutputCard({
   );
 }
 
-const AppWorkspaceRail = ({ onProjects, onSettings, onLogout }) => (
+const AppWorkspaceRail = ({
+  onProjects,
+  onSettings,
+  onLogout,
+  projectsButtonLabel = "Projects",
+  projectsButtonTitle = "Projects",
+  ProjectsNavIcon = ArrowLeft,
+}) => (
   <aside className={styles.appWorkspaceRail} aria-label="Account and navigation">
     <div className={styles.appWorkspaceRailFlyout}>
       <div className={styles.appWorkspaceRailTop}>
@@ -265,10 +309,10 @@ const AppWorkspaceRail = ({ onProjects, onSettings, onLogout }) => (
           type="button"
           className={styles.appWorkspaceRailItem}
           onClick={onProjects}
-          title="Projects"
+          title={projectsButtonTitle}
         >
-          <ArrowLeft size={18} className={styles.appWorkspaceRailIcon} />
-          <span className={styles.appWorkspaceRailLabel}>Projects</span>
+          <ProjectsNavIcon size={18} className={styles.appWorkspaceRailIcon} />
+          <span className={styles.appWorkspaceRailLabel}>{projectsButtonLabel}</span>
         </button>
       </div>
       <div className={styles.appWorkspaceRailSpacer} aria-hidden />
@@ -1006,31 +1050,6 @@ const createActivityMessage = (id, text, tone = "info") => ({
   tone,
 });
 
-const buildPendingQueryActivityMessages = ({ workspace }) => {
-  const vectorStores = (workspace?.vectorStores || []).filter(Boolean);
-  const vectorLabel = vectorStores.length ? vectorStores.join(", ") : "the selected vector store";
-  const topK = Math.max(1, Number(workspace?.topK) || 3);
-
-  return [
-    createActivityMessage(
-      "search",
-      `Searching ${vectorLabel} for the most relevant passages with top-k ${topK}.`,
-    ),
-    createActivityMessage(
-      "ranking",
-      "Ranking retrieved passages and preparing the grounded prompt.",
-    ),
-    createActivityMessage(
-      "generation",
-      "Generating the answer with gpt-4o-mini.",
-    ),
-    createActivityMessage(
-      "validation",
-      "Reviewing the answer for grounding and response quality.",
-    ),
-  ];
-};
-
 const buildQueryActivityMessages = ({ response, targetFile }) => {
   const results =
     Array.isArray(response?.comparison_results) && response.comparison_results.length > 0
@@ -1656,6 +1675,7 @@ function UploadProjectFilesList({
 
 const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) => {
   const router = useRouter();
+  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [projects, setProjects] = useState(INITIAL_PROJECTS);
   const [projectWorkspaces, setProjectWorkspaces] = useState(() =>
@@ -1719,7 +1739,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const timersRef = useRef([]);
   const hasHydratedRef = useRef(false);
   const projectFilesListSyncPromiseRef = useRef(null);
-  const focusResyncTimeoutRef = useRef(null);
   const prevActiveProjectIdRef = useRef(null);
   const initialProjectIdRef = useRef(initialProjectId);
   const activeProjectIdRef = useRef(activeProjectId);
@@ -1815,7 +1834,10 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   }, [perf]);
 
   const clearTimers = useCallback(() => {
-    timersRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    timersRef.current.forEach((timerId) => {
+      window.clearTimeout(timerId);
+      window.clearInterval(timerId);
+    });
     timersRef.current = [];
   }, []);
 
@@ -2050,7 +2072,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   }, [activeProjectId]);
 
   // Sync files from backend so DB deletes don't linger in UI.
-  // Coalesce concurrent calls (effects + focus + manual refresh) into one in-flight GET.
+  // Coalesce concurrent calls (effects + post-mutation refresh) into one in-flight GET.
   // Updates are keyed by project id so fast project switches cannot write files onto the wrong workspace.
   const syncProjectFilesFromBackend = useCallback(async () => {
     if (!activeProjectId) {
@@ -2144,27 +2166,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       };
     });
   }, [activeWorkspace?.files, activeWorkspace?.selectedFileId, updateActiveWorkspace]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    const onFocus = () => {
-      if (focusResyncTimeoutRef.current) {
-        window.clearTimeout(focusResyncTimeoutRef.current);
-      }
-      focusResyncTimeoutRef.current = window.setTimeout(() => {
-        focusResyncTimeoutRef.current = null;
-        syncProjectFilesFromBackend();
-      }, 500);
-    };
-    window.addEventListener("focus", onFocus);
-    return () => {
-      window.removeEventListener("focus", onFocus);
-      if (focusResyncTimeoutRef.current) {
-        window.clearTimeout(focusResyncTimeoutRef.current);
-        focusResyncTimeoutRef.current = null;
-      }
-    };
-  }, [syncProjectFilesFromBackend]);
 
   const visibleProjects = useMemo(() => {
     const normalizedSearch = deferredSearchValue.trim().toLowerCase();
@@ -2320,14 +2321,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         setNewProjectCategory("");
       });
     } catch (error) {
-      const message =
-        error?.payload?.detail ||
-        error?.payload?.message ||
-        error?.message ||
-        "Failed to create project";
-      if (typeof window !== "undefined") {
-        window.alert(message);
-      }
+      showToast({
+        title: "Project",
+        variant: "error",
+        message: formatWorkspaceApiError(error, "Failed to create project"),
+      });
     } finally {
       setIsCreatingProject(false);
     }
@@ -2404,14 +2402,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         }
       });
     } catch (error) {
-      const message =
-        error?.payload?.detail ||
-        error?.payload?.message ||
-        error?.message ||
-        "Failed to delete project";
-      if (typeof window !== "undefined") {
-        window.alert(message);
-      }
+      showToast({
+        title: "Project",
+        variant: "error",
+        message: formatWorkspaceApiError(error, "Failed to delete project"),
+      });
     } finally {
       setDeletingProjectId(null);
       setProjectPendingDelete(null);
@@ -2500,14 +2495,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       projectFilesListSyncPromiseRef.current = null;
       await syncProjectFilesFromBackend();
     } catch (error) {
-      const message =
-        error?.message ||
-        error?.payload?.message ||
-        error?.payload?.detail ||
-        "Failed to upload files";
-      if (typeof window !== "undefined") {
-        window.alert(message);
-      }
+      showToast({
+        title: "Files",
+        variant: "error",
+        message: formatWorkspaceApiError(error, "Failed to upload files"),
+      });
       updateActiveWorkspace((current) => ({
         ...current,
         visibleLines: [],
@@ -2537,14 +2529,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       setDeleteWorkspaceFileNameInput("");
       await syncProjectFilesFromBackend();
     } catch (error) {
-      const message =
-        error?.payload?.detail ||
-        error?.payload?.message ||
-        error?.message ||
-        "Failed to delete file";
-      if (typeof window !== "undefined") {
-        window.alert(message);
-      }
+      showToast({
+        title: "Files",
+        variant: "error",
+        message: formatWorkspaceApiError(error, "Failed to delete file"),
+      });
     } finally {
       setDeletingWorkspaceFileId(null);
     }
@@ -2596,14 +2585,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       setUploadFilesExpandedOpen(false);
       await syncProjectFilesFromBackend();
     } catch (error) {
-      const message =
-        error?.payload?.detail ||
-        error?.payload?.message ||
-        error?.message ||
-        "Failed to delete one or more files";
-      if (typeof window !== "undefined") {
-        window.alert(message);
-      }
+      showToast({
+        title: "Files",
+        variant: "error",
+        message: formatWorkspaceApiError(error, "Failed to delete one or more files"),
+      });
       await syncProjectFilesFromBackend();
     } finally {
       setIsDeletingAllFiles(false);
@@ -2619,21 +2605,27 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         (file) => Number(file.fileId) === Number(activeWorkspace.selectedFileId),
       ) || null;
     if (!selectableFiles.length) {
-      if (typeof window !== "undefined") {
-        window.alert("Upload at least one file before processing.");
-      }
+      showToast({
+        title: "Pipeline",
+        variant: "warning",
+        message: "Upload at least one file before processing.",
+      });
       return;
     }
     if (!executionTargetFile?.fileId) {
-      if (typeof window !== "undefined") {
-        window.alert("Select one uploaded file before processing.");
-      }
+      showToast({
+        title: "Pipeline",
+        variant: "warning",
+        message: "Select one uploaded file before processing.",
+      });
       return;
     }
     if (executionTargetFile.processed || executionTargetFile.allowedTechniques) {
-      if (typeof window !== "undefined") {
-        window.alert("The selected file is already processed.");
-      }
+      showToast({
+        title: "Pipeline",
+        variant: "warning",
+        message: "The selected file is already processed.",
+      });
       return;
     }
     const filesToProcess = [executionTargetFile];
@@ -2731,8 +2723,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
             file.fileId,
             processingConfig,
           );
-          if (processResponse?.data?.resumed && typeof window !== "undefined") {
-            window.alert(`Processing resumed for ${file.name || "the selected file"}.`);
+          if (processResponse?.data?.resumed) {
+            showToast({
+              title: "Pipeline",
+              variant: "info",
+              message: `Processing resumed for ${file.name || "the selected file"}.`,
+            });
           }
           processResponses.push(processResponse);
         }
@@ -2771,14 +2767,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           execution: resultSummary,
         }));
       } catch (error) {
-        const message =
-          error?.payload?.detail ||
-          error?.payload?.message ||
-          error?.message ||
-          "Failed to process files";
-        if (typeof window !== "undefined") {
-          window.alert(message);
-        }
+        const message = formatWorkspaceApiError(error, "Failed to process files");
+        showToast({
+          title: "Pipeline",
+          variant: "error",
+          message,
+        });
         updateActiveWorkspace((current) => ({
           ...current,
           phase: "ingestion-setup",
@@ -2841,9 +2835,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       activeWorkspace.embeddingModels.length > 0;
 
     if (!hasConfigurationSelected) {
-      if (typeof window !== "undefined") {
-        window.alert("Please select configuration then send the query.");
-      }
+      showToast({
+        title: "Query",
+        variant: "warning",
+        message: "Please select configuration then send the query.",
+      });
       return;
     }
 
@@ -2854,23 +2850,24 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       selectableFiles.find((file) => Number(file.fileId) === selectedFileId) ?? null;
 
     if (!targetFile?.fileId) {
-      if (typeof window !== "undefined") {
-        window.alert("Select one uploaded file before running a query.");
-      }
+      showToast({
+        title: "Query",
+        variant: "warning",
+        message: "Select one uploaded file before running a query.",
+      });
       return;
     }
     if (!targetFile.processed && !targetFile.allowedTechniques) {
-      if (typeof window !== "undefined") {
-        window.alert("Process the selected file before asking a query.");
-      }
+      showToast({
+        title: "Query",
+        variant: "warning",
+        message: "Process the selected file before asking a query.",
+      });
       return;
     }
 
     const runQuery = async () => {
       clearTimers();
-      const pendingMessages = buildPendingQueryActivityMessages({
-        workspace: activeWorkspace,
-      });
       updateActiveWorkspace((current) => ({
         ...current,
         phase: "query-processing",
@@ -2882,9 +2879,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         responseVariants: [],
         activeRightSection: "response",
         queryActivity: {
-          visible: true,
+          visible: false,
           status: "running",
-          messages: pendingMessages.slice(0, 1),
+          messages: [],
         },
       }));
 
@@ -2907,7 +2904,27 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           allowedTechniques = null;
         }
 
-        const response = await queryApi.runQuery(payload);
+        let progressSeq = 0;
+        const response = await queryApi.runQuery(payload, {
+          onProgress: ({ id, message }) => {
+            progressSeq += 1;
+            const lineId = `${String(id || "step")}-${progressSeq}`;
+            updateActiveWorkspace((current) => {
+              if (current.phase !== "query-processing") {
+                return current;
+              }
+              const prev = current.queryActivity?.messages || [];
+              return {
+                ...current,
+                queryActivity: {
+                  visible: true,
+                  status: "running",
+                  messages: [...prev, createActivityMessage(lineId, String(message || ""))],
+                },
+              };
+            });
+          },
+        });
         const results =
           Array.isArray(response?.comparison_results) && response.comparison_results.length > 0
             ? response.comparison_results
@@ -2954,89 +2971,49 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           targetFile,
         });
 
-        const playbackRows =
-          Array.isArray(response?.query_progress) && response.query_progress.length > 0
-            ? response.query_progress
-            : pendingMessages.map((m, idx) => ({
-                id: m.id,
-                text: m.text,
-                elapsed_ms: idx * 520,
-              }));
+        clearTimers();
 
-        const applyQuerySuccess = () => {
-          updateActiveWorkspace((current) => ({
-            ...current,
-            experimentId: primaryVariant?.experimentId || current?.experimentId || null,
-            phase: "query-complete",
-            submittedQuery: "",
-            response: finalAnswer,
-            responseVisible: true,
-            usedStrategies: primaryVariant?.usedStrategies || [],
-            responseVariants,
-            qualityMetrics:
-              primaryVariant?.qualityMetrics || current?.qualityMetrics || DEFAULT_QUALITY_METRICS,
-            queryActivity: {
-              visible: true,
-              status: "success",
-              messages: activityMessages,
+        updateActiveWorkspace((current) => ({
+          ...current,
+          experimentId: primaryVariant?.experimentId || current?.experimentId || null,
+          phase: "query-complete",
+          submittedQuery: "",
+          response: finalAnswer,
+          responseVisible: true,
+          usedStrategies: primaryVariant?.usedStrategies || [],
+          responseVariants,
+          qualityMetrics:
+            primaryVariant?.qualityMetrics || current?.qualityMetrics || DEFAULT_QUALITY_METRICS,
+          queryActivity: {
+            visible: true,
+            status: "success",
+            messages: activityMessages,
+          },
+          conversation: [
+            ...(current?.conversation || []),
+            {
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              fileId: targetFile.fileId,
+              query: submittedQuery,
+              responseVariants,
+              activityMessages,
             },
-            conversation: [
-              ...(current?.conversation || []),
-              {
-                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                fileId: targetFile.fileId,
-                query: submittedQuery,
-                responseVariants,
-                activityMessages,
-              },
-            ],
-            retrievedChunks: finalChunks.map((chunk, index) => ({
-              title: chunk?.source || targetFile.name || `Chunk ${index + 1}`,
-              page: chunk?.page || index + 1,
-              score: Number(chunk?.relevance_score ?? chunk?.raw_score ?? 0),
-              text: chunk?.content || "",
-            })),
-          }));
-        };
-
-        let cumulative = 0;
-        playbackRows.forEach((row, index) => {
-          const prevElapsed = index > 0 ? Number(playbackRows[index - 1].elapsed_ms) || 0 : 0;
-          const curElapsed = Number(row.elapsed_ms) || 0;
-          const stepDelta =
-            index === 0 ? 0 : Math.max(200, Math.min(9000, curElapsed - prevElapsed));
-          cumulative += stepDelta;
-          const timeoutId = window.setTimeout(() => {
-            updateActiveWorkspace((current) => ({
-              ...current,
-              phase: "query-processing",
-              queryActivity: {
-                visible: true,
-                status: "running",
-                messages: playbackRows
-                  .slice(0, index + 1)
-                  .map((ev) =>
-                    createActivityMessage(String(ev.id || "step"), String(ev.text || "")),
-                  ),
-              },
-            }));
-          }, cumulative);
-          timersRef.current.push(timeoutId);
-        });
-
-        const finalizeDelay = Math.max(cumulative + 220, 400);
-        const finalizeId = window.setTimeout(applyQuerySuccess, finalizeDelay);
-        timersRef.current.push(finalizeId);
+          ],
+          retrievedChunks: finalChunks.map((chunk, index) => ({
+            title: chunk?.source || targetFile.name || `Chunk ${index + 1}`,
+            page: chunk?.page || index + 1,
+            score: Number(chunk?.relevance_score ?? chunk?.raw_score ?? 0),
+            text: chunk?.content || "",
+          })),
+        }));
       } catch (error) {
         clearTimers();
-        const message =
-          error?.payload?.detail ||
-          error?.payload?.message ||
-          error?.message ||
-          "Failed to run query";
-        if (typeof window !== "undefined") {
-          window.alert(message);
-        }
+        const message = formatWorkspaceApiError(error, "Failed to run query");
+        showToast({
+          title: "Query",
+          variant: "error",
+          message,
+        });
         updateActiveWorkspace((current) => ({
           ...current,
           phase: "query-ready",
@@ -3201,7 +3178,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     status: "idle",
     messages: [],
   };
-  const isChatInputDisabled = !hasSelectedFile || !hasSelectedProcessedFile;
+  const isQueryInFlight = activeWorkspace?.phase === "query-processing";
+  const isChatInputDisabled =
+    !hasSelectedFile || !hasSelectedProcessedFile || isQueryInFlight;
 
   useEffect(() => {
     const prevStatus = previousExecutionStatusRef.current;
@@ -3213,9 +3192,13 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   }, [executionState.status]);
 
   const handleRailProjects = useCallback(() => {
+    if (isCreateProjectOpen) {
+      setIsCreateProjectOpen(false);
+      return;
+    }
     setActiveProjectId(null);
     router.replace(ROUTE_PATHS.WORKSPACE_UPLOAD);
-  }, [router]);
+  }, [router, isCreateProjectOpen]);
 
   const handleRailSettings = useCallback(() => {
     router.push(ROUTE_PATHS.SETTINGS);
@@ -3238,10 +3221,18 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         onClick: () => {
           setHasUnreadPipelineSuccess(false);
           if (hasUnreadPipelineSuccess) {
-            window.alert("Pipeline completed successfully.");
+            showToast({
+              title: "Notifications",
+              variant: "success",
+              message: "Pipeline completed successfully.",
+            });
             return;
           }
-          window.alert("No new notifications");
+          showToast({
+            title: "Notifications",
+            variant: "info",
+            message: "No new notifications",
+          });
         },
       },
       {
@@ -3267,7 +3258,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
             : router.push(ROUTE_PATHS.METRICS),
       },
     ],
-    [activeProject, hasUnreadPipelineSuccess, router],
+    [activeProject, hasUnreadPipelineSuccess, router, showToast],
   );
 
   const topNavbarBreadcrumbItems = useMemo(() => {
@@ -3344,6 +3335,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
             onProjects={handleRailProjects}
             onSettings={handleRailSettings}
             onLogout={handleRailLogout}
+            projectsButtonLabel={isCreateProjectOpen ? "Back to home" : "Projects"}
+            projectsButtonTitle={
+              isCreateProjectOpen ? "Back to home (close create project)" : "Projects"
+            }
+            ProjectsNavIcon={isCreateProjectOpen ? House : ArrowLeft}
           />
           <div className={styles.workspaceProjectsMain}>
             <ProjectsPageView
@@ -3686,25 +3682,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   />
                 </SidebarSection>
 
-                <SidebarSection
-                  icon={Blocks}
-                  title="Top-k"
-                  description="Maximum value is 5"
-                  expanded
-                >
-                  <Input
-                    type="number"
-                    min={1}
-                    max={5}
-                    value={activeWorkspace.topK}
-                    onChange={(event) =>
-                      updateActiveWorkspace((current) => ({
-                        ...current,
-                        topK: `${Math.min(5, Math.max(1, Number(event.target.value || 1)))}`,
-                      }))
-                    }
-                  />
-                </SidebarSection>
+
 
                 <SidebarSection
                   icon={FolderKanban}
@@ -4659,7 +4637,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                 <div className={styles.queryActivityStack}>
                   {queryActivityState.messages.map((message, messageIndex) => (
                     <p
-                      key={message.id}
+                      key={`${message.id}-${messageIndex}`}
                       className={classNames(styles.queryActivityLine, {
                         [styles.queryActivityLineSuccess]: message.tone === "success",
                         [styles.queryActivityLineWarning]: message.tone === "warning",
@@ -4714,9 +4692,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   }}
                   placeholder={
                     isChatInputDisabled
-                      ? hasSelectedFile
-                        ? "Process the selected file to enable chat"
-                        : "Select an uploaded file to enable chat"
+                      ? isQueryInFlight
+                        ? "Waiting for the model to finish…"
+                        : hasSelectedFile
+                          ? "Process the selected file to enable chat"
+                          : "Select an uploaded file to enable chat"
                       : "How can I help you today?"
                   }
                   className={classNames(styles.queryInput, styles.queryInputHero, {
@@ -4727,7 +4707,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                 <Button
                   className={classNames(styles.querySendButton, styles.querySendButtonHero)}
                   onClick={handleStartQuery}
-                  title="Send query"
+                  title={isQueryInFlight ? "Query in progress" : "Send query"}
                   disabled={isChatInputDisabled}
                 >
                   <Send size={16} />
@@ -4863,7 +4843,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
               {activeWorkspace.activeRightSection === "performance-legacy-disabled" && (
                 <div className={styles.insightPanel}>
                   <h3>Execution Performance</h3>
-                  {perfLoading && <div>Loading…</div>}
+                  {perfLoading && <ExecutionPerformanceSkeletonGrid />}
                   {perfError && <div>{perfError}</div>}
                   {!perfLoading && !perfError && (
                     <div className={styles.metricGrid}>
@@ -4913,7 +4893,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                       </div>
                     )}
                   </div>
-                  {perfLoading && <div>Loading...</div>}
+                  {perfLoading && <ExecutionPerformanceSkeletonGrid />}
                   {perfError && <div>{perfError}</div>}
                   {!perfLoading && !perfError && !perf && (
                     <div>No stored rows found for this experiment yet.</div>
@@ -5068,12 +5048,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                               {executionStatusLabel}
                             </span>
                           </div>
-                          {executionSummaryItems.slice(0, 6).map((item) => (
-                            <div key={item.label} className={styles.uploadSidebarKv}>
-                              <span>{item.label}</span>
-                              <strong>{item.value}</strong>
-                            </div>
-                          ))}
+                          {executionState.status === "running" ? (
+                            <UploadPipelineSidebarSkeletonRows />
+                          ) : (
+                            executionSummaryItems.slice(0, 6).map((item) => (
+                              <div key={item.label} className={styles.uploadSidebarKv}>
+                                <span>{item.label}</span>
+                                <strong>{item.value}</strong>
+                              </div>
+                            ))
+                          )}
                         </>
                       ) : (
                         <p className={styles.insightPanelMuted}>
