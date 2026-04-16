@@ -1,22 +1,28 @@
 import { buildUrl } from "@/services/axios";
 import httpClient from "@/services/axios";
-import { clearAuthSession, getAccessToken, redirectToLogin } from "@/services/auth";
+import { clearAuthSession, getCsrfToken, redirectToLogin } from "@/services/auth";
 import { runQuery as runQueryPath, fetchSavedResponse } from "@/services/api/networking/endpoints";
 
 /**
  * POST /query with Accept: application/x-ndjson.
  * Streams progress lines `{type:"progress",id,message}` then `{type:"result",data}`.
+ * Uses cookie-based auth: credentials:"include" + X-CSRF-Token header.
  */
-export async function runQuery(payload, { onProgress } = {}) {
+export async function runQuery(payload, { onProgress, signal } = {}) {
+  const csrfToken = typeof window !== "undefined" ? getCsrfToken() : null;
+
   const response = await fetch(buildUrl(runQueryPath), {
     method: "POST",
+    cache: "no-store",
+    credentials: "include",
     headers: {
       Accept: "application/x-ndjson",
       "Content-Type": "application/json",
-      ...(typeof window !== "undefined" && getAccessToken()
-        ? { Authorization: `Bearer ${getAccessToken()}` }
-        : {}),
+      "Cache-Control": "no-cache, no-store, max-age=0",
+      Pragma: "no-cache",
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
     },
+    signal,
     body: JSON.stringify(payload),
   });
 
@@ -107,6 +113,13 @@ export const queryApi = {
   fetchSavedResponse: ({ projectId, fileId, experimentId }) =>
     httpClient.get(
       `${fetchSavedResponse}?project_id=${projectId}&file_id=${fileId}&experiment_id=${experimentId}`,
+      {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, max-age=0",
+          Pragma: "no-cache",
+        },
+      },
     ),
 };
 

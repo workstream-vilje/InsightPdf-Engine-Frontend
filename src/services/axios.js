@@ -1,4 +1,4 @@
-import { clearAuthSession, getAccessToken, redirectToLogin } from "@/services/auth";
+import { clearAuthSession, getCsrfToken, redirectToLogin } from "@/services/auth";
 
 /**
  * API base defaults to the local FastAPI backend.
@@ -7,54 +7,58 @@ import { clearAuthSession, getAccessToken, redirectToLogin } from "@/services/au
 const normalizeApiBase = (url) => {
   const trimmed = url.trim().replace(/\/+$/, "");
   if (!trimmed) return trimmed;
-  if (/\/api\/v\d+(\/|$)/i.test(trimmed)) {
-    return trimmed;
-  }
+  if (/\/api\/v\d+(\/|$)/i.test(trimmed)) return trimmed;
   return `${trimmed}/api/v1`;
 };
 
 const getBaseUrl = () => {
   const host = process.env.NEXT_PUBLIC_API_HOST || "localhost";
   const port = process.env.NEXT_PUBLIC_API_PORT || "8000";
-  const raw = normalizeApiBase(`http://${host}:${port}`);
-  return raw.replace(/\/+$/, "");
+  return normalizeApiBase(`http://${host}:${port}`).replace(/\/+$/, "");
 };
 
 const getStoredUserId = () =>
   typeof window !== "undefined" ? window.localStorage.getItem("user_id") : null;
 
-const withQuery = (path, params = {}) => {
+export const withQuery = (path, params = {}) => {
   const searchParams = new URLSearchParams();
-
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") {
       searchParams.set(key, String(value));
     }
   });
-
   const query = searchParams.toString();
   if (!query) return path;
-
   return `${path}${path.includes("?") ? "&" : "?"}${query}`;
 };
 
-const buildHeaders = (headers = {}) => {
-  const token = typeof window !== "undefined" ? getAccessToken() : null;
+export const buildUrl = (path) => {
+  if (/^https?:\/\//i.test(path)) return path;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${getBaseUrl()}${normalizedPath}`;
+};
+
+/**
+ * Build request headers for cookie-based auth.
+ *
+ * - No Authorization header (tokens are HttpOnly cookies sent automatically).
+ * - X-CSRF-Token is added for write methods (POST, PUT, PATCH, DELETE).
+ */
+const buildHeaders = (method = "GET", extraHeaders = {}) => {
+  const isWriteMethod = ["POST", "PUT", "PATCH", "DELETE"].includes(
+    method.toUpperCase(),
+  );
+
+  const csrfHeader =
+    isWriteMethod && typeof window !== "undefined"
+      ? { "X-CSRF-Token": getCsrfToken() || "" }
+      : {};
 
   return {
     Accept: "application/json",
-    ...headers,
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...csrfHeader,
+    ...extraHeaders,
   };
-};
-
-const buildUrl = (path) => {
-  if (/^https?:\/\//i.test(path)) {
-    return path;
-  }
-
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${getBaseUrl()}${normalizedPath}`;
 };
 
 const parseResponse = async (response) => {
@@ -92,14 +96,17 @@ const parseResponse = async (response) => {
 };
 
 const request = async (path, options = {}) => {
-  const { headers, body, ...restOptions } = options;
+  const { headers, body, method = "GET", ...restOptions } = options;
   const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
 
   const response = await fetch(buildUrl(path), {
     ...restOptions,
+    method,
+    // Always include cookies — browser sends access_token + refresh_token automatically
+    credentials: "include",
     headers: isFormData
-      ? buildHeaders(headers)
-      : buildHeaders({
+      ? buildHeaders(method, headers)
+      : buildHeaders(method, {
           "Content-Type": "application/json",
           ...headers,
         }),
@@ -107,22 +114,19 @@ const request = async (path, options = {}) => {
       body == null
         ? undefined
         : isFormData || typeof body === "string"
-        ? body
-        : JSON.stringify(body),
+          ? body
+          : JSON.stringify(body),
   });
 
   return parseResponse(response);
 };
 
 const httpClient = {
-  get: (path, options = {}) => request(path, { ...options, method: "GET" }),
-  post: (path, body, options = {}) =>
-    request(path, { ...options, method: "POST", body }),
-  put: (path, body, options = {}) =>
-    request(path, { ...options, method: "PUT", body }),
-  patch: (path, body, options = {}) =>
-    request(path, { ...options, method: "PATCH", body }),
-  delete: (path, options = {}) => request(path, { ...options, method: "DELETE" }),
+  get:    (path, options = {}) => request(path, { ...options, method: "GET" }),
+  post:   (path, body, options = {}) => request(path, { ...options, method: "POST",   body }),
+  put:    (path, body, options = {}) => request(path, { ...options, method: "PUT",    body }),
+  patch:  (path, body, options = {}) => request(path, { ...options, method: "PATCH",  body }),
+  delete: (path, options = {})       => request(path, { ...options, method: "DELETE" }),
 };
 
 export { buildUrl, getBaseUrl, getStoredUserId, request, withQuery };

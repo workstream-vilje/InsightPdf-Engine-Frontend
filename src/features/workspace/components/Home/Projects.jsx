@@ -56,7 +56,7 @@ import {
   getScopedStorageKey,
   getStoredUserProfile,
 } from "@/services/auth";
-import { getExperimentPerformanceById } from "@/lib/api";
+import { getExperimentAgentReportById, getExperimentPerformanceById } from "@/lib/api";
 import {
   DATA_EXTRACTION_OPTIONS,
   DEFAULT_QUALITY_METRICS,
@@ -453,6 +453,7 @@ const pruneWorkspaceDataForFiles = (workspace, backendFileIds) => {
     retrievedChunks: fileStillExists ? workspace?.retrievedChunks || [] : [],
     usedStrategies: fileStillExists ? workspace?.usedStrategies || [] : [],
     experimentId: fileStillExists ? workspace?.experimentId || null : null,
+    agentReport: fileStillExists ? workspace?.agentReport || null : null,
     submittedQuery: fileStillExists ? workspace?.submittedQuery || "" : "",
     queryActivity: fileStillExists
       ? workspace?.queryActivity || { visible: false, status: "idle", messages: [] }
@@ -475,6 +476,28 @@ const mapUploadedFileToWorkspaceFile = (file, category) => ({
   pages: file?.pages_count ?? file?.pagesCount ?? file?.pages ?? null,
   allowedTechniques: file?.allowed_techniques || null,
   processed: Boolean(file?.allowed_techniques),
+});
+
+const sanitizeWorkspaceQueryState = (workspace) => ({
+  ...workspace,
+  phase:
+    workspace?.phase === "query-processing" || workspace?.phase === "query-complete"
+      ? "query-ready"
+      : workspace?.phase,
+  submittedQuery: "",
+  response: "",
+  responseVisible: false,
+  responseVariants: [],
+  experimentId: null,
+  agentReport: null,
+  visibleLines: [],
+  retrievedChunks: [],
+  queryActivity: {
+    visible: false,
+    status: "idle",
+    messages: [],
+  },
+  conversation: [],
 });
 
 /** One row per backend file id; first occurrence wins (order-stable). */
@@ -1891,11 +1914,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const [historyEntries, setHistoryEntries] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [isAgentReportOpen, setIsAgentReportOpen] = useState(false);
+  const [agentReportLoading, setAgentReportLoading] = useState(false);
+  const [agentReportError, setAgentReportError] = useState("");
   const fileInputRef = useRef(null);
   const queryInputRef = useRef(null);
   const workspaceContentRef = useRef(null);
   const timersRef = useRef([]);
   const hasHydratedRef = useRef(false);
+  const activeQueryAbortRef = useRef(null);
+  const activeQueryRequestIdRef = useRef(0);
   const projectFilesListSyncPromiseRef = useRef(null);
   const prevActiveProjectIdRef = useRef(null);
   const initialProjectIdRef = useRef(initialProjectId);
@@ -1935,11 +1963,39 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     activeWorkspace?.experimentId ||
     activeWorkspace?.experiment_id ||
     null;
+  const agentReportRows = useMemo(() => {
+    const report = activeWorkspace?.agentReport || null;
+    if (!report) return [];
+    return [
+      ["Enabled", report.enabled],
+      ["Expansion Room", report.expansion_room],
+      ["Required Vector DB", report.required_vector_db],
+      ["Selected Vector DB", report.selected_vector_db],
+      ["Backend Cost", report.backend_cost],
+      ["Selected Backend Cost", report.selected_backend_cost],
+      ["Original Query", report.original_query],
+      ["Query Complexity", report.query_complexity],
+      ["Search Type", report.search_type],
+      ["Subsequent Decision", report.subsequent_decision],
+      ["Retrieved Chunks", report.retrieved_chunks],
+      ["Error Message", report.error_message],
+      ["Duration (ms)", report.duration_ms],
+      ["Backend Decision", report.backend_decision],
+      ["Suggested Query", report.suggested_query],
+      ["Feedback", report.feedback],
+    ];
+  }, [activeWorkspace?.agentReport]);
 
   useEffect(() => {
     if (selectedPerformanceResponseIndex < performanceResponseVariants.length) return;
     setSelectedPerformanceResponseIndex(0);
   }, [performanceResponseVariants.length, selectedPerformanceResponseIndex]);
+
+  useEffect(() => {
+    setIsAgentReportOpen(false);
+    setAgentReportLoading(false);
+    setAgentReportError("");
+  }, [activeProjectId, experimentId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2096,7 +2152,10 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         const parsedWorkspaces = JSON.parse(storedWorkspaces);
         if (parsedWorkspaces && typeof parsedWorkspaces === "object") {
           const normalized = Object.fromEntries(
-            Object.entries(parsedWorkspaces).map(([key, value]) => [String(key), value]),
+            Object.entries(parsedWorkspaces).map(([key, value]) => [
+              String(key),
+              sanitizeWorkspaceQueryState(value),
+            ]),
           );
           setProjectWorkspaces(normalized);
         }
@@ -2170,11 +2229,26 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     if (typeof window === "undefined" || !hasHydratedRef.current) return;
     const currentUserId = getCurrentUserId();
     if (!currentUserId) return;
+    const sanitizedWorkspaces = Object.fromEntries(
+      Object.entries(projectWorkspaces).map(([key, value]) => [
+        key,
+        sanitizeWorkspaceQueryState(value),
+      ]),
+    );
     window.localStorage.setItem(
       getScopedStorageKey("rag-canvas-workspaces", currentUserId),
-      JSON.stringify(projectWorkspaces),
+      JSON.stringify(sanitizedWorkspaces),
     );
   }, [projectWorkspaces]);
+
+  useEffect(
+    () => () => {
+      activeQueryRequestIdRef.current += 1;
+      activeQueryAbortRef.current?.abort();
+      activeQueryAbortRef.current = null;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (initialProjectId == null || initialProjectId === "") {
@@ -3047,6 +3121,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     }
 
     const runQuery = async () => {
+      activeQueryRequestIdRef.current += 1;
+      const requestId = activeQueryRequestIdRef.current;
+      activeQueryAbortRef.current?.abort();
+      const controller = new AbortController();
+      activeQueryAbortRef.current = controller;
+
       clearTimers();
       updateActiveWorkspace((current) => ({
         ...current,
@@ -3054,9 +3134,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         query: "",
         submittedQuery,
         visibleLines: [],
-        response: "",
-        responseVisible: false,
-        responseVariants: [],
         activeRightSection: "response",
         queryActivity: {
           visible: false,
@@ -3086,7 +3163,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
         let progressSeq = 0;
         const response = await queryApi.runQuery(payload, {
+          signal: controller.signal,
           onProgress: ({ id, message }) => {
+            if (requestId !== activeQueryRequestIdRef.current) return;
             progressSeq += 1;
             const transformed = transformProgressMessage(String(message || ""));
             if (!transformed) return; // suppress technical noise
@@ -3104,6 +3183,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
             });
           },
         });
+        if (requestId !== activeQueryRequestIdRef.current) return;
         const results =
           Array.isArray(response?.comparison_results) && response.comparison_results.length > 0
             ? response.comparison_results
@@ -3130,6 +3210,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
               experimentId: result?.experiment_id || null,
               fileId: targetFile.fileId,
               db: result?.db || result?.retrieval || "Default",
+              agentEnabled: Boolean(result?.agent?.enabled),
               response: savedResponse?.response || result?.answer || "",
               chunks: savedResponse?.chunks || result?.chunks || [],
               qualityMetrics: buildRagasQualityMetrics(result),
@@ -3151,10 +3232,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         });
 
         clearTimers();
+        if (requestId !== activeQueryRequestIdRef.current) return;
 
         updateActiveWorkspace((current) => ({
           ...current,
           experimentId: primaryVariant?.experimentId || current?.experimentId || null,
+          agentReport: null,
           phase: "query-complete",
           submittedQuery: "",
           response: finalAnswer,
@@ -3187,6 +3270,26 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         }));
       } catch (error) {
         clearTimers();
+        if (requestId !== activeQueryRequestIdRef.current) return;
+        if (error?.name === "AbortError") {
+          updateActiveWorkspace((current) => ({
+            ...current,
+            phase: "query-ready",
+            submittedQuery: "",
+            queryActivity: {
+              visible: true,
+              status: "error",
+              messages: [
+                createActivityMessage(
+                  "query-cancelled",
+                  "Query request was interrupted.",
+                  "warning",
+                ),
+              ],
+            },
+          }));
+          return;
+        }
         const message = formatWorkspaceApiError(error, "Failed to run query");
         showToast({
           title: "Query",
@@ -3197,14 +3300,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           ...current,
           phase: "query-ready",
           submittedQuery: "",
-          response: "",
-          responseVisible: false,
           queryActivity: {
             visible: true,
             status: "error",
             messages: [createActivityMessage("query-error", message, "error")],
           },
         }));
+      } finally {
+        if (requestId === activeQueryRequestIdRef.current) {
+          activeQueryAbortRef.current = null;
+        }
       }
     };
 
@@ -3358,7 +3463,8 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     messages: [],
   };
   const isQueryInFlight = activeWorkspace?.phase === "query-processing";
-  const isChatInputDisabled = !hasSelectedFile || isQueryInFlight;
+  const isChatInputDisabled =
+    !hasSelectedFile || !hasSelectedProcessedFile || isQueryInFlight;
 
   useEffect(() => {
     const prevStatus = previousExecutionStatusRef.current;
@@ -4852,60 +4958,40 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                       </div>
                     )}
 
-                    {(activeWorkspace.conversation || []).map((entry) => {
-                      // Extract timestamp from entry.id (format: "timestamp-randomstring")
-                      const entryTs = Number(String(entry.id).split("-")[0]);
-                      const entryTime = Number.isFinite(entryTs) && entryTs > 0
-                        ? new Date(entryTs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                        : null;
-
-                      return (
-                        <div key={entry.id} className={styles.conversationBlock}>
-
-                          {/* User bubble with timestamp */}
-                          <div className={styles.userMessageRow}>
-                            <div className={styles.userBubbleWrap}>
-                              {entryTime && (
-                                <span className={styles.userBubbleTime}>{entryTime}</span>
-                              )}
-                              <div className={styles.userBubble}>{entry.query}</div>
-                            </div>
-                          </div>
-
-                          {/* AI responses — with markdown rendering */}
-                          {(entry.responseVariants || []).map((variant, index) => (
-                            <motion.div
-                              key={`${entry.id}-${variant.db}-${variant.experimentId || index}`}
-                              initial={{ opacity: 0, y: 12 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                              className={styles.aiMessageRow}
-                            >
-                              <span className={styles.aiAvatarDot} aria-hidden />
-                              <div className={styles.aiResponseCard}>
-                                <div className={styles.aiResponseText}>
-                                  {renderMarkdown(variant.response)}
-                                </div>
-                                {variant.usedStrategies?.length > 0 && (
-                                  <button
-                                    type="button"
-                                    className={styles.techniqueChip}
-                                    onClick={() =>
-                                      setTechniqueOverlay({
-                                        title: `Response-${index + 1}`,
-                                        strategies: variant.usedStrategies,
-                                      })
-                                    }
-                                  >
-                                    Techniques used ↗
-                                  </button>
-                                )}
+                    {(activeWorkspace.conversation || []).map((entry) => (
+                      <div key={entry.id} className={styles.conversationBlock}>
+                        <div className={styles.queryLine}>{entry.query}</div>
+                        {(entry.responseVariants || []).map((variant, index) => (
+                          <motion.div
+                            key={`${entry.id}-${variant.db}-${variant.experimentId || index}`}
+                            initial={{ opacity: 0, y: 16 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className={styles.responseBlock}
+                          >
+                            <div className={styles.responseTextBlock}>
+                              <div className={styles.chatMessageLabel}>
+                                Response-{index + 1}
                               </div>
-                            </motion.div>
-                          ))}
-                        </div>
-                      );
-                    })}
+                              <p>{variant.response}</p>
+                              {variant.usedStrategies?.length > 0 && (
+                                <button
+                                  type="button"
+                                  className={styles.techniqueButton}
+                                  onClick={() =>
+                                    setTechniqueOverlay({
+                                      title: `Response-${index + 1}`,
+                                      strategies: variant.usedStrategies,
+                                    })
+                                  }
+                                >
+                                  Techniques used
+                                </button>
+                              )}
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    ))}
 
                     {/* In-flight user bubble */}
                     {activeWorkspace.submittedQuery && (
@@ -4946,9 +5032,26 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
                   {/* ── Input dock ── */}
                   <div className={styles.queryDock}>
-                    <div className={styles.chatInputBar}>
+                    <div className={styles.queryDockHeader}>
+                      <div className={styles.queryDockLabel}>Chat input</div>
 
-                      {/* Text input — takes all available space */}
+                    </div>
+                    <div className={classNames(styles.queryInputShell, styles.queryInputShellHero)}>
+                      <button
+                        type="button"
+                        className={classNames(styles.queryAgentModeBadge, {
+                          [styles.queryAgentModeBadgeActive]: queryAgentModeEnabled,
+                        })}
+                        onClick={() => toggleWorkspaceValue("queryConfigurations", "agent")}
+                        aria-pressed={queryAgentModeEnabled}
+                        title={
+                          queryAgentModeEnabled
+                            ? "Turn off Agent mode (retrieval strategy picks re-enabled)"
+                            : "Turn on Agent mode (meta-retriever; retrieval strategy picks disabled)"
+                        }
+                      >
+                        Agent mode
+                      </button>
                       <Input
                         ref={queryInputRef}
                         value={activeWorkspace.query}
@@ -5108,6 +5211,66 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                       <span className={styles.strategyValue}>{item.value}</span>
                     </div>
                   ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isAgentReportOpen && (
+            <div
+              className={styles.agentReportBackdrop}
+              role="presentation"
+              onClick={() => setIsAgentReportOpen(false)}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="agent-report-title"
+                className={styles.agentReportModal}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className={styles.agentReportHeader}>
+                  <div>
+                    <h2 id="agent-report-title" className={styles.agentReportTitle}>
+                      Agent report
+                    </h2>
+                    <p className={styles.agentReportIntro}>
+                      Stored agent and validator details for the current query.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.agentReportClose}
+                    onClick={() => setIsAgentReportOpen(false)}
+                    aria-label="Close"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className={styles.agentReportContent}>
+                  {agentReportLoading ? (
+                    <div className={styles.agentReportEmpty}>Loading report...</div>
+                  ) : agentReportError ? (
+                    <div className={styles.agentReportEmpty}>{agentReportError}</div>
+                  ) : agentReportRows.length === 0 ? (
+                    <div className={styles.agentReportEmpty}>No agent report available.</div>
+                  ) : (
+                    <div className={styles.agentReportGrid}>
+                      {agentReportRows.map(([label, value]) => (
+                        <div key={label} className={styles.agentReportItem}>
+                          <span className={styles.agentReportItemLabel}>{label}</span>
+                          <span className={styles.agentReportItemValue}>
+                            {value == null || value === ""
+                              ? "-"
+                              : typeof value === "object"
+                                ? JSON.stringify(value)
+                                : String(value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

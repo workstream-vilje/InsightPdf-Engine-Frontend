@@ -1,11 +1,13 @@
 import { buildUrl } from "@/services/axios";
-import { getAccessToken } from "@/services/auth";
+import { getCsrfToken } from "@/services/auth";
 
 /**
- * POST multipart FormData with upload progress (fetch API does not expose upload progress).
- * @param {string} path API path (e.g. /project/1/upload?user_id=…)
- * @param {FormData} formData
- * @param {{ onProgress?: (p: { loaded: number; total: number; percent: number }) => void }} [options]
+ * POST multipart FormData with upload progress using XMLHttpRequest.
+ * (fetch API does not expose upload progress.)
+ *
+ * Uses cookie-based auth:
+ * - withCredentials = true  → browser sends HttpOnly auth cookies automatically
+ * - X-CSRF-Token header     → required for write requests
  */
 export function postFormDataWithProgress(path, formData, options = {}) {
   const { onProgress } = options;
@@ -20,21 +22,20 @@ export function postFormDataWithProgress(path, formData, options = {}) {
     const url = buildUrl(path);
 
     xhr.open("POST", url);
+    xhr.withCredentials = true; // send HttpOnly auth cookies
+
     xhr.setRequestHeader("Accept", "application/json");
 
-    const token = typeof window !== "undefined" ? getAccessToken() : null;
-    if (token) {
-      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    // CSRF token required for POST
+    const csrfToken = typeof window !== "undefined" ? getCsrfToken() : null;
+    if (csrfToken) {
+      xhr.setRequestHeader("X-CSRF-Token", csrfToken);
     }
 
     xhr.upload.onprogress = (event) => {
       if (!onProgress || !event.lengthComputable) return;
       const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
-      onProgress({
-        loaded: event.loaded,
-        total: event.total,
-        percent,
-      });
+      onProgress({ loaded: event.loaded, total: event.total, percent });
     };
 
     xhr.onload = () => {
@@ -52,7 +53,8 @@ export function postFormDataWithProgress(path, formData, options = {}) {
       }
 
       const message =
-        (payload && typeof payload === "object" && (payload.detail || payload.message || payload.error)) ||
+        (payload && typeof payload === "object" &&
+          (payload.detail || payload.message || payload.error)) ||
         xhr.statusText ||
         "Upload failed";
       const err = new Error(typeof message === "string" ? message : "Upload failed");

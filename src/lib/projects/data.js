@@ -61,6 +61,7 @@ export const createWorkspaceState = () => ({
   responseVisible: false,
   responseVariants: [],
   experimentId: null,
+  agentReport: null,
   visibleLines: [],
   activeRightSection: "response",
   queryActivity: {

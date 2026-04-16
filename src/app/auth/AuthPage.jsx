@@ -33,6 +33,9 @@ const callAuthApi = async (path, payload) => {
     try {
       const res = await fetch(`${base}${path}`, {
         method: "POST",
+        // credentials: "include" ensures the browser stores the HttpOnly cookies
+        // that the backend sets on login/signup
+        credentials: "include",
         headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -225,8 +228,8 @@ export default function AuthPage({ mode }) {
         password: loginForm.password,
       });
       setAuthSession({
-        accessToken: res?.access_token,
-        refreshToken: res?.refresh_token,
+        // Tokens are now HttpOnly cookies set by the backend — do NOT store them in JS.
+        // Only store the non-sensitive user profile fields.
         userId: res?.user_id,
         name: res?.name,
         mailId: res?.mail_id,
