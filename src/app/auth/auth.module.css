@@ -1,99 +1,145 @@
+/* ─────────────────────────────────────────────
+   PAGE SHELL  –  two-column, full viewport
+───────────────────────────────────────────── */
 .page {
-  min-height: 100vh;
-  width: 100%;
-  display: grid;
-  grid-template-columns: minmax(420px, 0.92fr) minmax(520px, 1.08fr);
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
   background: rgb(var(--background));
 }
 
+/* ─────────────────────────────────────────────
+   LEFT PANE
+───────────────────────────────────────────── */
 .leftPane {
+  flex: 0 0 clamp(400px, 46vw, 560px);
   display: flex;
-  background: var(--projects-page-surface);
-  overflow-y: auto;
+  flex-direction: column;
+  background: #ffffff;
+  /* hide scrollbar completely — content fits via flex centering */
+  overflow: hidden;
 }
 
 .leftInner {
-  width: 100%;
-  min-height: 100vh;
+  flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 34px 48px 72px;
+  padding: 32px 48px 40px;
+  height: 100vh;
+  overflow: hidden;
 }
 
+/* ─────────────────────────────────────────────
+   TOP ROW  (brand + home)
+───────────────────────────────────────────── */
 .topRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  max-width: 520px;
+  flex-shrink: 0;
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  color: var(--projects-page-text);
+  gap: 10px;
+  color: rgb(var(--foreground));
   font-family: var(--font-display);
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   text-decoration: none;
 }
 
 .brandMark {
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  background: linear-gradient(
-    135deg,
-    var(--projects-page-accent),
-    var(--projects-page-accent-text)
-  );
-  box-shadow: 12px 0 0 rgba(var(--primary), 0.16);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgb(var(--primary));
+  flex-shrink: 0;
 }
 
+/* Home button — gray ghost pill */
 .homeLink {
-  color: var(--projects-page-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid rgba(var(--foreground), 0.12);
+  background: rgba(var(--foreground), 0.04);
+  color: rgba(var(--foreground), 0.55);
   font-family: var(--font-body);
-  font-size: 0.92rem;
-  font-weight: 500;
+  font-size: 0.82rem;
+  font-weight: 600;
   text-decoration: none;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
 }
 
-.formWrap {
-  width: min(100%, 520px);
-  margin-top: clamp(36px, 7vh, 72px);
-  min-height: 0;
-  padding-bottom: 40px;
-  animation: formEnter 280ms ease;
+.homeLink:hover {
+  border-color: rgba(var(--foreground), 0.22);
+  background: rgba(var(--foreground), 0.07);
+  color: rgba(var(--foreground), 0.80);
 }
 
-.formWrapSignup {
-  padding-bottom: 88px;
+/* ─────────────────────────────────────────────
+   LEFT INNER  –  3-zone layout
+   topRow (fixed height) | centreZone (fills rest) | nothing
+───────────────────────────────────────────── */
+.leftInner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 32px 48px 40px;
+  height: 100vh;
+  overflow: hidden;
 }
 
+/* ─────────────────────────────────────────────
+   CENTRE ZONE  –  toggle + header + form
+   Anchored at a fixed distance from topRow.
+   The toggle never moves because it's always
+   the first child of this block, and this block
+   starts at a fixed offset (margin-top).
+───────────────────────────────────────────── */
+.centreZone {
+  /* push down from topRow by a fixed amount — not flex-center */
+  margin-top: 72px;
+  width: min(100%, 380px);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─────────────────────────────────────────────
+   MODE TOGGLE  (Login / Sign Up pill)
+───────────────────────────────────────────── */
 .modeRow {
   position: relative;
-  display: inline-grid;
-  grid-template-columns: repeat(2, minmax(118px, 1fr));
-  gap: 8px;
-  padding: 6px;
-  border-radius: 999px;
-  background: var(--projects-page-surface-soft);
-  border: 1px solid var(--projects-page-border);
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 4px;
+  border-radius: var(--radius-full);
+  background: rgba(var(--foreground), 0.06);
+  border: 1.5px solid rgba(var(--foreground), 0.10);
+  /* fixed margin below toggle — header always starts here */
+  margin-bottom: 24px;
+  flex-shrink: 0;
 }
 
+/* sliding pill */
 .modeRow::before {
   content: "";
   position: absolute;
-  top: 6px;
-  bottom: 6px;
-  left: 6px;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
   width: calc(50% - 4px);
-  border-radius: 999px;
-  background: var(--projects-page-accent);
-  box-shadow: 0 8px 18px rgba(var(--primary), 0.18);
-  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  border-radius: var(--radius-full);
+  background: rgb(var(--primary));
+  box-shadow: 0 3px 10px rgba(var(--primary), 0.28);
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
 }
 
 .modeRowLogin::before {
@@ -101,7 +147,7 @@
 }
 
 .modeRowSignup::before {
-  transform: translateX(calc(100% + 8px));
+  transform: translateX(calc(100% + 0px));
 }
 
 .modeLink {
@@ -110,264 +156,433 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 42px;
+  height: 34px;
+  width: 90px;
+  padding: 0;
   border: 0;
   background: transparent;
-  padding: 0 18px;
-  border-radius: 999px;
-  color: var(--projects-page-text-muted);
+  border-radius: var(--radius-full);
+  color: rgba(var(--foreground), 0.45);
   font-family: var(--font-body);
-  font-size: 0.92rem;
+  font-size: 0.86rem;
   font-weight: 600;
-  text-decoration: none;
   cursor: pointer;
-  transition: color 180ms ease;
+  transition: color 200ms ease;
+  white-space: nowrap;
 }
 
 .modeLinkActive {
   color: rgb(var(--primary-foreground));
 }
 
+/* ─────────────────────────────────────────────
+   HEADER
+───────────────────────────────────────────── */
 .header {
-  margin: 28px 0 26px;
+  margin-bottom: 24px;
 }
 
 .title {
-  margin: 0;
-  color: var(--projects-page-text);
+  margin: 0 0 8px;
+  color: rgb(var(--foreground));
   font-family: var(--font-display);
-  font-size: clamp(2.2rem, 3.4vw, 3rem);
-  line-height: 1;
-  letter-spacing: -0.06em;
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
 }
 
 .description {
-  margin: 14px 0 0;
-  color: var(--projects-page-text-muted);
-  font-family: var(--font-body);
-  font-size: 1rem;
-  line-height: 1.7;
-}
-
-.form {
-  display: grid;
-  gap: 18px;
-}
-
-.field {
-  display: grid;
-  gap: 8px;
-}
-
-.label {
-  color: var(--projects-page-text-strong);
-  font-family: var(--font-body);
-  font-size: 0.92rem;
-  font-weight: 600;
-}
-
-.input {
-  min-height: 54px;
-  padding: 0 16px;
-  border: 1px solid var(--projects-page-border);
-  border-radius: 12px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(var(--surface-2), 0.9));
-  color: var(--projects-page-text);
-  font-size: 0.96rem;
-  font-family: var(--font-body);
-  font-weight: 500;
-  letter-spacing: 0;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    inset 0 0 0 1px rgba(var(--primary), 0.02);
-  transition:
-    border-color 180ms ease,
-    box-shadow 180ms ease;
-}
-
-.input::placeholder {
-  color: var(--projects-page-text-subtle);
-  font-family: var(--font-body);
-  font-weight: 500;
-}
-
-.input:focus {
-  outline: none;
-  border-color: rgba(var(--primary), 0.5);
-  box-shadow:
-    0 0 0 4px rgba(var(--primary), 0.12),
-    inset 0 0 0 1px rgba(var(--primary), 0.12);
-}
-
-.submitButton {
-  min-height: 54px;
-  margin-top: 4px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--projects-page-accent);
-  color: rgb(var(--primary-foreground));
-  font-family: var(--font-body);
-  font-size: 0.98rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    transform 180ms ease,
-    opacity 180ms ease;
-}
-
-.submitButton:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: var(--projects-page-accent-hover);
-}
-
-.submitButton:disabled {
-  opacity: 0.72;
-  cursor: wait;
-}
-
-.status {
-  margin-top: 18px;
-  padding: 12px 14px;
-  border-radius: 12px;
+  margin: 0;
+  color: rgba(var(--foreground), 0.52);
   font-family: var(--font-body);
   font-size: 0.9rem;
-  line-height: 1.5;
-}
-
-.statusError {
-  color: rgb(var(--destructive));
-  background: rgba(var(--destructive), 0.08);
-  border: 1px solid rgba(var(--destructive), 0.18);
-}
-
-.statusSuccess {
-  color: rgb(var(--success));
-  background: rgba(var(--success), 0.1);
-  border: 1px solid rgba(var(--success), 0.22);
-}
-
-.hint {
-  margin-top: 18px;
-  color: var(--projects-page-text-muted);
-  font-family: var(--font-body);
-  font-size: 0.88rem;
   line-height: 1.6;
 }
 
-@keyframes formEnter {
+/* ─────────────────────────────────────────────
+   FORM  –  animated slide-in on mode switch
+───────────────────────────────────────────── */
+.form {
+  display: grid;
+  gap: 14px;
+  animation: formSlideIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes formSlideIn {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  color: rgb(var(--foreground));
+  font-family: var(--font-body);
+  font-size: 0.84rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.input {
+  height: 44px;
+  padding: 0 14px;
+  border: 1.5px solid rgba(var(--border), 1);
+  border-radius: var(--radius-md);
+  background: rgba(var(--surface-2), 0.5);
+  color: rgb(var(--foreground));
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  font-weight: 500;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.input::placeholder {
+  color: rgba(var(--foreground), 0.30);
+  font-weight: 400;
+}
+
+.input:focus {
+  outline: none;
+  border-color: rgba(var(--primary), 0.55);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(var(--primary), 0.10);
+}
+
+/* ─────────────────────────────────────────────
+   SUBMIT BUTTON
+───────────────────────────────────────────── */
+.submitButton {
+  height: 46px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: rgb(var(--primary));
+  color: rgb(var(--primary-foreground));
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(var(--primary), 0.28);
+  transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.submitButton:hover:not(:disabled) {
+  background: rgb(var(--secondary));
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px rgba(var(--primary), 0.36);
+}
+
+.submitButton:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.submitButton:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+/* ─────────────────────────────────────────────
+   HINT  (switch link)
+───────────────────────────────────────────── */
+.hint {
+  margin-top: 16px;
+  color: rgba(var(--foreground), 0.50);
+  font-family: var(--font-body);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.hintToggle {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: rgb(var(--primary));
+  font-family: var(--font-body);
+  font-size: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 160ms ease;
+}
+
+.hintToggle:hover {
+  color: rgb(var(--secondary));
+}
+
+/* ─────────────────────────────────────────────
+   RIGHT PANE  –  fixed, never moves
+───────────────────────────────────────────── */
 .rightPane {
-  position: relative;
-  min-height: 100vh;
+  flex: 1;
+  position: sticky;
+  top: 0;
+  height: 100vh;
   overflow: hidden;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   background:
-    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.3), transparent 24%),
-    radial-gradient(circle at 80% 18%, rgba(255, 255, 255, 0.2), transparent 20%),
-    linear-gradient(
-      145deg,
+    radial-gradient(ellipse 60% 50% at 20% 20%, rgba(255, 255, 255, 0.28), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 80% 80%, rgba(var(--secondary), 0.20), transparent 50%),
+    linear-gradient(145deg,
       rgba(var(--stage-0), 1) 0%,
-      rgba(var(--stage-2), 1) 28%,
-      rgba(var(--stage-4), 1) 60%,
-      rgba(var(--primary), 0.82) 100%
-    );
+      rgba(var(--stage-2), 1) 30%,
+      rgba(var(--stage-4), 1) 65%,
+      rgba(var(--primary), 0.85) 100%);
 }
 
 .gradientOverlay {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(var(--secondary), 0.06), rgba(var(--secondary), 0.18)),
-    radial-gradient(circle at bottom left, rgba(var(--primary), 0.22), transparent 28%);
+    radial-gradient(circle at bottom left, rgba(var(--primary), 0.18), transparent 35%),
+    linear-gradient(180deg, rgba(var(--secondary), 0.04), rgba(var(--secondary), 0.14));
+  pointer-events: none;
+}
+
+/* ── animated floating orbs ── */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.orb1 {
+  width: 260px;
+  height: 260px;
+  top: -60px;
+  right: -60px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.22) 0%, transparent 70%);
+  animation: orbFloat1 8s ease-in-out infinite;
+}
+
+.orb2 {
+  width: 180px;
+  height: 180px;
+  bottom: 40px;
+  left: 20px;
+  background: radial-gradient(circle, rgba(var(--primary), 0.18) 0%, transparent 70%);
+  animation: orbFloat2 11s ease-in-out infinite;
+}
+
+.orb3 {
+  width: 120px;
+  height: 120px;
+  top: 45%;
+  right: 12%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.14) 0%, transparent 70%);
+  animation: orbFloat3 7s ease-in-out infinite;
+}
+
+@keyframes orbFloat1 {
+
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  33% {
+    transform: translate(-18px, 22px) scale(1.06);
+  }
+
+  66% {
+    transform: translate(12px, -14px) scale(0.96);
+  }
+}
+
+@keyframes orbFloat2 {
+
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  40% {
+    transform: translate(20px, -28px) scale(1.08);
+  }
+
+  70% {
+    transform: translate(-10px, 16px) scale(0.94);
+  }
+}
+
+@keyframes orbFloat3 {
+
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  50% {
+    transform: translate(-16px, 20px);
+  }
 }
 
 .heroCopy {
   position: relative;
   z-index: 1;
-  max-width: 520px;
-  padding: 0 64px;
-  color: var(--projects-page-text);
+  max-width: 480px;
+  padding: 0 56px;
+  /* ensure it never overflows the panel */
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .heroEyebrow {
-  display: inline-block;
-  padding: 8px 14px;
-  border: 1px solid rgba(var(--primary), 0.22);
-  border-radius: 999px;
-  background: rgba(255, 249, 240, 0.72);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(var(--primary), 0.25);
+  background: rgba(255, 249, 240, 0.70);
   color: var(--projects-page-accent-text);
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  margin-bottom: 24px;
+  /* prevent it from being clipped */
+  position: relative;
+  z-index: 2;
+}
+
+.heroEyebrowDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgb(var(--primary));
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.4;
+    transform: scale(0.75);
+  }
 }
 
 .heroTitle {
-  margin: 24px 0 0;
+  margin: 0 0 20px;
   font-family: var(--font-display);
-  font-size: clamp(3rem, 5vw, 4.8rem);
-  line-height: 0.94;
-  letter-spacing: -0.07em;
+  font-size: clamp(2.4rem, 3.8vw, 3.6rem);
+  line-height: 1.05;
+  letter-spacing: -0.05em;
+  color: rgb(var(--foreground));
 }
 
 .heroText {
-  margin: 20px 0 0;
-  max-width: 32rem;
-  color: rgba(43, 43, 43, 0.72);
+  margin: 0 0 32px;
+  color: rgba(43, 43, 43, 0.62);
   font-family: var(--font-body);
-  font-size: 1.02rem;
+  font-size: 0.96rem;
   line-height: 1.8;
+  max-width: 360px;
 }
 
-@media (max-width: 1080px) {
+/* ── simple stat row replaces the feature cards ── */
+.heroStats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.heroStat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: rgba(43, 43, 43, 0.70);
+}
+
+.heroStatDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgb(var(--primary));
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* ─────────────────────────────────────────────
+   RESPONSIVE
+───────────────────────────────────────────── */
+@media (max-width: 900px) {
   .page {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    height: auto;
+    overflow: auto;
+  }
+
+  .leftPane {
+    flex: none;
+    overflow: visible;
   }
 
   .leftInner {
-    min-height: auto;
-    padding: 28px 24px 48px;
+    padding: 28px 28px 40px;
+    height: auto;
+    overflow: visible;
   }
 
-  .formWrap {
-    width: 100%;
-    margin: 36px 0 0;
-    min-height: auto;
-    padding-bottom: 18px;
+  .centreZone {
+    margin-top: 40px;
   }
 
   .rightPane {
-    min-height: 360px;
+    position: relative;
+    height: 300px;
+    flex: none;
   }
 
   .heroCopy {
-    padding: 40px 24px 56px;
+    padding: 0 32px;
+  }
+
+  .heroStats {
+    display: none;
   }
 }
 
-@media (max-width: 640px) {
-  .topRow {
-    flex-direction: column;
-    align-items: flex-start;
+@media (max-width: 480px) {
+  .leftInner {
+    padding: 24px 20px 36px;
   }
 
   .modeRow {
     width: 100%;
-    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .modeLink {
+    min-width: unset;
+    flex: 1;
   }
 
   .heroTitle {
-    font-size: 2.6rem;
+    font-size: 2rem;
   }
 }

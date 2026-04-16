@@ -23,8 +23,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata = {
-  title: "Vilje RAG Canvas",
-  description: "Advanced RAG Experimentation and Deployment Platform",
+  title: "InsightPDF Engine",
+  description: "Professional PDF Ingestion and RAG Analytics Platform",
 };
 
 export default function RootLayout({ children }) {

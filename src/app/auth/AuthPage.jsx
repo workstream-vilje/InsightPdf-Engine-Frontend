@@ -10,73 +10,57 @@ import styles from "./auth.module.css";
 import { setAuthSession } from "@/services/auth";
 import { ROUTE_PATHS } from "@/utils/routepaths";
 
-const initialSignupForm = {
-  name: "",
-  mail_id: "",
-  password: "",
-};
+const initialSignupForm = { name: "", mail_id: "", password: "" };
+const initialLoginForm = { mail_id: "", password: "" };
 
-const initialLoginForm = {
-  mail_id: "",
-  password: "",
-};
-
-const emailLooksValid = (value) => /\S+@\S+\.\S+/.test(value);
+const emailLooksValid = (v) => /\S+@\S+\.\S+/.test(v);
 
 const authBases = () => {
   const host = process.env.NEXT_PUBLIC_API_HOST || "localhost";
   const port = process.env.NEXT_PUBLIC_API_PORT || "8000";
-  const candidates = [
+  return [...new Set([
     `http://${host}:${port}/api/v1`,
     "http://127.0.0.1:8000/api/v1",
     "http://localhost:8000/api/v1",
-  ].filter(Boolean);
-
-  return [...new Set(candidates)];
+  ])];
 };
 
 const callAuthApi = async (path, payload) => {
   let lastError = null;
-
   for (const base of authBases()) {
     try {
-      const response = await fetch(`${base}${path}`, {
+      const res = await fetch(`${base}${path}`, {
         method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      const contentType = response.headers.get("content-type") || "";
-      const isJson = contentType.includes("application/json");
-      const parsed = isJson ? await response.json() : await response.text();
-
-      if (!response.ok) {
-        const message =
-          (isJson && (parsed?.detail || parsed?.message || parsed?.error)) ||
-          response.statusText ||
-          "Request failed";
-        const error = new Error(message);
-        error.status = response.status;
-        throw error;
+      const ct = res.headers.get("content-type") || "";
+      const isJson = ct.includes("application/json");
+      const parsed = isJson ? await res.json() : await res.text();
+      if (!res.ok) {
+        const msg = (isJson && (parsed?.detail || parsed?.message || parsed?.error)) || res.statusText || "Request failed";
+        const err = new Error(msg);
+        err.status = res.status;
+        throw err;
       }
-
       return parsed;
-    } catch (error) {
-      lastError = error;
-    }
+    } catch (e) { lastError = e; }
   }
-
   throw lastError || new Error("Unable to connect to the auth service.");
 };
+
+const RIGHT_STATS = [
+  "Smart PDF ingestion & chunking",
+  "RAG queries with self-reflection",
+  "Experiment analytics & RAGAS scores",
+];
 
 export default function AuthPage({ mode }) {
   const router = useRouter();
   const { isAuthenticated, isAuthInitialized } = useAuth();
   const { showToast } = useToast();
   const isSignup = mode === "signup";
+
   const [switchingMode, setSwitchingMode] = useState("");
   const [signupForm, setSignupForm] = useState(initialSignupForm);
   const [loginForm, setLoginForm] = useState(initialLoginForm);
@@ -89,150 +73,86 @@ export default function AuthPage({ mode }) {
     }
   }, [isAuthInitialized, isAuthenticated, router]);
 
-  useEffect(() => {
-    return () => {
-      if (switchTimerRef.current) {
-        window.clearTimeout(switchTimerRef.current);
-      }
-    };
-  }, []);
+  useEffect(() => () => { if (switchTimerRef.current) clearTimeout(switchTimerRef.current); }, []);
 
   const activeMode = switchingMode || mode;
 
-  const handleModeSwitch = (nextMode) => {
-    if (nextMode === mode || switchingMode) return;
-
-    setSwitchingMode(nextMode);
-    switchTimerRef.current = window.setTimeout(() => {
-      router.push(nextMode === "signup" ? ROUTE_PATHS.AUTH_SIGNUP : ROUTE_PATHS.AUTH_LOGIN);
-    }, 180);
+  const handleModeSwitch = (next) => {
+    if (next === mode || switchingMode) return;
+    setSwitchingMode(next);
+    switchTimerRef.current = setTimeout(() => {
+      router.push(next === "signup" ? ROUTE_PATHS.AUTH_SIGNUP : ROUTE_PATHS.AUTH_LOGIN);
+    }, 200);
   };
 
-  const handleSignupChange = (event) => {
-    const { name, value } = event.target;
-    setSignupForm((current) => ({ ...current, [name]: value }));
+  const handleSignupChange = (e) => {
+    const { name, value } = e.target;
+    setSignupForm((c) => ({ ...c, [name]: value }));
   };
 
-  const handleLoginChange = (event) => {
-    const { name, value } = event.target;
-    setLoginForm((current) => ({ ...current, [name]: value }));
+  const handleLoginChange = (e) => {
+    const { name, value } = e.target;
+    setLoginForm((c) => ({ ...c, [name]: value }));
   };
 
-  const handleSignup = async (event) => {
-    event.preventDefault();
-
+  const handleSignup = async (e) => {
+    e.preventDefault();
     if (!signupForm.name.trim()) {
-      showToast({
-        title: "Sign up",
-        variant: "warning",
-        message: "Enter your name to create the account.",
-      });
+      showToast({ title: "Sign up", variant: "warning", message: "Enter your name." });
       return;
     }
-
     if (!emailLooksValid(signupForm.mail_id)) {
-      showToast({
-        title: "Sign up",
-        variant: "warning",
-        message: "Enter a valid mail id.",
-      });
+      showToast({ title: "Sign up", variant: "warning", message: "Enter a valid email." });
       return;
     }
-
     if (signupForm.password.length < 6) {
-      showToast({
-        title: "Sign up",
-        variant: "warning",
-        message: "Password should be at least 6 characters.",
-      });
+      showToast({ title: "Sign up", variant: "warning", message: "Password must be at least 6 characters." });
       return;
     }
-
     setLoading(true);
-
     try {
-      const payload = {
+      const res = await callAuthApi("/auth/signup", {
         name: signupForm.name.trim(),
         mail_id: signupForm.mail_id.trim(),
         password: signupForm.password,
-      };
-
-      const response = await callAuthApi("/auth/signup", payload);
-
-      showToast({
-        title: "Sign up",
-        variant: "success",
-        message: response?.message || "Signup successful. Continue with login.",
       });
+      showToast({ title: "Sign up", variant: "success", message: res?.message || "Account created. Please log in." });
       setSignupForm(initialSignupForm);
-      switchTimerRef.current = window.setTimeout(() => {
-        router.push(ROUTE_PATHS.AUTH_LOGIN);
-      }, 500);
-    } catch (error) {
-      showToast({
-        title: "Authentication",
-        variant: "error",
-        message: error?.message || "Unable to sign up right now.",
-      });
+      switchTimerRef.current = setTimeout(() => router.push(ROUTE_PATHS.AUTH_LOGIN), 500);
+    } catch (err) {
+      showToast({ title: "Authentication", variant: "error", message: err?.message || "Unable to sign up." });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogin = async (event) => {
-    event.preventDefault();
-
+  const handleLogin = async (e) => {
+    e.preventDefault();
     if (!emailLooksValid(loginForm.mail_id)) {
-      showToast({
-        title: "Login",
-        variant: "warning",
-        message: "Enter a valid mail id.",
-      });
+      showToast({ title: "Login", variant: "warning", message: "Enter a valid email." });
       return;
     }
-
     if (!loginForm.password) {
-      showToast({
-        title: "Login",
-        variant: "warning",
-        message: "Enter your password to login.",
-      });
+      showToast({ title: "Login", variant: "warning", message: "Enter your password." });
       return;
     }
-
     setLoading(true);
-
     try {
-      const payload = {
+      const res = await callAuthApi("/auth/login", {
         mail_id: loginForm.mail_id.trim(),
         password: loginForm.password,
-      };
-
-      const response = await callAuthApi("/auth/login", payload);
-
+      });
       setAuthSession({
-        accessToken: response?.access_token,
-        refreshToken: response?.refresh_token,
-        userId: response?.user_id,
-        name: response?.name,
-        mailId: response?.mail_id,
+        accessToken: res?.access_token,
+        refreshToken: res?.refresh_token,
+        userId: res?.user_id,
+        name: res?.name,
+        mailId: res?.mail_id,
       });
-
-      showToast({
-        title: "Login",
-        variant: "success",
-        message: response?.message || "Login successful.",
-      });
-
-      switchTimerRef.current = window.setTimeout(() => {
-        router.push("/workspace");
-      }, 500);
-    } catch (error) {
-      showToast({
-        title: "Authentication",
-        variant: "error",
-        message: error?.message || "Unable to login right now.",
-      });
+      showToast({ title: "Login", variant: "success", message: res?.message || "Login successful." });
+      switchTimerRef.current = setTimeout(() => router.push("/workspace"), 500);
+    } catch (err) {
+      showToast({ title: "Authentication", variant: "error", message: err?.message || "Unable to login." });
     } finally {
       setLoading(false);
     }
@@ -240,40 +160,36 @@ export default function AuthPage({ mode }) {
 
   return (
     <main className={styles.page}>
+
+      {/* ── LEFT PANE ── */}
       <section className={styles.leftPane}>
         <div className={styles.leftInner}>
+
+          {/* top bar — always at top */}
           <div className={styles.topRow}>
             <Link className={styles.brand} href={ROUTE_PATHS.HOME}>
               <span className={styles.brandMark} />
               InsightPDF
             </Link>
-
             <Link className={styles.homeLink} href={ROUTE_PATHS.HOME}>
-              Home
+              ← Home
             </Link>
           </div>
 
-          <div
-            className={`${styles.formWrap} ${isSignup ? styles.formWrapSignup : ""}`}
-          >
-            <div
-              className={`${styles.modeRow} ${
-                activeMode === "signup" ? styles.modeRowSignup : styles.modeRowLogin
-              }`}
-            >
+          {/* centre zone — toggle + header always at same vertical position */}
+          <div className={styles.centreZone}>
+
+            {/* mode toggle — FIXED position, never moves */}
+            <div className={`${styles.modeRow} ${activeMode === "signup" ? styles.modeRowSignup : styles.modeRowLogin}`}>
               <button
-                className={`${styles.modeLink} ${
-                  activeMode === "login" ? styles.modeLinkActive : ""
-                }`}
+                className={`${styles.modeLink} ${activeMode === "login" ? styles.modeLinkActive : ""}`}
                 type="button"
                 onClick={() => handleModeSwitch("login")}
               >
                 Login
               </button>
               <button
-                className={`${styles.modeLink} ${
-                  activeMode === "signup" ? styles.modeLinkActive : ""
-                }`}
+                className={`${styles.modeLink} ${activeMode === "signup" ? styles.modeLinkActive : ""}`}
                 type="button"
                 onClick={() => handleModeSwitch("signup")}
               >
@@ -281,6 +197,7 @@ export default function AuthPage({ mode }) {
               </button>
             </div>
 
+            {/* heading */}
             <div className={styles.header}>
               <h1 className={styles.title}>
                 {isSignup ? "Create your account" : "Sign in to your account"}
@@ -292,8 +209,9 @@ export default function AuthPage({ mode }) {
               </p>
             </div>
 
+            {/* form — only this part changes height */}
             {isSignup ? (
-              <form className={styles.form} onSubmit={handleSignup}>
+              <form className={styles.form} onSubmit={handleSignup} key="signup">
                 <label className={styles.field}>
                   <span className={styles.label}>Username</span>
                   <input
@@ -305,7 +223,6 @@ export default function AuthPage({ mode }) {
                     autoComplete="name"
                   />
                 </label>
-
                 <label className={styles.field}>
                   <span className={styles.label}>Email</span>
                   <input
@@ -318,7 +235,6 @@ export default function AuthPage({ mode }) {
                     autoComplete="email"
                   />
                 </label>
-
                 <label className={styles.field}>
                   <span className={styles.label}>Password</span>
                   <input
@@ -331,13 +247,12 @@ export default function AuthPage({ mode }) {
                     autoComplete="new-password"
                   />
                 </label>
-
                 <button className={styles.submitButton} disabled={loading} type="submit">
-                  {loading ? "Creating account..." : "Create account"}
+                  {loading ? "Creating account…" : "Create account"}
                 </button>
               </form>
             ) : (
-              <form className={styles.form} onSubmit={handleLogin}>
+              <form className={styles.form} onSubmit={handleLogin} key="login">
                 <label className={styles.field}>
                   <span className={styles.label}>Email</span>
                   <input
@@ -350,7 +265,6 @@ export default function AuthPage({ mode }) {
                     autoComplete="email"
                   />
                 </label>
-
                 <label className={styles.field}>
                   <span className={styles.label}>Password</span>
                   <input
@@ -363,35 +277,63 @@ export default function AuthPage({ mode }) {
                     autoComplete="current-password"
                   />
                 </label>
-
                 <button className={styles.submitButton} disabled={loading} type="submit">
-                  {loading ? "Signing in..." : "Sign In"}
+                  {loading ? "Signing in…" : "Sign In"}
                 </button>
               </form>
             )}
 
             <p className={styles.hint}>
-              {isSignup
-                ? "Already have an account? Switch to login."
-                : "Need an account? Switch to signup."}
+              {isSignup ? (
+                <>Already have an account?{" "}
+                  <button type="button" className={styles.hintToggle} onClick={() => handleModeSwitch("login")}>
+                    Switch to login
+                  </button>
+                </>
+              ) : (
+                <>Need an account?{" "}
+                  <button type="button" className={styles.hintToggle} onClick={() => handleModeSwitch("signup")}>
+                    Switch to signup
+                  </button>
+                </>
+              )}
             </p>
+
           </div>
         </div>
       </section>
 
+      {/* ── RIGHT PANE  –  never moves ── */}
       <aside className={styles.rightPane}>
         <div className={styles.gradientOverlay} />
+
+        {/* animated floating orbs */}
+        <div className={styles.orb + " " + styles.orb1} />
+        <div className={styles.orb + " " + styles.orb2} />
+        <div className={styles.orb + " " + styles.orb3} />
+
         <div className={styles.heroCopy}>
-          <span className={styles.heroEyebrow}>InsightPDF Engine</span>
+          <span className={styles.heroEyebrow}>
+            <span className={styles.heroEyebrowDot} />
+            InsightPDF Engine
+          </span>
           <h2 className={styles.heroTitle}>
-            Search, organize, and explore documents in one clean workspace.
+            Search, organize,<br />and explore documents<br />in one clean workspace.
           </h2>
           <p className={styles.heroText}>
-            This panel is intentionally simple for now. We can replace it later with artwork,
-            screenshots, or illustrations.
+            Upload PDFs, run intelligent queries, and track every experiment — all from one professional platform.
           </p>
+          <div className={styles.heroStats}>
+            {RIGHT_STATS.map((s) => (
+              <div key={s} className={styles.heroStat}>
+                <span className={styles.heroStatDot} />
+                {s}
+              </div>
+            ))}
+          </div>
         </div>
       </aside>
+
     </main>
   );
 }
