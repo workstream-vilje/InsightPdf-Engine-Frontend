@@ -7,16 +7,20 @@ import { runQuery as runQueryPath, fetchSavedResponse } from "@/services/api/net
  * POST /query with Accept: application/x-ndjson.
  * Streams progress lines `{type:"progress",id,message}` then `{type:"result",data}`.
  */
-export async function runQuery(payload, { onProgress } = {}) {
+export async function runQuery(payload, { onProgress, signal } = {}) {
   const response = await fetch(buildUrl(runQueryPath), {
     method: "POST",
+    cache: "no-store",
     headers: {
       Accept: "application/x-ndjson",
       "Content-Type": "application/json",
+      "Cache-Control": "no-cache, no-store, max-age=0",
+      Pragma: "no-cache",
       ...(typeof window !== "undefined" && getAccessToken()
         ? { Authorization: `Bearer ${getAccessToken()}` }
         : {}),
     },
+    signal,
     body: JSON.stringify(payload),
   });
 
@@ -107,6 +111,13 @@ export const queryApi = {
   fetchSavedResponse: ({ projectId, fileId, experimentId }) =>
     httpClient.get(
       `${fetchSavedResponse}?project_id=${projectId}&file_id=${fileId}&experiment_id=${experimentId}`,
+      {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, max-age=0",
+          Pragma: "no-cache",
+        },
+      },
     ),
 };
 

@@ -56,7 +56,7 @@ import {
   getScopedStorageKey,
   getStoredUserProfile,
 } from "@/services/auth";
-import { getExperimentPerformanceById } from "@/lib/api";
+import { getExperimentAgentReportById, getExperimentPerformanceById } from "@/lib/api";
 import {
   DATA_EXTRACTION_OPTIONS,
   DEFAULT_QUALITY_METRICS,
@@ -400,6 +400,7 @@ const pruneWorkspaceDataForFiles = (workspace, backendFileIds) => {
     retrievedChunks: fileStillExists ? workspace?.retrievedChunks || [] : [],
     usedStrategies: fileStillExists ? workspace?.usedStrategies || [] : [],
     experimentId: fileStillExists ? workspace?.experimentId || null : null,
+    agentReport: fileStillExists ? workspace?.agentReport || null : null,
     submittedQuery: fileStillExists ? workspace?.submittedQuery || "" : "",
     queryActivity: fileStillExists
       ? workspace?.queryActivity || { visible: false, status: "idle", messages: [] }
@@ -422,6 +423,28 @@ const mapUploadedFileToWorkspaceFile = (file, category) => ({
   pages: file?.pages_count ?? file?.pagesCount ?? file?.pages ?? null,
   allowedTechniques: file?.allowed_techniques || null,
   processed: Boolean(file?.allowed_techniques),
+});
+
+const sanitizeWorkspaceQueryState = (workspace) => ({
+  ...workspace,
+  phase:
+    workspace?.phase === "query-processing" || workspace?.phase === "query-complete"
+      ? "query-ready"
+      : workspace?.phase,
+  submittedQuery: "",
+  response: "",
+  responseVisible: false,
+  responseVariants: [],
+  experimentId: null,
+  agentReport: null,
+  visibleLines: [],
+  retrievedChunks: [],
+  queryActivity: {
+    visible: false,
+    status: "idle",
+    messages: [],
+  },
+  conversation: [],
 });
 
 /** One row per backend file id; first occurrence wins (order-stable). */
@@ -1738,11 +1761,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const [historyEntries, setHistoryEntries] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [isAgentReportOpen, setIsAgentReportOpen] = useState(false);
+  const [agentReportLoading, setAgentReportLoading] = useState(false);
+  const [agentReportError, setAgentReportError] = useState("");
   const fileInputRef = useRef(null);
   const queryInputRef = useRef(null);
   const workspaceContentRef = useRef(null);
   const timersRef = useRef([]);
   const hasHydratedRef = useRef(false);
+  const activeQueryAbortRef = useRef(null);
+  const activeQueryRequestIdRef = useRef(0);
   const projectFilesListSyncPromiseRef = useRef(null);
   const prevActiveProjectIdRef = useRef(null);
   const initialProjectIdRef = useRef(initialProjectId);
@@ -1782,11 +1810,39 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     activeWorkspace?.experimentId ||
     activeWorkspace?.experiment_id ||
     null;
+  const agentReportRows = useMemo(() => {
+    const report = activeWorkspace?.agentReport || null;
+    if (!report) return [];
+    return [
+      ["Enabled", report.enabled],
+      ["Expansion Room", report.expansion_room],
+      ["Required Vector DB", report.required_vector_db],
+      ["Selected Vector DB", report.selected_vector_db],
+      ["Backend Cost", report.backend_cost],
+      ["Selected Backend Cost", report.selected_backend_cost],
+      ["Original Query", report.original_query],
+      ["Query Complexity", report.query_complexity],
+      ["Search Type", report.search_type],
+      ["Subsequent Decision", report.subsequent_decision],
+      ["Retrieved Chunks", report.retrieved_chunks],
+      ["Error Message", report.error_message],
+      ["Duration (ms)", report.duration_ms],
+      ["Backend Decision", report.backend_decision],
+      ["Suggested Query", report.suggested_query],
+      ["Feedback", report.feedback],
+    ];
+  }, [activeWorkspace?.agentReport]);
 
   useEffect(() => {
     if (selectedPerformanceResponseIndex < performanceResponseVariants.length) return;
     setSelectedPerformanceResponseIndex(0);
   }, [performanceResponseVariants.length, selectedPerformanceResponseIndex]);
+
+  useEffect(() => {
+    setIsAgentReportOpen(false);
+    setAgentReportLoading(false);
+    setAgentReportError("");
+  }, [activeProjectId, experimentId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1931,7 +1987,10 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         const parsedWorkspaces = JSON.parse(storedWorkspaces);
         if (parsedWorkspaces && typeof parsedWorkspaces === "object") {
           const normalized = Object.fromEntries(
-            Object.entries(parsedWorkspaces).map(([key, value]) => [String(key), value]),
+            Object.entries(parsedWorkspaces).map(([key, value]) => [
+              String(key),
+              sanitizeWorkspaceQueryState(value),
+            ]),
           );
           setProjectWorkspaces(normalized);
         }
@@ -2005,11 +2064,26 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     if (typeof window === "undefined" || !hasHydratedRef.current) return;
     const currentUserId = getCurrentUserId();
     if (!currentUserId) return;
+    const sanitizedWorkspaces = Object.fromEntries(
+      Object.entries(projectWorkspaces).map(([key, value]) => [
+        key,
+        sanitizeWorkspaceQueryState(value),
+      ]),
+    );
     window.localStorage.setItem(
       getScopedStorageKey("rag-canvas-workspaces", currentUserId),
-      JSON.stringify(projectWorkspaces),
+      JSON.stringify(sanitizedWorkspaces),
     );
   }, [projectWorkspaces]);
+
+  useEffect(
+    () => () => {
+      activeQueryRequestIdRef.current += 1;
+      activeQueryAbortRef.current?.abort();
+      activeQueryAbortRef.current = null;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (initialProjectId == null || initialProjectId === "") {
@@ -2872,6 +2946,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     }
 
     const runQuery = async () => {
+      activeQueryRequestIdRef.current += 1;
+      const requestId = activeQueryRequestIdRef.current;
+      activeQueryAbortRef.current?.abort();
+      const controller = new AbortController();
+      activeQueryAbortRef.current = controller;
+
       clearTimers();
       updateActiveWorkspace((current) => ({
         ...current,
@@ -2879,9 +2959,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         query: "",
         submittedQuery,
         visibleLines: [],
-        response: "",
-        responseVisible: false,
-        responseVariants: [],
         activeRightSection: "response",
         queryActivity: {
           visible: false,
@@ -2911,7 +2988,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
 
         let progressSeq = 0;
         const response = await queryApi.runQuery(payload, {
+          signal: controller.signal,
           onProgress: ({ id, message }) => {
+            if (requestId !== activeQueryRequestIdRef.current) return;
             progressSeq += 1;
             const lineId = `${String(id || "step")}-${progressSeq}`;
             updateActiveWorkspace((current) => {
@@ -2930,6 +3009,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
             });
           },
         });
+        if (requestId !== activeQueryRequestIdRef.current) return;
         const results =
           Array.isArray(response?.comparison_results) && response.comparison_results.length > 0
             ? response.comparison_results
@@ -2956,6 +3036,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
               experimentId: result?.experiment_id || null,
               fileId: targetFile.fileId,
               db: result?.db || result?.retrieval || "Default",
+              agentEnabled: Boolean(result?.agent?.enabled),
               response: savedResponse?.response || result?.answer || "",
               chunks: savedResponse?.chunks || result?.chunks || [],
               qualityMetrics: buildRagasQualityMetrics(result),
@@ -2977,10 +3058,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         });
 
         clearTimers();
+        if (requestId !== activeQueryRequestIdRef.current) return;
 
         updateActiveWorkspace((current) => ({
           ...current,
           experimentId: primaryVariant?.experimentId || current?.experimentId || null,
+          agentReport: null,
           phase: "query-complete",
           submittedQuery: "",
           response: finalAnswer,
@@ -3013,6 +3096,26 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         }));
       } catch (error) {
         clearTimers();
+        if (requestId !== activeQueryRequestIdRef.current) return;
+        if (error?.name === "AbortError") {
+          updateActiveWorkspace((current) => ({
+            ...current,
+            phase: "query-ready",
+            submittedQuery: "",
+            queryActivity: {
+              visible: true,
+              status: "error",
+              messages: [
+                createActivityMessage(
+                  "query-cancelled",
+                  "Query request was interrupted.",
+                  "warning",
+                ),
+              ],
+            },
+          }));
+          return;
+        }
         const message = formatWorkspaceApiError(error, "Failed to run query");
         showToast({
           title: "Query",
@@ -3023,14 +3126,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           ...current,
           phase: "query-ready",
           submittedQuery: "",
-          response: "",
-          responseVisible: false,
           queryActivity: {
             visible: true,
             status: "error",
             messages: [createActivityMessage("query-error", message, "error")],
           },
         }));
+      } finally {
+        if (requestId === activeQueryRequestIdRef.current) {
+          activeQueryAbortRef.current = null;
+        }
       }
     };
 
@@ -3186,6 +3291,39 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const isQueryInFlight = activeWorkspace?.phase === "query-processing";
   const isChatInputDisabled =
     !hasSelectedFile || !hasSelectedProcessedFile || isQueryInFlight;
+  const handleOpenAgentReport = useCallback(async (targetExperimentId = null) => {
+    const resolvedExperimentId = targetExperimentId || experimentId;
+    if (!resolvedExperimentId) {
+      setAgentReportError("Run a query in agent mode to view the stored report.");
+      setIsAgentReportOpen(true);
+      return;
+    }
+
+    setIsAgentReportOpen(true);
+    if (
+      activeWorkspace?.agentReport &&
+      String(activeWorkspace?.experimentId || activeWorkspace?.experiment_id || "") ===
+        String(resolvedExperimentId)
+    ) {
+      setAgentReportError("");
+      return;
+    }
+
+    setAgentReportLoading(true);
+    setAgentReportError("");
+    try {
+      const report = await getExperimentAgentReportById(resolvedExperimentId);
+      updateActiveWorkspace((current) => ({
+        ...current,
+        experimentId: resolvedExperimentId,
+        agentReport: report,
+      }));
+    } catch (error) {
+      setAgentReportError(error?.message || "Failed to load agent report.");
+    } finally {
+      setAgentReportLoading(false);
+    }
+  }, [activeWorkspace?.agentReport, activeWorkspace?.experimentId, activeWorkspace?.experiment_id, experimentId, updateActiveWorkspace]);
 
   useEffect(() => {
     const prevStatus = previousExecutionStatusRef.current;
@@ -4612,18 +4750,29 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                               </div>
                               <p>{variant.response}</p>
                               {variant.usedStrategies?.length > 0 && (
-                                <button
-                                  type="button"
-                                  className={styles.techniqueButton}
-                                  onClick={() =>
-                                    setTechniqueOverlay({
-                                      title: `Response-${index + 1}`,
-                                      strategies: variant.usedStrategies,
-                                    })
-                                  }
-                                >
-                                  Techniques used
-                                </button>
+                                <div className={styles.responseCardActions}>
+                                  <button
+                                    type="button"
+                                    className={styles.techniqueButton}
+                                    onClick={() =>
+                                      setTechniqueOverlay({
+                                        title: `Response-${index + 1}`,
+                                        strategies: variant.usedStrategies,
+                                      })
+                                    }
+                                  >
+                                    Techniques used
+                                  </button>
+                                  {variant.agentEnabled && (
+                                    <button
+                                      type="button"
+                                      className={styles.techniqueButton}
+                                      onClick={() => handleOpenAgentReport(variant.experimentId)}
+                                    >
+                                      View agent report
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </motion.div>
@@ -4656,7 +4805,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   <div className={styles.queryDock}>
                     <div className={styles.queryDockHeader}>
                       <div className={styles.queryDockLabel}>Chat input</div>
-
                     </div>
                     <div className={classNames(styles.queryInputShell, styles.queryInputShellHero)}>
                       <button
@@ -4768,6 +4916,66 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                       <span className={styles.strategyValue}>{item.value}</span>
                     </div>
                   ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isAgentReportOpen && (
+            <div
+              className={styles.agentReportBackdrop}
+              role="presentation"
+              onClick={() => setIsAgentReportOpen(false)}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="agent-report-title"
+                className={styles.agentReportModal}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className={styles.agentReportHeader}>
+                  <div>
+                    <h2 id="agent-report-title" className={styles.agentReportTitle}>
+                      Agent report
+                    </h2>
+                    <p className={styles.agentReportIntro}>
+                      Stored agent and validator details for the current query.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.agentReportClose}
+                    onClick={() => setIsAgentReportOpen(false)}
+                    aria-label="Close"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className={styles.agentReportContent}>
+                  {agentReportLoading ? (
+                    <div className={styles.agentReportEmpty}>Loading report...</div>
+                  ) : agentReportError ? (
+                    <div className={styles.agentReportEmpty}>{agentReportError}</div>
+                  ) : agentReportRows.length === 0 ? (
+                    <div className={styles.agentReportEmpty}>No agent report available.</div>
+                  ) : (
+                    <div className={styles.agentReportGrid}>
+                      {agentReportRows.map(([label, value]) => (
+                        <div key={label} className={styles.agentReportItem}>
+                          <span className={styles.agentReportItemLabel}>{label}</span>
+                          <span className={styles.agentReportItemValue}>
+                            {value == null || value === ""
+                              ? "-"
+                              : typeof value === "object"
+                                ? JSON.stringify(value)
+                                : String(value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
