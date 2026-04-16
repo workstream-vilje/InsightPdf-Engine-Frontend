@@ -16,6 +16,13 @@ const AUTH_SESSION_EVENT = "auth-session-changed";
 const canUseStorage = () => typeof window !== "undefined";
 const canUseCookies = () => typeof document !== "undefined";
 
+const expireCookie = (name) => {
+  if (!canUseCookies()) return;
+  const encodedName = encodeURIComponent(name);
+  const secure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${encodedName}=; Max-Age=0; path=/${secure}; SameSite=Lax`;
+};
+
 // ── Cookie helpers ──
 export const readCookie = (name) => {
   if (!canUseCookies()) return null;
@@ -92,7 +99,8 @@ export const setUserSession = setAuthSession;
 
 export const clearTokens = () => {
   // Tokens are HttpOnly cookies — the backend clears them on logout.
-  // Nothing to do on the frontend for the tokens themselves.
+  // Clear the readable csrf cookie immediately on the frontend as well.
+  expireCookie(CSRF_COOKIE_KEY);
   emitAuthSessionChanged();
 };
 
@@ -102,6 +110,14 @@ export const clearAuthSession = () => {
   window.localStorage.removeItem(USER_ID_KEY);
   window.localStorage.removeItem(USER_NAME_KEY);
   window.localStorage.removeItem(USER_MAIL_ID_KEY);
+
+  Object.keys(window.localStorage).forEach((key) => {
+    if (key.startsWith("rag-canvas-projects:") || key.startsWith("rag-canvas-workspaces:")) {
+      window.localStorage.removeItem(key);
+    }
+  });
+
+  expireCookie(CSRF_COOKIE_KEY);
 
   emitAuthSessionChanged();
 };
