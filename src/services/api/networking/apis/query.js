@@ -4,14 +4,32 @@ import { clearAuthSession, getCsrfToken, redirectToLogin } from "@/services/auth
 import { runQuery as runQueryPath, fetchSavedResponse } from "@/services/api/networking/endpoints";
 
 /**
- * POST /query with Accept: application/x-ndjson.
- * Streams progress lines `{type:"progress",id,message}` then `{type:"result",data}`.
- * Uses cookie-based auth: credentials:"include" + X-CSRF-Token header.
+ * Attempt to refresh the access token via POST /auth/refresh.
+ * The browser sends the refresh_token HttpOnly cookie automatically.
+ * Returns true if the backend issued fresh cookies, false otherwise.
  */
-export async function runQuery(payload, { onProgress, signal } = {}) {
-  const csrfToken = typeof window !== "undefined" ? getCsrfToken() : null;
+async function tryRefresh() {
+  try {
+    const res = await fetch(buildUrl("/auth/refresh"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "X-CSRF-Token": getCsrfToken() || "",
+      },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
-  const response = await fetch(buildUrl(runQueryPath), {
+/**
+ * Build the fetch options for the streaming query request.
+ */
+function buildQueryFetchOptions(payload, signal) {
+  const csrfToken = typeof window !== "undefined" ? getCsrfToken() : null;
+  return {
     method: "POST",
     cache: "no-store",
     credentials: "include",
@@ -24,28 +42,39 @@ export async function runQuery(payload, { onProgress, signal } = {}) {
     },
     signal,
     body: JSON.stringify(payload),
-  });
+  };
+}
 
-  if (response.status === 401 && typeof window !== "undefined") {
+/**
+ * POST /query with Accept: application/x-ndjson.
+ * Streams progress lines `{type:"progress",id,message}` then `{type:"result",data}`.
+ *
+ * On 401: attempts one token refresh then retries the stream once.
+ * If refresh fails: clears session and redirects to login.
+ */
+export async function runQuery(payload, { onProgress, signal } = {}, _isRetry = false) {
+  const response = await fetch(buildUrl(runQueryPath), buildQueryFetchOptions(payload, signal));
+
+  // ── 401: try refresh once ──
+  if (response.status === 401 && !_isRetry && typeof window !== "undefined") {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      return runQuery(payload, { onProgress, signal }, true);
+    }
     clearAuthSession();
     redirectToLogin();
+    const err = new Error("Session expired. Please log in again.");
+    err.status = 401;
+    throw err;
   }
 
   if (!response.ok) {
     const text = await response.text();
     let parsed = text;
-    try {
-      parsed = text ? JSON.parse(text) : null;
-    } catch {
-      parsed = text;
-    }
+    try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
     const detail = parsed && typeof parsed === "object" ? parsed.detail : null;
     const detailMessage =
-      typeof detail === "string"
-        ? detail
-        : detail != null
-          ? JSON.stringify(detail)
-          : null;
+      typeof detail === "string" ? detail : detail != null ? JSON.stringify(detail) : null;
     const message =
       detailMessage ||
       (parsed && typeof parsed === "object" && (parsed.message || parsed.error)) ||
@@ -58,9 +87,7 @@ export async function runQuery(payload, { onProgress, signal } = {}) {
   }
 
   const reader = response.body?.getReader();
-  if (!reader) {
-    throw new Error("No response body");
-  }
+  if (!reader) throw new Error("No response body");
 
   const decoder = new TextDecoder();
   let buffer = "";
@@ -76,32 +103,20 @@ export async function runQuery(payload, { onProgress, signal } = {}) {
 
   while (true) {
     const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
+    if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed) {
-        continue;
-      }
+      if (!trimmed) continue;
       let obj;
-      try {
-        obj = JSON.parse(trimmed);
-      } catch {
-        continue;
-      }
+      try { obj = JSON.parse(trimmed); } catch { continue; }
       if (obj.type === "progress" && typeof onProgress === "function") {
         onProgress({ id: obj.id, message: obj.message });
       }
-      if (obj.type === "result") {
-        return obj.data;
-      }
-      if (obj.type === "error") {
-        throwFromErrorLine(obj);
-      }
+      if (obj.type === "result") return obj.data;
+      if (obj.type === "error") throwFromErrorLine(obj);
     }
   }
 

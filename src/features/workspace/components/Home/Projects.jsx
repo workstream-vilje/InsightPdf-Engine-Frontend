@@ -3488,12 +3488,72 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     router.push(ROUTE_PATHS.SETTINGS);
   }, [router]);
 
-  const handleRailLogout = useCallback(() => {
+  const handleRailLogout = useCallback(async () => {
+    // 1. Call backend logout — this clears the HttpOnly cookies (access_token, refresh_token, csrf_token)
+    try {
+      const { buildUrl } = await import("@/services/axios");
+      const { getCsrfToken } = await import("@/services/auth");
+      await fetch(buildUrl("/auth/logout"), {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "X-CSRF-Token": getCsrfToken() || "",
+        },
+      });
+    } catch {
+      // Even if the backend call fails, clear frontend state and redirect
+    }
+
+    // 2. Clear all frontend state (user profile + any stale token keys)
     clearAuthSession();
+
+    // 3. Redirect to login
     if (typeof window !== "undefined") {
-      window.location.href = ROUTE_PATHS.AUTH_LOGIN;
+      window.location.replace(ROUTE_PATHS.AUTH_LOGIN);
     }
   }, []);
+
+  const handleOpenAgentReport = useCallback(async (targetExperimentId = null) => {
+    const resolvedExperimentId = targetExperimentId || experimentId;
+    if (!resolvedExperimentId) {
+      setAgentReportError("Run a query in agent mode to view the stored report.");
+      setIsAgentReportOpen(true);
+      return;
+    }
+
+    setIsAgentReportOpen(true);
+
+    // Use cached report if it's for the same experiment
+    if (
+      activeWorkspace?.agentReport &&
+      String(activeWorkspace?.experimentId || activeWorkspace?.experiment_id || "") ===
+      String(resolvedExperimentId)
+    ) {
+      setAgentReportError("");
+      return;
+    }
+
+    setAgentReportLoading(true);
+    setAgentReportError("");
+    try {
+      const report = await getExperimentAgentReportById(resolvedExperimentId);
+      updateActiveWorkspace((current) => ({
+        ...current,
+        experimentId: resolvedExperimentId,
+        agentReport: report,
+      }));
+    } catch (error) {
+      setAgentReportError(error?.message || "Failed to load agent report.");
+    } finally {
+      setAgentReportLoading(false);
+    }
+  }, [
+    activeWorkspace?.agentReport,
+    activeWorkspace?.experimentId,
+    activeWorkspace?.experiment_id,
+    experimentId,
+    updateActiveWorkspace,
+  ]);
 
   const topNavbarActions = useMemo(
     () => [
@@ -4958,40 +5018,71 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                       </div>
                     )}
 
-                    {(activeWorkspace.conversation || []).map((entry) => (
-                      <div key={entry.id} className={styles.conversationBlock}>
-                        <div className={styles.queryLine}>{entry.query}</div>
-                        {(entry.responseVariants || []).map((variant, index) => (
-                          <motion.div
-                            key={`${entry.id}-${variant.db}-${variant.experimentId || index}`}
-                            initial={{ opacity: 0, y: 16 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className={styles.responseBlock}
-                          >
-                            <div className={styles.responseTextBlock}>
-                              <div className={styles.chatMessageLabel}>
-                                Response-{index + 1}
-                              </div>
-                              <p>{variant.response}</p>
-                              {variant.usedStrategies?.length > 0 && (
-                                <button
-                                  type="button"
-                                  className={styles.techniqueButton}
-                                  onClick={() =>
-                                    setTechniqueOverlay({
-                                      title: `Response-${index + 1}`,
-                                      strategies: variant.usedStrategies,
-                                    })
-                                  }
-                                >
-                                  Techniques used
-                                </button>
+                    {(activeWorkspace.conversation || []).map((entry) => {
+                      // Timestamp from entry.id (format: "timestamp-randomstring")
+                      const entryTs = Number(String(entry.id).split("-")[0]);
+                      const entryTime = Number.isFinite(entryTs) && entryTs > 0
+                        ? new Date(entryTs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                        : null;
+
+                      return (
+                        <div key={entry.id} className={styles.conversationBlock}>
+
+                          {/* User bubble with timestamp */}
+                          <div className={styles.userMessageRow}>
+                            <div className={styles.userBubbleWrap}>
+                              {entryTime && (
+                                <span className={styles.userBubbleTime}>{entryTime}</span>
                               )}
+                              <div className={styles.userBubble}>{entry.query}</div>
                             </div>
-                          </motion.div>
-                        ))}
-                      </div>
-                    ))}
+                          </div>
+
+                          {/* AI responses — markdown + avatar dot */}
+                          {(entry.responseVariants || []).map((variant, index) => (
+                            <motion.div
+                              key={`${entry.id}-${variant.db}-${variant.experimentId || index}`}
+                              initial={{ opacity: 0, y: 12 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                              className={styles.aiMessageRow}
+                            >
+                              <span className={styles.aiAvatarDot} aria-hidden />
+                              <div className={styles.aiResponseCard}>
+                                <div className={styles.aiResponseText}>
+                                  {renderMarkdown(variant.response)}
+                                </div>
+                                <div className={styles.responseCardActions}>
+                                  {variant.usedStrategies?.length > 0 && (
+                                    <button
+                                      type="button"
+                                      className={styles.techniqueChip}
+                                      onClick={() =>
+                                        setTechniqueOverlay({
+                                          title: `Response-${index + 1}`,
+                                          strategies: variant.usedStrategies,
+                                        })
+                                      }
+                                    >
+                                      Techniques used ↗
+                                    </button>
+                                  )}
+                                  {variant.agentEnabled && (
+                                    <button
+                                      type="button"
+                                      className={styles.techniqueChip}
+                                      onClick={() => handleOpenAgentReport(variant.experimentId)}
+                                    >
+                                      Agent report ↗
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      );
+                    })}
 
                     {/* In-flight user bubble */}
                     {activeWorkspace.submittedQuery && (
@@ -5030,28 +5121,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                     )}
                   </div>
 
-                  {/* ── Input dock ── */}
+                  {/* ── Input dock — floating bar, no label ── */}
                   <div className={styles.queryDock}>
-                    <div className={styles.queryDockHeader}>
-                      <div className={styles.queryDockLabel}>Chat input</div>
+                    <div className={styles.chatInputBar}>
 
-                    </div>
-                    <div className={classNames(styles.queryInputShell, styles.queryInputShellHero)}>
-                      <button
-                        type="button"
-                        className={classNames(styles.queryAgentModeBadge, {
-                          [styles.queryAgentModeBadgeActive]: queryAgentModeEnabled,
-                        })}
-                        onClick={() => toggleWorkspaceValue("queryConfigurations", "agent")}
-                        aria-pressed={queryAgentModeEnabled}
-                        title={
-                          queryAgentModeEnabled
-                            ? "Turn off Agent mode (retrieval strategy picks re-enabled)"
-                            : "Turn on Agent mode (meta-retriever; retrieval strategy picks disabled)"
-                        }
-                      >
-                        Agent mode
-                      </button>
+                      {/* Text input — takes all available space */}
                       <Input
                         ref={queryInputRef}
                         value={activeWorkspace.query}
@@ -5083,7 +5157,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                       {/* Divider */}
                       <span className={styles.chatInputDivider} aria-hidden />
 
-                      {/* Model selector dropdown — right side */}
+                      {/* Model selector dropdown */}
                       <div className={styles.modelDropdownWrap} ref={modelDropdownRef}>
                         <button
                           type="button"
@@ -5144,7 +5218,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                       {/* Divider */}
                       <span className={styles.chatInputDivider} aria-hidden />
 
-                      {/* Agent toggle — right side */}
+                      {/* Agent toggle */}
                       <button
                         type="button"
                         className={styles.agentToggleWrap}

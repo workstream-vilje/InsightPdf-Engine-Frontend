@@ -1,5 +1,25 @@
 import { buildUrl } from "@/services/axios";
-import { getCsrfToken } from "@/services/auth";
+import { clearAuthSession, getCsrfToken, redirectToLogin } from "@/services/auth";
+
+/**
+ * Attempt token refresh via POST /auth/refresh.
+ * Returns true if backend issued fresh cookies.
+ */
+async function tryRefresh() {
+  try {
+    const res = await fetch(buildUrl("/auth/refresh"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "X-CSRF-Token": getCsrfToken() || "",
+      },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * POST multipart FormData with upload progress using XMLHttpRequest.
@@ -8,8 +28,10 @@ import { getCsrfToken } from "@/services/auth";
  * Uses cookie-based auth:
  * - withCredentials = true  → browser sends HttpOnly auth cookies automatically
  * - X-CSRF-Token header     → required for write requests
+ *
+ * On 401: attempts one token refresh then retries once.
  */
-export function postFormDataWithProgress(path, formData, options = {}) {
+export function postFormDataWithProgress(path, formData, options = {}, _isRetry = false) {
   const { onProgress } = options;
 
   return new Promise((resolve, reject) => {
@@ -22,11 +44,10 @@ export function postFormDataWithProgress(path, formData, options = {}) {
     const url = buildUrl(path);
 
     xhr.open("POST", url);
-    xhr.withCredentials = true; // send HttpOnly auth cookies
+    xhr.withCredentials = true;
 
     xhr.setRequestHeader("Accept", "application/json");
 
-    // CSRF token required for POST
     const csrfToken = typeof window !== "undefined" ? getCsrfToken() : null;
     if (csrfToken) {
       xhr.setRequestHeader("X-CSRF-Token", csrfToken);
@@ -38,14 +59,28 @@ export function postFormDataWithProgress(path, formData, options = {}) {
       onProgress({ loaded: event.loaded, total: event.total, percent });
     };
 
-    xhr.onload = () => {
+    xhr.onload = async () => {
+      // ── 401: try refresh once then retry ──
+      if (xhr.status === 401 && !_isRetry && typeof window !== "undefined") {
+        const refreshed = await tryRefresh();
+        if (refreshed) {
+          try {
+            const result = await postFormDataWithProgress(path, formData, options, true);
+            resolve(result);
+          } catch (retryErr) {
+            reject(retryErr);
+          }
+          return;
+        }
+        clearAuthSession();
+        redirectToLogin();
+        reject(new Error("Session expired. Please log in again."));
+        return;
+      }
+
       const text = xhr.responseText;
       let payload = text;
-      try {
-        payload = text ? JSON.parse(text) : null;
-      } catch {
-        payload = text;
-      }
+      try { payload = text ? JSON.parse(text) : null; } catch { payload = text; }
 
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(payload);
