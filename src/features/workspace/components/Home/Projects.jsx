@@ -10,7 +10,7 @@ import React, {
   useTransition,
 } from "react";
 import classNames from "classnames";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Blocks,
@@ -1851,8 +1851,19 @@ function UploadProjectFilesList({
   );
 }
 
-const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) => {
+const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModeProp = "upload" }) => {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Derive workspaceMode from the URL so navigating between /upload and /query
+  // does NOT remount this component — it just updates the mode reactively.
+  const workspaceMode = pathname?.includes("/workspace/query") ? "query" : "upload";
+
+  // Derive initialProjectId from the URL search params so it stays in sync
+  // when the URL changes without a remount.
+  const urlProjectId = searchParams?.get("project") ?? null;
+  const resolvedInitialProjectId = urlProjectId ?? initialProjectId;
   const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [projects, setProjects] = useState(INITIAL_PROJECTS);
@@ -1860,7 +1871,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     Object.fromEntries(INITIAL_PROJECTS.map((project) => [project.id, createWorkspaceState()])),
   );
   const [activeProjectId, setActiveProjectId] = useState(() =>
-    initialProjectId != null && initialProjectId !== "" ? String(initialProjectId) : null,
+    resolvedInitialProjectId != null && resolvedInitialProjectId !== "" ? String(resolvedInitialProjectId) : null,
   );
   const [searchValue, setSearchValue] = useState("");
   const deferredSearchValue = useDeferredValue(searchValue);
@@ -1926,12 +1937,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const activeQueryRequestIdRef = useRef(0);
   const projectFilesListSyncPromiseRef = useRef(null);
   const prevActiveProjectIdRef = useRef(null);
-  const initialProjectIdRef = useRef(initialProjectId);
+  const initialProjectIdRef = useRef(resolvedInitialProjectId);
   const activeProjectIdRef = useRef(activeProjectId);
 
   useEffect(() => {
-    initialProjectIdRef.current = initialProjectId;
-  }, [initialProjectId]);
+    initialProjectIdRef.current = resolvedInitialProjectId;
+  }, [resolvedInitialProjectId]);
 
   useEffect(() => {
     activeProjectIdRef.current = activeProjectId;
@@ -2251,16 +2262,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   );
 
   useEffect(() => {
-    if (initialProjectId == null || initialProjectId === "") {
+    if (resolvedInitialProjectId == null || resolvedInitialProjectId === "") {
       setActiveProjectId(null);
       return;
     }
-    const requested = String(initialProjectId);
+    const requested = String(resolvedInitialProjectId);
     const projectExists = projects.some((project) => String(project.id) === requested);
     if (projectExists) {
       setActiveProjectId(requested);
     }
-  }, [initialProjectId, projects]);
+  }, [resolvedInitialProjectId, projects]);
 
   /** Keep `?project=` in the URL so refresh stays on the same project workspace. */
   useEffect(() => {
