@@ -179,14 +179,18 @@
 .searchField {
   position: relative;
   width: min(356px, 100%);
+  display: flex;
+  align-items: center;
 }
 
 .searchIcon {
   position: absolute;
-  left: 14px;
+  left: 18px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--projects-page-text-subtle);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .searchInput,
@@ -200,10 +204,13 @@
 }
 
 .searchInput {
-  padding-left: 42px;
+  padding-left: 46px;
+  padding-right: 16px;
   min-width: 356px;
   color: var(--projects-page-text);
   font-family: var(--projects-font-body);
+  font-size: 0.98rem;
+  line-height: 1.2;
 }
 
 .searchInput::placeholder {

@@ -1,0 +1,333 @@
+.pageShell {
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(var(--primary), 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(var(--surface-2), 0.82), rgba(var(--background), 0.98));
+}
+
+.pageGradient {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 85% 12%, rgba(var(--sky), 0.16), transparent 24%),
+    radial-gradient(circle at 18% 80%, rgba(var(--primary), 0.08), transparent 24%);
+}
+
+.pageContent {
+  position: relative;
+  z-index: 1;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 56px 24px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.pageIntro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgb(var(--primary));
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 800;
+  color: rgb(var(--foreground));
+}
+
+.pageLead {
+  margin: 0;
+  max-width: 42rem;
+  line-height: 1.7;
+  color: rgb(var(--muted-foreground));
+}
+
+.settingsPanel {
+  border: 1px solid rgba(var(--border), 0.85);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(16px);
+  overflow: hidden;
+}
+
+.accountHeader {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 28px 28px 24px;
+  border-bottom: 1px solid rgba(var(--border), 0.75);
+  background: linear-gradient(180deg, rgba(var(--surface-2), 0.42), rgba(255, 255, 255, 0.72));
+}
+
+.avatar {
+  width: 68px;
+  height: 68px;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, rgba(var(--primary), 0.92), rgba(var(--sky), 0.92));
+  color: rgb(var(--primary-foreground));
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.accountMeta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.accountMeta strong {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: rgb(var(--foreground));
+}
+
+.mailRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgb(var(--muted-foreground));
+  font-size: 0.95rem;
+}
+
+.settingsList {
+  display: flex;
+  flex-direction: column;
+}
+
+.settingRow {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 28px;
+  border-bottom: 1px solid rgba(var(--border), 0.72);
+}
+
+.settingRow:last-child {
+  border-bottom: none;
+}
+
+.settingRowDanger {
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.52), rgba(255, 255, 255, 0.88));
+}
+
+.settingRowHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.settingIcon {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: rgba(var(--primary), 0.1);
+  color: rgb(var(--primary));
+  flex-shrink: 0;
+}
+
+.deleteIcon {
+  background: rgba(239, 68, 68, 0.1);
+  color: rgb(220, 38, 38);
+}
+
+.settingBody {
+  min-width: 0;
+}
+
+.settingTitle {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: rgb(var(--foreground));
+}
+
+.settingText {
+  margin: 0;
+  line-height: 1.6;
+  color: rgb(var(--muted-foreground));
+}
+
+.nameForm {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 62px;
+}
+
+.nameInput {
+  width: min(420px, 100%);
+  min-height: 44px;
+  font-size: 0.95rem;
+  padding-inline: 14px;
+  background: rgba(var(--surface-1), 0.92);
+}
+
+.saveNameButton {
+  min-width: 150px;
+  height: 42px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  border: 1px solid rgba(var(--border), 0.88);
+  background: rgb(var(--surface-1));
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+}
+
+.saveNameButton:hover:not(:disabled) {
+  border-color: rgba(var(--primary), 0.34);
+  background: rgba(var(--surface-2), 0.96);
+}
+
+.dangerActions {
+  padding-left: 62px;
+}
+
+.deleteButton {
+  min-width: 156px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.84rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  box-shadow: 0 8px 18px rgba(239, 68, 68, 0.18);
+}
+
+.deleteButton svg {
+  flex-shrink: 0;
+}
+
+.deleteButton:hover {
+  filter: brightness(0.98);
+  transform: translateY(-1px);
+}
+
+.overlayBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.2);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.overlayCard {
+  width: min(460px, 100%);
+  border-radius: 26px;
+  background: #ffffff;
+  border: 1px solid rgba(var(--border), 0.88);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.14);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.overlayIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: rgba(239, 68, 68, 0.1);
+  color: rgb(220, 38, 38);
+}
+
+.overlayTitle {
+  margin: 0;
+  font-size: 1.28rem;
+  font-weight: 800;
+  color: rgb(var(--foreground));
+}
+
+.overlayText {
+  margin: 0;
+  line-height: 1.65;
+  color: rgb(var(--muted-foreground));
+}
+
+.overlayActions {
+  display: flex;
+  justify-content: stretch;
+  margin-top: 4px;
+}
+
+.overlayDeleteButton {
+  width: 100%;
+  height: 42px;
+  border-radius: 14px;
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  box-shadow: 0 12px 24px rgba(239, 68, 68, 0.18);
+}
+
+.overlayDeleteButton:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.98);
+}
+
+@media (max-width: 720px) {
+  .pageContent {
+    padding: 36px 16px 56px;
+  }
+
+  .accountHeader {
+    padding: 22px 18px 18px;
+  }
+
+  .settingRow {
+    padding: 20px 18px;
+  }
+
+  .settingRowHeader {
+    gap: 12px;
+  }
+
+  .nameForm,
+  .dangerActions {
+    padding-left: 0;
+  }
+
+  .nameForm {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .nameInput,
+  .saveNameButton,
+  .deleteButton {
+    width: 100%;
+  }
+
+  .overlayActions {
+    flex-direction: column;
+  }
+}
