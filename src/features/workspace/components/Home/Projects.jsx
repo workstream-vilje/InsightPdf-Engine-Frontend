@@ -62,6 +62,7 @@ import {
   DEFAULT_QUALITY_METRICS,
   EMBEDDING_OPTIONS,
   INITIAL_PROJECTS,
+  LLM_MODEL_OPTIONS,
   QUERY_CONFIGURATION_OPTIONS,
   RETRIEVAL_STRATEGY_OPTIONS,
   TEXT_PROCESSING_OPTIONS,
@@ -295,7 +296,8 @@ function UploadPipelineOutputCard({
 }
 
 /** Lightweight inline markdown → React nodes (no library).
- *  Handles: **bold**, *italic*, numbered lists, line breaks.
+ *  Handles: headings, **bold**, *italic*, `code`, bullet lists,
+ *           numbered lists, blockquotes, horizontal rules, line breaks.
  */
 function renderMarkdown(text) {
   if (!text) return null;
@@ -303,33 +305,81 @@ function renderMarkdown(text) {
   const nodes = [];
   let key = 0;
 
+  // Parse inline formatting: **bold**, *italic*, `code`, ***bold-italic***
+  const parseInline = (str) => {
+    const parts = [];
+    // Order matters: ***bold-italic*** before **bold** before *italic*
+    const regex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`)/g;
+    let last = 0;
+    let m;
+    let k = 0;
+    while ((m = regex.exec(str)) !== null) {
+      if (m.index > last) parts.push(str.slice(last, m.index));
+      if (m[1].startsWith("***")) {
+        parts.push(<strong key={k++}><em>{m[2]}</em></strong>);
+      } else if (m[1].startsWith("**")) {
+        parts.push(<strong key={k++}>{m[3]}</strong>);
+      } else if (m[1].startsWith("*")) {
+        parts.push(<em key={k++}>{m[4]}</em>);
+      } else if (m[1].startsWith("`")) {
+        parts.push(<code key={k++} className={styles.aiResponseInlineCode}>{m[5]}</code>);
+      }
+      last = m.index + m[0].length;
+    }
+    if (last < str.length) parts.push(str.slice(last));
+    return parts;
+  };
+
   for (const line of lines) {
     const trimmed = line.trim();
+
+    // Empty line → break
     if (!trimmed) {
       nodes.push(<br key={key++} />);
       continue;
     }
 
-    // Parse inline bold/italic within a line
-    const parseInline = (str) => {
-      const parts = [];
-      // split on **bold** or *italic*
-      const regex = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
-      let last = 0;
-      let m;
-      let k = 0;
-      while ((m = regex.exec(str)) !== null) {
-        if (m.index > last) parts.push(str.slice(last, m.index));
-        if (m[0].startsWith("**")) {
-          parts.push(<strong key={k++}>{m[2]}</strong>);
-        } else {
-          parts.push(<em key={k++}>{m[3]}</em>);
-        }
-        last = m.index + m[0].length;
-      }
-      if (last < str.length) parts.push(str.slice(last));
-      return parts;
-    };
+    // Horizontal rule
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      nodes.push(<hr key={key++} className={styles.aiResponseHr} />);
+      continue;
+    }
+
+    // Headings H1–H6
+    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const Tag = `h${Math.min(level, 6)}`;
+      nodes.push(
+        <Tag key={key++} className={styles[`aiResponseH${level}`] || styles.aiResponseH3}>
+          {parseInline(headingMatch[2])}
+        </Tag>
+      );
+      continue;
+    }
+
+    // Blockquote
+    const blockquoteMatch = trimmed.match(/^>\s*(.+)$/);
+    if (blockquoteMatch) {
+      nodes.push(
+        <blockquote key={key++} className={styles.aiResponseBlockquote}>
+          {parseInline(blockquoteMatch[1])}
+        </blockquote>
+      );
+      continue;
+    }
+
+    // Unordered list item: - text or * text or + text
+    const bulletMatch = trimmed.match(/^[-*+]\s+(.+)$/);
+    if (bulletMatch) {
+      nodes.push(
+        <div key={key++} className={styles.aiResponseListItem}>
+          <span className={styles.aiResponseBulletDot} aria-hidden>•</span>
+          <span>{parseInline(bulletMatch[1])}</span>
+        </div>
+      );
+      continue;
+    }
 
     // Numbered list item: "1. text" or "1) text"
     const listMatch = trimmed.match(/^(\d+)[.)]\s+(.+)$/);
@@ -340,9 +390,15 @@ function renderMarkdown(text) {
           <span>{parseInline(listMatch[2])}</span>
         </div>
       );
-    } else {
-      nodes.push(<span key={key++} className={styles.aiResponseLine}>{parseInline(trimmed)}</span>);
+      continue;
     }
+
+    // Regular paragraph line
+    nodes.push(
+      <span key={key++} className={styles.aiResponseLine}>
+        {parseInline(trimmed)}
+      </span>
+    );
   }
   return nodes;
 }
@@ -1365,7 +1421,13 @@ const buildSharedPipelineConfig = (workspace) => {
   const queryConfig = {
     retrieval_strategy: {
       top_k: Math.max(1, Number(workspace.topK) || 3),
-      search_type: "similarity",
+      search_type: (() => {
+        const selected = (workspace.retrievalStrategies || [])[0] || "semantic-similarity";
+        if (selected === "hybrid-search") return "hybrid";
+        if (selected === "keyword-search") return "keyword";
+        if (selected === "mmr") return "mmr";
+        return "similarity";
+      })(),
       vector_db:
         processingConfig.vector_store.backends.length > 1
           ? processingConfig.vector_store.backends
@@ -1377,7 +1439,7 @@ const buildSharedPipelineConfig = (workspace) => {
       model: processingConfig.embeddings.model,
     },
     llm: {
-      provider: "openai",
+      provider: (workspace?.selectedLlmModel === "llama3.2") ? "ollama" : "openai",
       model: workspace?.selectedLlmModel || "gpt-4o-mini",
       temperature: 0.2,
     },
@@ -1574,7 +1636,7 @@ const TypedLine = ({ text }) => {
   return <p className={styles.statusLine}>{visibleText}</p>;
 };
 
-const MultiSelectChips = ({ options, selectedValues, onToggle, disabled = false }) => (
+const MultiSelectChips = ({ options, selectedValues, onToggle, disabled = false, singleSelect = false }) => (
   <div
     className={classNames(styles.choiceGrid, {
       [styles.choiceGridDisabled]: disabled,
@@ -1594,12 +1656,15 @@ const MultiSelectChips = ({ options, selectedValues, onToggle, disabled = false 
           aria-pressed={checked}
           onClick={() => {
             if (disabled) return;
+            // Single-select: clicking an already-selected item does nothing
+            if (singleSelect && checked) return;
             onToggle(option.value);
           }}
           onKeyDown={(event) => {
             if (disabled) return;
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
+              if (singleSelect && checked) return;
               onToggle(option.value);
             }
           }}
@@ -1672,13 +1737,22 @@ function UploadProjectFilesList({
         const showReportBtn = Boolean(fileReport);
         const isSelected = String(file.fileId) === activeWorkspaceFileId;
         const isProcessed = Boolean(file.processed || file.allowedTechniques || fileReport);
+        const indexStatus = file.indexStatus || (isProcessed ? "ready" : "not_processed");
+
+        // Status badge label — index status takes priority over processed/selected labels
         const statusLabel = isSelected
           ? isProcessed
-            ? "Selected / Processed"
+            ? indexStatus === "checking"
+              ? "Checking…"
+              : "Selected / Processed"
             : "Selected"
           : isProcessed
-            ? "Processed"
-            : "Ready";
+            ? indexStatus === "checking"
+              ? "Checking…"
+              : "Processed"
+            : indexStatus === "not_processed"
+              ? "Index Pending"
+              : "Ready";
         return uploadFilesViewMode === "grid" ? (
           <button
             key={file.id}
@@ -1729,7 +1803,9 @@ function UploadProjectFilesList({
             <div className={styles.uploadFileCardFooter}>
               <span
                 className={classNames(styles.fileStatusBadge, styles.uploadFileStatusPill, {
-                  [styles.fileStatusBadgeActive]: isSelected,
+                  [styles.fileStatusBadgeActive]: isSelected && isProcessed && indexStatus !== "not_processed",
+                  [styles.fileStatusBadgeChecking]: indexStatus === "checking",
+                  [styles.fileStatusBadgeNotProcessed]: !isProcessed || indexStatus === "not_processed",
                 })}
               >
                 {statusLabel}
@@ -1814,7 +1890,9 @@ function UploadProjectFilesList({
               </span>
               <span
                 className={classNames(styles.fileStatusBadge, styles.uploadFileStatusPill, {
-                  [styles.fileStatusBadgeActive]: isSelected,
+                  [styles.fileStatusBadgeActive]: isSelected && isProcessed && indexStatus !== "not_processed",
+                  [styles.fileStatusBadgeChecking]: indexStatus === "checking",
+                  [styles.fileStatusBadgeNotProcessed]: !isProcessed || indexStatus === "not_processed",
                   [styles.fileStatusBadgeSelected]: isSelected,
                 })}
               >
@@ -1915,6 +1993,8 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
   const [hasUnreadPipelineSuccess, setHasUnreadPipelineSuccess] = useState(false);
   const [pipelineSuccessModalOpen, setPipelineSuccessModalOpen] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [ollamaWarningOpen, setOllamaWarningOpen] = useState(false);
+  const [ollamaDocsOpen, setOllamaDocsOpen] = useState(false);
   const modelDropdownRef = useRef(null);
   const uploadSidebarControlRef = useRef(null);
   const previousExecutionStatusRef = useRef("idle");
@@ -2415,12 +2495,113 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
         current.files.find(
           (file) => Number(file?.fileId) === Number(current.selectedFileId),
         ) || current.files[0];
+
+      const newAllowedTechniques = resolvedFile?.allowedTechniques || null;
+
+      // Reset vectorStores and embeddingModels to only allowed values
+      // so the query payload never sends stores that weren't used at ingestion
+      let nextVectorStores = current.vectorStores || ["faiss"];
+      let nextEmbeddingModels = current.embeddingModels || ["text-embedding-3-large"];
+
+      if (newAllowedTechniques) {
+        const allowedStores = (newAllowedTechniques.vector_stores || []).map(String);
+        if (allowedStores.length > 0) {
+          const filtered = nextVectorStores.filter((v) => allowedStores.includes(v));
+          nextVectorStores = filtered.length > 0 ? filtered : [allowedStores[0]];
+        }
+
+        const allowedEmbeddings = (newAllowedTechniques.embeddings || []);
+        if (allowedEmbeddings.length > 0) {
+          const allowedModels = allowedEmbeddings.map((e) => e.model).filter(Boolean);
+          const filtered = nextEmbeddingModels.filter((m) => allowedModels.includes(m));
+          nextEmbeddingModels = filtered.length > 0 ? filtered : [allowedModels[0]];
+        }
+      }
+
       return {
         ...current,
-        allowedTechniques: resolvedFile?.allowedTechniques || null,
+        allowedTechniques: newAllowedTechniques,
+        vectorStores: nextVectorStores,
+        embeddingModels: nextEmbeddingModels,
       };
     });
   }, [activeWorkspace?.files, activeWorkspace?.selectedFileId, updateActiveWorkspace]);
+
+  // ── Chat history loading state ──
+  const [chatHistoryLoading, setChatHistoryLoading] = useState(false);
+
+  // ── Load chat history when file is selected in query workspace ──
+  // Guard: only fetch once per project+file pair
+  const lastChatHistoryContextRef = useRef({ projectId: null, fileId: null });
+
+  useEffect(() => {
+    if (workspaceMode !== "query") return;
+    if (!activeProjectId || !activeWorkspace?.selectedFileId) return;
+
+    const fileId = Number(activeWorkspace.selectedFileId);
+    const projectId = Number(activeProjectId);
+    if (!fileId || !projectId) return;
+
+    // Skip if already loaded for this project+file
+    const last = lastChatHistoryContextRef.current;
+    if (last.projectId === projectId && last.fileId === fileId) return;
+    lastChatHistoryContextRef.current = { projectId, fileId };
+
+    let cancelled = false;
+    setChatHistoryLoading(true);
+
+    queryApi.fetchChatHistory({ projectId, fileId })
+      .then((history) => {
+        if (cancelled) return;
+        if (!Array.isArray(history) || history.length === 0) {
+          setChatHistoryLoading(false);
+          return;
+        }
+
+        const entries = history.map((record, index) => ({
+          id: `history-${fileId}-${index}-${record.created_at || index}`,
+          fileId,
+          query: record.query || "",
+          submittedAt: record.created_at || null,
+          responseVariants: [
+            {
+              db: record.db || "",
+              experimentId: null,
+              response: record.response || "",
+              agentEnabled: false,
+              usedStrategies: [
+                ...(record.llm ? [{ label: "LLM", value: record.llm }] : []),
+                ...(record.embedding ? [{ label: "Embedding", value: record.embedding }] : []),
+                ...(record.db ? [{ label: "Vector DB", value: record.db }] : []),
+                ...(record.retrieval ? [{ label: "Retrieval", value: record.retrieval }] : []),
+              ],
+            },
+          ],
+          activityMessages: [],
+        }));
+
+        updateActiveWorkspace((current) => ({
+          ...current,
+          ...(String(current.selectedFileId) === String(fileId)
+            ? { conversation: entries }
+            : {}),
+        }));
+      })
+      .catch(() => {
+        // History load failure is non-fatal — leave conversation empty
+      })
+      .finally(() => {
+        if (!cancelled) setChatHistoryLoading(false);
+      });
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspace?.selectedFileId, activeProjectId, workspaceMode]);
+
+  // Reset history guard when project changes
+  useEffect(() => {
+    lastChatHistoryContextRef.current = { projectId: null, fileId: null };
+  }, [activeProjectId]);
 
   const visibleProjects = useMemo(() => {
     const normalizedSearch = deferredSearchValue.trim().toLowerCase();
@@ -3302,6 +3483,41 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
           return;
         }
         const message = formatWorkspaceApiError(error, "Failed to run query");
+
+        // Detect Ollama connection error
+        const isOllamaError =
+          String(error?.message || "").toLowerCase().includes("ollama") ||
+          String(error?.message || "").toLowerCase().includes("localhost:11434") ||
+          String(error?.message || "").toLowerCase().includes("could not reach llm") ||
+          String(error?.payload?.detail || "").toLowerCase().includes("ollama") ||
+          String(error?.payload?.detail || "").toLowerCase().includes("localhost:11434");
+
+        if (isOllamaError) {
+          updateActiveWorkspace((current) => ({
+            ...current,
+            phase: "query-ready",
+            submittedQuery: "",
+            queryActivity: {
+              visible: true,
+              status: "error",
+              messages: [
+                createActivityMessage(
+                  "ollama-error",
+                  "Ollama is not running. Install or start Ollama to use Llama 3.2 locally.",
+                  "error",
+                ),
+              ],
+              ollamaError: true,
+            },
+          }));
+          showToast({
+            title: "Ollama",
+            variant: "error",
+            message: "Ollama is not running. Install or start Ollama to use Llama 3.2.",
+          });
+          return;
+        }
+
         showToast({
           title: "Query",
           variant: "error",
@@ -4131,6 +4347,125 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
                       selectedValues={activeWorkspace.embeddingModels}
                       onToggle={(value) => toggleWorkspaceValue("embeddingModels", value)}
                     />
+                  </SidebarSection>
+
+                  <SidebarSection
+                    icon={MessageSquare}
+                    title="LLM Model"
+                    description="Language model used to generate the answer"
+                    expanded
+                  >
+                    <MultiSelectChips
+                      options={LLM_MODEL_OPTIONS}
+                      selectedValues={[activeWorkspace.selectedLlmModel || "gpt-4o-mini"]}
+                      onToggle={(value) => {
+                        updateActiveWorkspace((current) => ({
+                          ...current,
+                          selectedLlmModel: value,
+                        }));
+                        if (value === "llama3.2") {
+                          setOllamaWarningOpen(true);
+                        } else {
+                          setOllamaWarningOpen(false);
+                          setOllamaDocsOpen(false);
+                        }
+                      }}
+                      singleSelect
+                    />
+
+                    {/* Ollama warning card */}
+                    {(activeWorkspace.selectedLlmModel === "llama3.2") && !ollamaDocsOpen && (
+                      <div className={styles.ollamaWarningCard}>
+                        <div className={styles.ollamaWarningIcon} aria-hidden>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                        </div>
+                        <div className={styles.ollamaWarningBody}>
+                          <p className={styles.ollamaWarningTitle}>Requires local Ollama</p>
+                          <p className={styles.ollamaWarningDesc}>
+                            Llama 3.2 runs locally via Ollama. Make sure Ollama is installed and the model is pulled before querying.
+                          </p>
+                          <div className={styles.ollamaWarningActions}>
+                            <button
+                              type="button"
+                              className={styles.ollamaWarningBtnSecondary}
+                              onClick={() => setOllamaDocsOpen(true)}
+                            >
+                              Learn more
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.ollamaWarningBtnPrimary}
+                              onClick={() => setOllamaWarningOpen(false)}
+                            >
+                              Got it
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Ollama docs panel */}
+                    {ollamaDocsOpen && (
+                      <div className={styles.ollamaDocsCard}>
+                        <div className={styles.ollamaDocsHeader}>
+                          <span className={styles.ollamaDocsTitle}>Using Ollama with InsightPDF</span>
+                          <button
+                            type="button"
+                            className={styles.ollamaDocsClose}
+                            onClick={() => setOllamaDocsOpen(false)}
+                            aria-label="Close"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                        <div className={styles.ollamaDocsBody}>
+                          <p className={styles.ollamaDocsSection}>What is Ollama?</p>
+                          <p className={styles.ollamaDocsText}>
+                            Ollama lets you run large language models locally on your machine — no API key, no internet required for inference.
+                          </p>
+
+                          <p className={styles.ollamaDocsSection}>Step 1 — Install Ollama</p>
+                          <p className={styles.ollamaDocsText}>
+                            Download and install from <strong>ollama.com</strong>. Available for macOS, Linux, and Windows.
+                          </p>
+
+                          <p className={styles.ollamaDocsSection}>Step 2 — Pull the model</p>
+                          <code className={styles.ollamaDocsCode}>ollama pull llama3.2</code>
+
+                          <p className={styles.ollamaDocsSection}>Step 3 — Start Ollama</p>
+                          <p className={styles.ollamaDocsText}>
+                            Ollama runs as a background service on <strong>http://localhost:11434</strong>. It starts automatically after install on most systems.
+                          </p>
+                          <code className={styles.ollamaDocsCode}>ollama serve</code>
+
+                          <p className={styles.ollamaDocsSection}>How it works here</p>
+                          <p className={styles.ollamaDocsText}>
+                            When you select Llama 3.2, the backend automatically sets <strong>provider: ollama</strong> and calls your local Ollama server. If Ollama is not running or the model is not installed, you will see a clear error message.
+                          </p>
+
+                          <p className={styles.ollamaDocsSection}>Common errors</p>
+                          <p className={styles.ollamaDocsText}>
+                            <strong>Ollama not reachable</strong> — Start Ollama with <code>ollama serve</code> or relaunch the Ollama app.
+                          </p>
+                          <p className={styles.ollamaDocsText}>
+                            <strong>Model not installed</strong> — Run <code>ollama pull llama3.2</code> in your terminal.
+                          </p>
+
+                          <button
+                            type="button"
+                            className={styles.ollamaWarningBtnPrimary}
+                            style={{ marginTop: 12, width: "100%" }}
+                            onClick={() => setOllamaDocsOpen(false)}
+                          >
+                            Got it, close
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </SidebarSection>
 
                   <SidebarSection
@@ -5013,9 +5348,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
                   {/* ── Welcome subtitle ── */}
                   {showChatWelcome && (
                     <div className={styles.chatWelcomeShell}>
-                      <p className={styles.chatWelcomeSubtitle}>
-                        Ask questions, summarize uploaded files, or explore ideas from your document set.
-                      </p>
                     </div>
                   )}
 
@@ -5026,6 +5358,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
                         {activeWorkspace.visibleLines.map((line) => (
                           <TypedLine key={line.id} text={line.text} />
                         ))}
+                      </div>
+                    )}
+
+                    {/* Chat history loading state */}
+                    {chatHistoryLoading && (
+                      <div className={styles.chatHistoryLoading}>
+                        <span className={styles.chatHistoryLoadingDot} />
+                        <span className={styles.chatHistoryLoadingDot} />
+                        <span className={styles.chatHistoryLoadingDot} />
+                        <span className={styles.chatHistoryLoadingText}>Loading conversation history…</span>
                       </div>
                     )}
 
@@ -5126,6 +5468,54 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
                             >
                               {queryActivityState.messages[0]?.text ?? "Starting analysis…"}
                             </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Ollama not running error card */}
+                    {queryActivityState.ollamaError && activeWorkspace.phase === "query-ready" && (
+                      <div className={styles.aiMessageRow}>
+                        <span className={styles.aiAvatarDot} aria-hidden />
+                        <div className={styles.ollamaErrorCard}>
+                          <div className={styles.ollamaErrorIcon} aria-hidden>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10" />
+                              <line x1="12" y1="8" x2="12" y2="12" />
+                              <line x1="12" y1="16" x2="12.01" y2="16" />
+                            </svg>
+                          </div>
+                          <div className={styles.ollamaErrorBody}>
+                            <p className={styles.ollamaErrorTitle}>Ollama is not running</p>
+                            <p className={styles.ollamaErrorDesc}>
+                              Llama 3.2 requires Ollama running locally at <code>localhost:11434</code>. Install Ollama and pull the model to continue.
+                            </p>
+                            <div className={styles.ollamaErrorActions}>
+                              <a
+                                href="https://ollama.com/download/windows"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={styles.ollamaErrorBtnInstall}
+                              >
+                                Install Ollama
+                              </a>
+                              <button
+                                type="button"
+                                className={styles.ollamaErrorBtnDismiss}
+                                onClick={() =>
+                                  updateActiveWorkspace((current) => ({
+                                    ...current,
+                                    queryActivity: {
+                                      ...current.queryActivity,
+                                      ollamaError: false,
+                                      visible: false,
+                                    },
+                                  }))
+                                }
+                              >
+                                Dismiss
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>

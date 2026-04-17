@@ -36,6 +36,13 @@ export const QUERY_CONFIGURATION_OPTIONS = [
   { value: "langsmith", label: "LangSmith" },
 ];
 
+export const LLM_MODEL_OPTIONS = [
+  { value: "gpt-4o-mini", label: "GPT-4o mini", provider: "openai" },
+  { value: "gpt-4o",      label: "GPT-4o",      provider: "openai" },
+  { value: "gpt-4.1",     label: "GPT-4.1",     provider: "openai" },
+  { value: "llama3.2",    label: "Llama 3.2",   provider: "ollama" },
+];
+
 export const DEFAULT_QUALITY_METRICS = [
   { label: "Answer relevance", score: 0.91 },
   { label: "Groundedness", score: 0.89 },

@@ -1,7 +1,7 @@
 import { buildUrl } from "@/services/axios";
 import httpClient from "@/services/axios";
 import { clearAuthSession, getCsrfToken, redirectToLogin } from "@/services/auth";
-import { runQuery as runQueryPath, fetchSavedResponse } from "@/services/api/networking/endpoints";
+import { runQuery as runQueryPath, fetchSavedResponse, chatHistory } from "@/services/api/networking/endpoints";
 
 /**
  * Attempt to refresh the access token via POST /auth/refresh.
@@ -136,6 +136,8 @@ export const queryApi = {
         },
       },
     ),
+  fetchChatHistory: ({ projectId, fileId }) =>
+    httpClient.get(`${chatHistory}?file_id=${fileId}&project_id=${projectId}`),
 };
 
 export default queryApi;

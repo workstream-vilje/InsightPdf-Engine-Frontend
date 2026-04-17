@@ -30,3 +30,8 @@ export const fetchComparisonAnalytics = (projectId) =>
 // Query ENDPOINTS
 export const runQuery = "/query";
 export const fetchSavedResponse = "/response";
+export const chatHistory = "/chat/history";
+
+// File index status ENDPOINT
+export const getFileIndexStatus = (projectId, fileId) =>
+  `/project/${projectId}/file/${fileId}/index-status`;
