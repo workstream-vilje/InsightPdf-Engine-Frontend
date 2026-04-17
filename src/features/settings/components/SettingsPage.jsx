@@ -73,7 +73,7 @@ function SettingsContent() {
     try {
       await authApi.deleteAccount();
       clearAuthSession();
-      router.replace(ROUTE_PATHS.AUTH_LOGIN);
+      router.replace(ROUTE_PATHS.AUTH_SIGNUP);
     } catch (error) {
       showToast({
         title: "Delete account",
