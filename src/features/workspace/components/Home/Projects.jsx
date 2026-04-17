@@ -3797,9 +3797,9 @@ const ProjectCanvas = ({ initialProjectId = null, initialFileId = null, workspac
     // 2. Clear all frontend state (user profile + any stale token keys)
     clearAuthSession();
 
-    // 3. Redirect to login
+    // 3. Redirect to signup
     if (typeof window !== "undefined") {
-      window.location.replace(ROUTE_PATHS.AUTH_LOGIN);
+      window.location.replace(ROUTE_PATHS.AUTH_SIGNUP);
     }
   }, []);
 

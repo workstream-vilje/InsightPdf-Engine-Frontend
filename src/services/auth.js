@@ -106,7 +106,7 @@ export const setTokens      = () => {}; // no-op: tokens are cookie-managed
 export const setUserSession = setAuthSession;
 
 export const clearTokens = () => {
-  // Tokens are HttpOnly cookies — backend clears them on logout.
+  // HttpOnly cookies are cleared by the backend on logout.
   // Scrub any stale token keys that may exist from old auth flows.
   if (!canUseStorage()) return;
   STALE_TOKEN_KEYS.forEach((key) => window.localStorage.removeItem(key));
@@ -135,8 +135,9 @@ export const redirectToLogin = () => {
   if (!canUseStorage()) return;
 
   const currentPath = window.location.pathname;
-  const authPrefix = `/${String(ROUTE_PATHS.AUTH_LOGIN).split("/").filter(Boolean)[0] || "auth"}/`;
+  const authPrefix = `/${String(ROUTE_PATHS.AUTH_SIGNUP).split("/").filter(Boolean)[0] || "auth"}/`;
   if (currentPath.startsWith(authPrefix)) return;
 
-  window.location.replace(ROUTE_PATHS.AUTH_LOGIN);
+  window.location.replace(ROUTE_PATHS.AUTH_SIGNUP);
 };
+
