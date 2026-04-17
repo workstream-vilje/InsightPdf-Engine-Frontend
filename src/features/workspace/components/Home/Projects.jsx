@@ -477,7 +477,8 @@ const mapUploadedFileToWorkspaceFile = (file, category) => ({
   allowedTechniques: file?.allowed_techniques || null,
   processed: Boolean(file?.allowed_techniques),
   // indexStatus: "unknown" | "ready" | "not_processed" | "checking"
-  indexStatus: file?.allowed_techniques ? "unknown" : "not_processed",
+  // Start as "ready" for processed files so the status API is not called again.
+  indexStatus: file?.allowed_techniques ? "ready" : "not_processed",
 });
 
 const sanitizeWorkspaceQueryState = (workspace) => ({
@@ -2525,12 +2526,22 @@ const ProjectCanvas = ({ initialProjectId = null, initialFileId = null, workspac
   const lastHistoryContextRef = useRef({ projectId: null, fileId: null });
 
   // ── Fetch index status when a file is selected ──
+  // Only call once per file — skip if status is already known (not "unknown").
   useEffect(() => {
     if (!activeProjectId || !activeWorkspace?.selectedFileId) return;
 
     const fileId = Number(activeWorkspace.selectedFileId);
     const projectId = Number(activeProjectId);
     if (!fileId || !projectId) return;
+
+    // Skip if we already have a definitive status for this file
+    const currentFile = (activeWorkspace.files || []).find(
+      (f) => String(f.fileId) === String(fileId),
+    );
+    const alreadyKnown =
+      currentFile?.indexStatus === "ready" ||
+      currentFile?.indexStatus === "not_processed";
+    if (alreadyKnown) return;
 
     // Mark as checking immediately
     updateActiveWorkspace((current) => ({
@@ -3743,7 +3754,7 @@ const ProjectCanvas = ({ initialProjectId = null, initialFileId = null, workspac
   };
   const isQueryInFlight = activeWorkspace?.phase === "query-processing";
   const isChatInputDisabled =
-    !hasSelectedFile || !hasSelectedProcessedFile || !selectedFileIndexReady || isQueryInFlight;
+    !hasSelectedFile || !hasSelectedProcessedFile || isQueryInFlight;
 
   useEffect(() => {
     const prevStatus = previousExecutionStatusRef.current;
@@ -5463,11 +5474,11 @@ const ProjectCanvas = ({ initialProjectId = null, initialFileId = null, workspac
                               : "Select an uploaded file to enable chat"
                             : !hasSelectedProcessedFile
                               ? "Process the selected file first, then ask your question…"
-                              : !selectedFileIndexReady
-                                ? selectedWorkspaceFile?.indexStatus === "checking"
-                                  ? "Checking index status…"
-                                  : "File not indexed — please reprocess it before querying…"
-                                : "Ask anything about your document…"
+                              : selectedWorkspaceFile?.indexStatus === "checking"
+                                ? "Checking index status — you can type now…"
+                                : selectedWorkspaceFile?.indexStatus === "not_processed"
+                                  ? "File not indexed — query may fail. Ask your question…"
+                                  : "Ask anything about your document…"
                         }
                         className={classNames(styles.queryInput, styles.queryInputHero, {
                           [styles.queryInputDisabled]: isChatInputDisabled,
