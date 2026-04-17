@@ -6,6 +6,7 @@ import {
   processProjectFile,
   getProjectFile,
   deleteProjectFile,
+  getFileIndexStatus,
 } from "@/services/api/networking/endpoints";
 import { getCurrentUserId } from "@/services/auth";
 
@@ -40,6 +41,8 @@ export const fileApi = {
     httpClient.get(getProjectFile(projectId, fileId)),
   deleteProjectFile: (projectId, fileId) =>
     httpClient.delete(withUserIdQuery(deleteProjectFile(projectId, fileId))),
+  getFileIndexStatus: (projectId, fileId) =>
+    httpClient.get(getFileIndexStatus(projectId, fileId)),
 };
 
 export default fileApi;

@@ -27,7 +27,6 @@ const canUseCookies = () => typeof document !== "undefined";
 // ── Cookie helpers ──
 export const readCookie = (name) => {
   if (!canUseCookies()) return null;
-  // Escape special regex characters in the cookie name
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`));
   return match ? decodeURIComponent(match[1]) : null;
@@ -53,6 +52,15 @@ export const getStoredUserProfile = () => ({
   name:  canUseStorage() ? window.localStorage.getItem(USER_NAME_KEY)    || "" : "",
   email: canUseStorage() ? window.localStorage.getItem(USER_MAIL_ID_KEY) || "" : "",
 });
+
+export const hasAccessToken = () => Boolean(getCsrfToken());
+
+/**
+ * Scoped localStorage key — namespaces data per user so different users
+ * on the same browser don't share workspace state.
+ */
+export const getScopedStorageKey = (baseKey, userId = getCurrentUserId()) =>
+  `${baseKey}:${userId || "anonymous"}`;
 
 // ── Session event ──
 const emitAuthSessionChanged = () => {
@@ -98,7 +106,7 @@ export const setTokens      = () => {}; // no-op: tokens are cookie-managed
 export const setUserSession = setAuthSession;
 
 export const clearTokens = () => {
-  // HttpOnly cookies are cleared by the backend on logout.
+  // Tokens are HttpOnly cookies — backend clears them on logout.
   // Scrub any stale token keys that may exist from old auth flows.
   if (!canUseStorage()) return;
   STALE_TOKEN_KEYS.forEach((key) => window.localStorage.removeItem(key));
@@ -122,11 +130,6 @@ export const clearAuthSession = () => {
 
   emitAuthSessionChanged();
 };
-
-export const hasAccessToken = () => Boolean(getCsrfToken());
-
-export const getScopedStorageKey = (baseKey, userId = getCurrentUserId()) =>
-  `${baseKey}:${userId || "anonymous"}`;
 
 export const redirectToLogin = () => {
   if (!canUseStorage()) return;

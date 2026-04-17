@@ -21,13 +21,17 @@ export const ROUTE_PATHS = {
 };
 
 /** @param {string | number | null | undefined} projectId */
-export const workspaceUploadUrl = (projectId) =>
-  projectId == null || projectId === ''
-    ? ROUTE_PATHS.WORKSPACE_UPLOAD
-    : `${ROUTE_PATHS.WORKSPACE_UPLOAD}?project=${encodeURIComponent(String(projectId))}`;
+export const workspaceUploadUrl = (projectId, fileId = null) => {
+  if (projectId == null || projectId === '') return ROUTE_PATHS.WORKSPACE_UPLOAD;
+  const params = new URLSearchParams({ project: String(projectId) });
+  if (fileId != null && fileId !== '') params.set('file', String(fileId));
+  return `${ROUTE_PATHS.WORKSPACE_UPLOAD}?${params.toString()}`;
+};
 
 /** @param {string | number | null | undefined} projectId */
-export const workspaceQueryUrl = (projectId) =>
-  projectId == null || projectId === ''
-    ? ROUTE_PATHS.WORKSPACE_QUERY
-    : `${ROUTE_PATHS.WORKSPACE_QUERY}?project=${encodeURIComponent(String(projectId))}`;
+export const workspaceQueryUrl = (projectId, fileId = null) => {
+  if (projectId == null || projectId === '') return ROUTE_PATHS.WORKSPACE_QUERY;
+  const params = new URLSearchParams({ project: String(projectId) });
+  if (fileId != null && fileId !== '') params.set('file', String(fileId));
+  return `${ROUTE_PATHS.WORKSPACE_QUERY}?${params.toString()}`;
+};

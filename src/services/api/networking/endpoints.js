@@ -22,6 +22,8 @@ export const getProjectFile = (projectId, fileId) =>
   `/project/${projectId}/file/${fileId}`;
 export const deleteProjectFile = (projectId, fileId) =>
   `/project/${projectId}/file/${fileId}`;
+export const getFileIndexStatus = (projectId, fileId) =>
+  `/project/${projectId}/file/${fileId}/index-status`;
 
 // Comparison ENDPOINTS
 export const fetchComparisonAnalytics = (projectId) =>
@@ -30,3 +32,4 @@ export const fetchComparisonAnalytics = (projectId) =>
 // Query ENDPOINTS
 export const runQuery = "/query";
 export const fetchSavedResponse = "/response";
+export const chatHistory = "/chat/history";

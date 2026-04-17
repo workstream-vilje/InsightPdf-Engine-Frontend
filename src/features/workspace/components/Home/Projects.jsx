@@ -476,6 +476,8 @@ const mapUploadedFileToWorkspaceFile = (file, category) => ({
   pages: file?.pages_count ?? file?.pagesCount ?? file?.pages ?? null,
   allowedTechniques: file?.allowed_techniques || null,
   processed: Boolean(file?.allowed_techniques),
+  // indexStatus: "unknown" | "ready" | "not_processed" | "checking"
+  indexStatus: file?.allowed_techniques ? "unknown" : "not_processed",
 });
 
 const sanitizeWorkspaceQueryState = (workspace) => ({
@@ -1128,72 +1130,110 @@ const createActivityMessage = (id, text, tone = "info") => ({
 });
 
 /* ─────────────────────────────────────────────
-   Transform raw backend log strings into
-   human-readable, friendly progress messages.
-   Returns { label, phase, tone }
+   Technique-aware, step-based live execution messages.
+   Returns { label, phase, tone } or null (suppress).
 ───────────────────────────────────────────── */
 const PHASE_UNDERSTAND = "understand";
 const PHASE_SEARCH = "search";
 const PHASE_GENERATE = "generate";
 const PHASE_DONE = "done";
 
-const transformProgressMessage = (raw) => {
+/** Pick a random item from an array. */
+const getRandomMessage = (pool) => pool[Math.floor(Math.random() * pool.length)];
+
+/**
+ * Build technique-aware message pools based on the active workspace config.
+ * vectorStores: ["faiss","chroma",...], embeddingModels: ["text-embedding-3-large","ollama-nomic-embed",...]
+ * queryConfigurations: ["ragas","langsmith","agent",...]
+ */
+const buildMessagePools = (workspace) => {
+  const stores = (workspace?.vectorStores || ["faiss"]).map((s) => s.toLowerCase());
+  const embeddings = workspace?.embeddingModels || [];
+  const configs = workspace?.queryConfigurations || [];
+
+  const usesFaiss = stores.some((s) => s.includes("faiss"));
+  const usesChroma = stores.some((s) => s.includes("chroma"));
+  const usesPgvector = stores.some((s) => s.includes("pgvector"));
+  const usesPinecone = stores.some((s) => s.includes("pinecone"));
+  const usesOpenAI = embeddings.some((e) => !e.includes("ollama"));
+  const usesOllama = embeddings.some((e) => e.includes("ollama"));
+  const usesRagas = configs.includes("ragas");
+  const usesLangSmith = configs.includes("langsmith");
+
+  const dbLabel = usesFaiss ? "FAISS"
+    : usesChroma ? "ChromaDB"
+      : usesPgvector ? "PgVector"
+        : usesPinecone ? "Pinecone"
+          : "vector database";
+
+  const embLabel = usesOpenAI ? "OpenAI embeddings"
+    : usesOllama ? "Ollama embeddings"
+      : "embeddings";
+
+  return {
+    init: [
+      "Preparing your query…",
+      "Setting up the retrieval pipeline…",
+      "Initializing search context…",
+    ],
+    embedding: usesOpenAI ? [
+      `Generating ${embLabel} for your question…`,
+      "Transforming query into vector representation…",
+      "Encoding your question for semantic search…",
+      `Converting question to ${embLabel}…`,
+    ] : [
+      `Generating ${embLabel} for your question…`,
+      "Transforming query into vector representation…",
+      "Encoding your question for semantic search…",
+    ],
+    search: usesFaiss ? [
+      `Searching ${dbLabel} vector database for relevant content…`,
+      `Scanning ${dbLabel} index using semantic similarity…`,
+      `Querying ${dbLabel} for matching embeddings…`,
+      "Looking for similar passages in your documents…",
+    ] : [
+      `Searching ${dbLabel} for relevant content…`,
+      "Scanning vector store using semantic similarity…",
+      "Looking for similar passages in your documents…",
+      `Querying ${dbLabel} for matching content…`,
+    ],
+    retry: [
+      "Expanding search scope for better results…",
+      "Trying a deeper search across documents…",
+      "Adjusting retrieval parameters…",
+      "Widening the search to find more context…",
+    ],
+    noResults: [
+      "No strong matches found, refining search…",
+      "Relevant data is limited, trying alternative approach…",
+      "Broadening search to find related content…",
+    ],
+    generate: (usesRagas || usesLangSmith) ? [
+      "Generating response using RAG pipeline…",
+      "Composing answer from retrieved data…",
+      "Preparing final response via RAG pipeline…",
+    ] : [
+      "Generating response using available context…",
+      "Composing answer from retrieved data…",
+      "Preparing final response…",
+      "Synthesizing answer from document passages…",
+    ],
+    validate: [
+      "Reviewing the answer for accuracy…",
+      "Validating response quality…",
+      "Checking answer against retrieved context…",
+    ],
+    final: [
+      "Response ready",
+      "Answer generated successfully",
+      "Done — your answer is ready",
+    ],
+  };
+};
+
+const transformProgressMessage = (raw, workspace) => {
   const s = String(raw || "").toLowerCase().trim();
-
-  /* ── Understanding phase ── */
-  if (s.includes("starting rag query") || s.includes("start query")) {
-    return { label: "Understanding your question…", phase: PHASE_UNDERSTAND, tone: "info" };
-  }
-  if (s.includes("embedding the question") || s.includes("embed query") || s.includes("embedding query")) {
-    return { label: "Analyzing your question to find the best matches…", phase: PHASE_UNDERSTAND, tone: "info" };
-  }
-
-  /* ── Search phase ── */
-  if (s.includes("searching") || s.includes("searching faiss") || s.includes("searching chroma") || s.includes("searching pgvector") || s.includes("searching pinecone")) {
-    return { label: "Searching through your documents…", phase: PHASE_SEARCH, tone: "info" };
-  }
-  if (/retrieved\s+0\s+chunk/.test(s) || s.includes("no relevant chunks")) {
-    return { label: "No strong matches yet — trying a deeper search…", phase: PHASE_SEARCH, tone: "warning" };
-  }
-  const chunkMatch = s.match(/retrieved\s+(\d+)\s+chunk/);
-  if (chunkMatch) {
-    const n = chunkMatch[1];
-    return { label: `Found ${n} relevant passage${n === "1" ? "" : "s"} from your document.`, phase: PHASE_SEARCH, tone: "info" };
-  }
-  if (s.includes("retrying") || s.includes("retry") || s.includes("higher top_k") || s.includes("increasing top_k")) {
-    return { label: "Trying a deeper search for better results…", phase: PHASE_SEARCH, tone: "warning" };
-  }
-  if (s.includes("max retries") || s.includes("max retry")) {
-    return { label: "Could not find strong matches — generating the best possible answer…", phase: PHASE_GENERATE, tone: "warning" };
-  }
-  if (s.includes("retrieval") && s.includes("finish")) {
-    return { label: "Document search complete.", phase: PHASE_SEARCH, tone: "info" };
-  }
-
-  /* ── Generation phase ── */
-  if (s.includes("generating") || s.includes("llm") || s.includes("language model") || s.includes("generating answer")) {
-    return { label: "Generating your answer…", phase: PHASE_GENERATE, tone: "info" };
-  }
-  if (s.includes("validat") && !s.includes("writing")) {
-    return { label: "Reviewing the answer for accuracy…", phase: PHASE_GENERATE, tone: "info" };
-  }
-  if (s.includes("reflection") && s.includes("accepted")) {
-    return { label: "Answer looks good — finalizing…", phase: PHASE_GENERATE, tone: "success" };
-  }
-  if (s.includes("reflection") && (s.includes("rejected") || s.includes("retry"))) {
-    return { label: "Improving the answer quality…", phase: PHASE_GENERATE, tone: "warning" };
-  }
-  if (s.includes("generation") && s.includes("retry")) {
-    return { label: "Refining the answer with better context…", phase: PHASE_GENERATE, tone: "info" };
-  }
-
-  /* ── Done phase ── */
-  if (s.includes("writing experiment") || s.includes("saving") || s.includes("experiment log")) {
-    return { label: "Saving your results…", phase: PHASE_DONE, tone: "info" };
-  }
-  if (s.includes("completed") || s.includes("finished") || s.includes("done")) {
-    return { label: "All done!", phase: PHASE_DONE, tone: "success" };
-  }
+  const pools = buildMessagePools(workspace);
 
   /* ── Suppress purely technical noise ── */
   if (
@@ -1202,15 +1242,72 @@ const transformProgressMessage = (raw) => {
     s.includes("experiment id") ||
     s.includes("agent trace") ||
     s.includes("validator output") ||
-    /\[faiss\]|\[chroma\]|\[pgvector\]|\[pinecone\]/i.test(raw) ||
     /project_id=\d+/.test(s) ||
     /file_id=\d+/.test(s)
   ) {
-    return null; // suppress — don't show this line
+    return null;
   }
 
-  /* ── Fallback: clean up and show ── */
-  // Strip technical prefixes like "[faiss]", "[QUERY]", "project_id=6"
+  /* ── init ── */
+  if (s.includes("starting rag query") || s.includes("start query")) {
+    return { label: getRandomMessage(pools.init), phase: PHASE_UNDERSTAND, tone: "info" };
+  }
+
+  /* ── embedding ── */
+  if (s.includes("embedding the question") || s.includes("embed query") || s.includes("embedding query") || s.includes("embedding question")) {
+    return { label: getRandomMessage(pools.embedding), phase: PHASE_UNDERSTAND, tone: "info" };
+  }
+
+  /* ── search ── */
+  if (s.includes("searching") || s.includes("searching faiss") || s.includes("searching chroma") || s.includes("searching pgvector") || s.includes("searching pinecone")) {
+    return { label: getRandomMessage(pools.search), phase: PHASE_SEARCH, tone: "info" };
+  }
+
+  /* ── no results ── */
+  if (/retrieved\s+0\s+chunk/.test(s) || s.includes("no relevant chunks")) {
+    return { label: getRandomMessage(pools.noResults), phase: PHASE_SEARCH, tone: "warning" };
+  }
+
+  /* ── found chunks ── */
+  const chunkMatch = s.match(/retrieved\s+(\d+)\s+chunk/);
+  if (chunkMatch) {
+    const n = chunkMatch[1];
+    return { label: `Found ${n} relevant passage${n === "1" ? "" : "s"} from your document.`, phase: PHASE_SEARCH, tone: "info" };
+  }
+
+  /* ── retry ── */
+  if (s.includes("retrying") || s.includes("retry") || s.includes("higher top_k") || s.includes("increasing top_k")) {
+    return { label: getRandomMessage(pools.retry), phase: PHASE_SEARCH, tone: "warning" };
+  }
+  if (s.includes("max retries") || s.includes("max retry")) {
+    return { label: getRandomMessage(pools.generate), phase: PHASE_GENERATE, tone: "warning" };
+  }
+
+  /* ── generate ── */
+  if (s.includes("generating") || s.includes("llm") || s.includes("language model") || s.includes("generating answer")) {
+    return { label: getRandomMessage(pools.generate), phase: PHASE_GENERATE, tone: "info" };
+  }
+
+  /* ── validate ── */
+  if (s.includes("validat") && !s.includes("writing")) {
+    return { label: getRandomMessage(pools.validate), phase: PHASE_GENERATE, tone: "info" };
+  }
+  if (s.includes("reflection") && s.includes("accepted")) {
+    return { label: "Answer looks good — finalizing…", phase: PHASE_GENERATE, tone: "success" };
+  }
+  if (s.includes("reflection") && (s.includes("rejected") || s.includes("retry"))) {
+    return { label: getRandomMessage(pools.retry), phase: PHASE_GENERATE, tone: "warning" };
+  }
+
+  /* ── done ── */
+  if (s.includes("writing experiment") || s.includes("saving") || s.includes("experiment log")) {
+    return { label: "Saving your results…", phase: PHASE_DONE, tone: "info" };
+  }
+  if (s.includes("completed") || s.includes("finished") || s.includes("done")) {
+    return { label: getRandomMessage(pools.final), phase: PHASE_DONE, tone: "success" };
+  }
+
+  /* ── fallback: clean and show ── */
   let cleaned = raw
     .replace(/\[faiss\]|\[chroma\]|\[pgvector\]|\[pinecone\]/gi, "")
     .replace(/project_id=\d+,?\s*/gi, "")
@@ -1218,7 +1315,6 @@ const transformProgressMessage = (raw) => {
     .replace(/\s{2,}/g, " ")
     .trim();
   if (!cleaned) return null;
-  // Capitalise first letter
   cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
   return { label: cleaned, phase: PHASE_SEARCH, tone: "info" };
 };
@@ -1358,7 +1454,7 @@ const buildSharedPipelineConfig = (workspace) => {
     },
     vector_store: {
       backends: normalizedVectorStores.length ? normalizedVectorStores : ["faiss"],
-      collection_name: "documents",
+      collection_name: `file_${workspace.selectedFileId || "documents"}`,
     },
   };
 
@@ -1672,6 +1768,12 @@ function UploadProjectFilesList({
         const showReportBtn = Boolean(fileReport);
         const isSelected = String(file.fileId) === activeWorkspaceFileId;
         const isProcessed = Boolean(file.processed || file.allowedTechniques || fileReport);
+        const indexStatus = file.indexStatus || (isProcessed ? "unknown" : "not_processed");
+        const indexBadgeLabel =
+          indexStatus === "ready" ? "Index Ready" :
+            indexStatus === "checking" ? "Checking…" :
+              indexStatus === "not_processed" ? "Not Indexed" :
+                isProcessed ? "Processed" : null;
         const statusLabel = isSelected
           ? isProcessed
             ? "Selected / Processed"
@@ -1734,6 +1836,17 @@ function UploadProjectFilesList({
               >
                 {statusLabel}
               </span>
+              {indexBadgeLabel && (
+                <span
+                  className={classNames(styles.fileStatusBadge, styles.uploadFileStatusPill, {
+                    [styles.fileStatusBadgeReady]: indexStatus === "ready",
+                    [styles.fileStatusBadgeChecking]: indexStatus === "checking",
+                    [styles.fileStatusBadgeNotProcessed]: indexStatus === "not_processed",
+                  })}
+                >
+                  {indexBadgeLabel}
+                </span>
+              )}
               {showReportBtn && (
                 <span
                   role="button"
@@ -1851,7 +1964,7 @@ function UploadProjectFilesList({
   );
 }
 
-const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) => {
+const ProjectCanvas = ({ initialProjectId = null, initialFileId = null, workspaceMode = "upload" }) => {
   const router = useRouter();
   const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -1927,11 +2040,16 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   const projectFilesListSyncPromiseRef = useRef(null);
   const prevActiveProjectIdRef = useRef(null);
   const initialProjectIdRef = useRef(initialProjectId);
+  const initialFileIdRef = useRef(initialFileId);
   const activeProjectIdRef = useRef(activeProjectId);
 
   useEffect(() => {
     initialProjectIdRef.current = initialProjectId;
   }, [initialProjectId]);
+
+  useEffect(() => {
+    initialFileIdRef.current = initialFileId;
+  }, [initialFileId]);
 
   useEffect(() => {
     activeProjectIdRef.current = activeProjectId;
@@ -1995,6 +2113,8 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     setIsAgentReportOpen(false);
     setAgentReportLoading(false);
     setAgentReportError("");
+    // Reset history guard when project changes so history re-fetches for the new project
+    lastHistoryContextRef.current = { projectId: null, fileId: null };
   }, [activeProjectId, experimentId]);
 
   useEffect(() => {
@@ -2137,9 +2257,6 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       const storedProjects = window.localStorage.getItem(
         getScopedStorageKey("rag-canvas-projects", currentUserId),
       );
-      const storedWorkspaces = window.localStorage.getItem(
-        getScopedStorageKey("rag-canvas-workspaces", currentUserId),
-      );
 
       if (storedProjects) {
         const parsedProjects = JSON.parse(storedProjects);
@@ -2148,18 +2265,8 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
         }
       }
 
-      if (storedWorkspaces) {
-        const parsedWorkspaces = JSON.parse(storedWorkspaces);
-        if (parsedWorkspaces && typeof parsedWorkspaces === "object") {
-          const normalized = Object.fromEntries(
-            Object.entries(parsedWorkspaces).map(([key, value]) => [
-              String(key),
-              sanitizeWorkspaceQueryState(value),
-            ]),
-          );
-          setProjectWorkspaces(normalized);
-        }
-      }
+      // REMOVED: workspace state hydration from localStorage
+      // URL is now the single source of truth for project_id and file_id
     } catch (error) {
       console.error("Failed to restore workspace state", error);
     }
@@ -2225,21 +2332,8 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     );
   }, [projects]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !hasHydratedRef.current) return;
-    const currentUserId = getCurrentUserId();
-    if (!currentUserId) return;
-    const sanitizedWorkspaces = Object.fromEntries(
-      Object.entries(projectWorkspaces).map(([key, value]) => [
-        key,
-        sanitizeWorkspaceQueryState(value),
-      ]),
-    );
-    window.localStorage.setItem(
-      getScopedStorageKey("rag-canvas-workspaces", currentUserId),
-      JSON.stringify(sanitizedWorkspaces),
-    );
-  }, [projectWorkspaces]);
+  // REMOVED: workspace state persistence to localStorage
+  // file_id is now kept in the URL, not in localStorage
 
   useEffect(
     () => () => {
@@ -2262,20 +2356,23 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
     }
   }, [initialProjectId, projects]);
 
-  /** Keep `?project=` in the URL so refresh stays on the same project workspace. */
+  /** Keep `?project=` and `?file=` in the URL so refresh stays on the same project + file. */
   useEffect(() => {
     if (typeof window === "undefined" || !activeProjectId) return;
+    const activeFileId = activeWorkspace?.selectedFileId ?? null;
     const desired =
       workspaceMode === "query"
-        ? workspaceQueryUrl(activeProjectId)
-        : workspaceUploadUrl(activeProjectId);
+        ? workspaceQueryUrl(activeProjectId, activeFileId)
+        : workspaceUploadUrl(activeProjectId, activeFileId);
     const url = new URL(desired, window.location.origin);
     const pathOk = window.location.pathname === url.pathname;
     const currentProject = new URLSearchParams(window.location.search).get("project");
-    if (!pathOk || currentProject !== String(activeProjectId)) {
+    const currentFile = new URLSearchParams(window.location.search).get("file");
+    const nextFile = activeFileId != null ? String(activeFileId) : null;
+    if (!pathOk || currentProject !== String(activeProjectId) || currentFile !== nextFile) {
       router.replace(desired);
     }
-  }, [activeProjectId, workspaceMode, router]);
+  }, [activeProjectId, activeWorkspace?.selectedFileId, workspaceMode, router]);
 
   const updateActiveWorkspace = useCallback(
     (recipe) => {
@@ -2353,10 +2450,23 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
               : mf;
           });
           const backendIds = new Set(mergedFiles.map((f) => String(f.fileId)));
+
+          // Resolve selected file: URL param wins, then existing valid selection, then first file
+          const urlFileId = initialFileIdRef.current != null && initialFileIdRef.current !== ""
+            ? String(initialFileIdRef.current)
+            : null;
+          const existingSelected = current.selectedFileId != null
+            ? String(current.selectedFileId)
+            : null;
           const nextSelected =
-            current.selectedFileId != null && backendIds.has(String(current.selectedFileId))
-              ? current.selectedFileId
-              : null;
+            (urlFileId && backendIds.has(urlFileId) ? urlFileId : null) ||
+            (existingSelected && backendIds.has(existingSelected) ? existingSelected : null) ||
+            (mergedFiles[0]?.fileId != null ? String(mergedFiles[0].fileId) : null);
+
+          // Clear the URL file hint after first use so subsequent user selections
+          // don't get overridden on re-sync
+          initialFileIdRef.current = null;
+
           const prunedData = pruneWorkspaceDataForFiles(
             {
               ...current,
@@ -2410,6 +2520,117 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       };
     });
   }, [activeWorkspace?.files, activeWorkspace?.selectedFileId, updateActiveWorkspace]);
+
+  // Track the last project+file pair for which chat history was loaded
+  const lastHistoryContextRef = useRef({ projectId: null, fileId: null });
+
+  // ── Fetch index status when a file is selected ──
+  useEffect(() => {
+    if (!activeProjectId || !activeWorkspace?.selectedFileId) return;
+
+    const fileId = Number(activeWorkspace.selectedFileId);
+    const projectId = Number(activeProjectId);
+    if (!fileId || !projectId) return;
+
+    // Mark as checking immediately
+    updateActiveWorkspace((current) => ({
+      ...current,
+      files: (current.files || []).map((f) =>
+        String(f.fileId) === String(fileId)
+          ? { ...f, indexStatus: "checking" }
+          : f,
+      ),
+    }));
+
+    let cancelled = false;
+    fileApi.getFileIndexStatus(projectId, fileId)
+      .then((res) => {
+        if (cancelled) return;
+        const status = res?.status || "not_processed";
+        updateActiveWorkspace((current) => ({
+          ...current,
+          files: (current.files || []).map((f) =>
+            String(f.fileId) === String(fileId)
+              ? { ...f, indexStatus: status }
+              : f,
+          ),
+        }));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        updateActiveWorkspace((current) => ({
+          ...current,
+          files: (current.files || []).map((f) =>
+            String(f.fileId) === String(fileId)
+              ? { ...f, indexStatus: "not_processed" }
+              : f,
+          ),
+        }));
+      });
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspace?.selectedFileId, activeProjectId]);
+
+  // ── Load chat history when a file is selected in query workspace ──
+  useEffect(() => {
+    if (workspaceMode !== "query") return;
+    if (!activeProjectId || !activeWorkspace?.selectedFileId) return;
+
+    const fileId = Number(activeWorkspace.selectedFileId);
+    const projectId = Number(activeProjectId);
+    if (!fileId || !projectId) return;
+
+    // Guard: skip if this project+file combination was already loaded
+    const last = lastHistoryContextRef.current;
+    if (last.projectId === projectId && last.fileId === fileId) return;
+    lastHistoryContextRef.current = { projectId, fileId };
+
+    let cancelled = false;
+
+    queryApi.fetchChatHistory({ projectId, fileId })
+      .then((history) => {
+        if (cancelled) return;
+        if (!Array.isArray(history) || history.length === 0) return;
+
+        // Map backend history records to the existing conversation entry format
+        const historyEntries = history.map((record, index) => ({
+          id: `history-${fileId}-${index}-${record.created_at || index}`,
+          fileId,
+          query: record.query || "",
+          submittedAt: record.created_at || null,
+          responseVariants: [
+            {
+              db: record.db || "",
+              experimentId: null,
+              response: record.response || "",
+              agentEnabled: false,
+              usedStrategies: [
+                ...(record.llm ? [{ label: "LLM", value: record.llm }] : []),
+                ...(record.embedding ? [{ label: "Embedding", value: record.embedding }] : []),
+                ...(record.db ? [{ label: "Vector DB", value: record.db }] : []),
+                ...(record.retrieval ? [{ label: "Retrieval", value: record.retrieval }] : []),
+              ],
+            },
+          ],
+          activityMessages: [],
+        }));
+
+        updateActiveWorkspace((current) => ({
+          ...current,
+          // Only replace if the file is still selected
+          ...(String(current.selectedFileId) === String(fileId)
+            ? { conversation: historyEntries }
+            : {}),
+        }));
+      })
+      .catch(() => {
+        // History load failure is non-fatal — just leave conversation empty
+      });
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspace?.selectedFileId, activeProjectId, workspaceMode]);
 
   const visibleProjects = useMemo(() => {
     const normalizedSearch = deferredSearchValue.trim().toLowerCase();
@@ -3077,6 +3298,19 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
       });
       return;
     }
+
+    // Guard: FAISS index must exist
+    if (!selectedFileIndexReady) {
+      const status = selectedWorkspaceFile?.indexStatus;
+      const msg =
+        status === "checking"
+          ? "Checking file index status, please wait…"
+          : status === "not_processed"
+            ? "This file has not been indexed yet. Please reprocess it."
+            : "File is not ready for query. Please reprocess it.";
+      showToast({ title: "Query", variant: "warning", message: msg });
+      return;
+    }
     const agentModeOn = (activeWorkspace?.queryConfigurations || []).includes("agent");
     const hasRetrievalSelection =
       Array.isArray(activeWorkspace?.retrievalStrategies) &&
@@ -3167,7 +3401,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           onProgress: ({ id, message }) => {
             if (requestId !== activeQueryRequestIdRef.current) return;
             progressSeq += 1;
-            const transformed = transformProgressMessage(String(message || ""));
+            const transformed = transformProgressMessage(String(message || ""), activeWorkspace);
             if (!transformed) return; // suppress technical noise
             updateActiveWorkspace((current) => {
               if (current.phase !== "query-processing") return current;
@@ -3290,6 +3524,44 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
           }));
           return;
         }
+
+        // FILE_NOT_INDEXED — update file status and show specific message
+        const errorDetail = error?.payload?.detail || error?.payload;
+        const isNotIndexed =
+          errorDetail?.error === "FILE_NOT_INDEXED" ||
+          String(error?.message || "").includes("FILE_NOT_INDEXED") ||
+          String(errorDetail?.message || "").includes("not been indexed");
+
+        if (isNotIndexed) {
+          updateActiveWorkspace((current) => ({
+            ...current,
+            phase: "query-ready",
+            submittedQuery: "",
+            files: (current.files || []).map((f) =>
+              String(f.fileId) === String(targetFile.fileId)
+                ? { ...f, indexStatus: "not_processed" }
+                : f,
+            ),
+            queryActivity: {
+              visible: true,
+              status: "error",
+              messages: [
+                createActivityMessage(
+                  "file-not-indexed",
+                  "This file is not ready for search. Please reprocess it.",
+                  "error",
+                ),
+              ],
+            },
+          }));
+          showToast({
+            title: "Query",
+            variant: "error",
+            message: "This file is not ready for search. Please reprocess it.",
+          });
+          return;
+        }
+
         const message = formatWorkspaceApiError(error, "Failed to run query");
         showToast({
           title: "Query",
@@ -3339,6 +3611,13 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   );
   const hasSelectedProcessedFile = Boolean(
     selectedWorkspaceFile?.processed || selectedWorkspaceFile?.allowedTechniques,
+  );
+  const selectedFileIndexReady = Boolean(
+    selectedWorkspaceFile?.indexStatus === "ready" ||
+    // For non-FAISS stores (chroma, pgvector) we trust allowedTechniques alone
+    (selectedWorkspaceFile?.allowedTechniques &&
+      selectedWorkspaceFile?.indexStatus !== "not_processed" &&
+      selectedWorkspaceFile?.indexStatus !== "checking"),
   );
   const queryAgentModeEnabled = Boolean(
     (activeWorkspace?.queryConfigurations || []).includes("agent"),
@@ -3464,7 +3743,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
   };
   const isQueryInFlight = activeWorkspace?.phase === "query-processing";
   const isChatInputDisabled =
-    !hasSelectedFile || !hasSelectedProcessedFile || isQueryInFlight;
+    !hasSelectedFile || !hasSelectedProcessedFile || !selectedFileIndexReady || isQueryInFlight;
 
   useEffect(() => {
     const prevStatus = previousExecutionStatusRef.current;
@@ -5098,12 +5377,49 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                         <div className={styles.queryActivityStack}>
                           <div className={styles.queryActivityGlass}>
                             <span className={styles.queryActivityGlassShimmer} aria-hidden />
+
+                            {/* Fixed heading */}
                             <p className={styles.queryActivityLabel}>
                               Analyzing your documents
                               <span className={styles.queryActivityLabelDot} />
                               <span className={styles.queryActivityLabelDot} />
                               <span className={styles.queryActivityLabelDot} />
                             </p>
+
+                            {/* Technique tags */}
+                            {(() => {
+                              const tags = [];
+                              const stores = activeWorkspace.vectorStores || [];
+                              const embeddings = activeWorkspace.embeddingModels || [];
+                              const strategies = activeWorkspace.retrievalStrategies || [];
+                              const configs = activeWorkspace.queryConfigurations || [];
+
+                              if (strategies.some((s) => s.includes("semantic"))) tags.push("Semantic Search");
+                              if (strategies.some((s) => s.includes("hybrid"))) tags.push("Hybrid Search");
+                              if (strategies.some((s) => s.includes("mmr"))) tags.push("MMR Reranking");
+                              if (stores.some((s) => s.includes("faiss"))) tags.push("FAISS");
+                              if (stores.some((s) => s.includes("chroma"))) tags.push("ChromaDB");
+                              if (stores.some((s) => s.includes("pgvector"))) tags.push("PgVector");
+                              if (stores.some((s) => s.includes("pinecone"))) tags.push("Pinecone");
+                              if (embeddings.some((e) => !e.includes("ollama"))) tags.push("OpenAI Embeddings");
+                              if (embeddings.some((e) => e.includes("ollama"))) tags.push("Ollama Embeddings");
+                              if (configs.includes("ragas") || configs.includes("langsmith")) tags.push("RAG Pipeline");
+                              if (configs.includes("agent")) tags.push("Agent Mode");
+
+                              if (tags.length === 0) return null;
+                              return (
+                                <div className={styles.queryActivityTechTags}>
+                                  {tags.map((tag, i) => (
+                                    <span key={tag} className={styles.queryActivityTechTag}>
+                                      {i > 0 && <span className={styles.queryActivityTechSep} aria-hidden>•</span>}
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+
+                            {/* Single dynamic live message */}
                             <p
                               key={queryActivityState.messages[0]?.id ?? "idle"}
                               className={classNames(styles.queryActivityLiveText, {
@@ -5147,7 +5463,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                               : "Select an uploaded file to enable chat"
                             : !hasSelectedProcessedFile
                               ? "Process the selected file first, then ask your question…"
-                              : "Ask anything about your document…"
+                              : !selectedFileIndexReady
+                                ? selectedWorkspaceFile?.indexStatus === "checking"
+                                  ? "Checking index status…"
+                                  : "File not indexed — please reprocess it before querying…"
+                                : "Ask anything about your document…"
                         }
                         className={classNames(styles.queryInput, styles.queryInputHero, {
                           [styles.queryInputDisabled]: isChatInputDisabled,
