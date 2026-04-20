@@ -171,11 +171,8 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning, processingConfi
   const [query, setQuery] = useState("");
   const [fileList, setFileList] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
-<<<<<<< HEAD
   const [processingFileIds, setProcessingFileIds] = useState([]);
-=======
   const menuPortalTarget = typeof window !== "undefined" ? document.body : null;
->>>>>>> 12edc9b0248ca73f33e4fd75449dc5393c438ff7
 
   const normalizeProjectValue = (value) =>
     value

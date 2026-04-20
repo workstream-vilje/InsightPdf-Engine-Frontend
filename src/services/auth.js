@@ -105,16 +105,13 @@ export const setTokens      = () => {}; // no-op: tokens are cookie-managed
 export const setUserSession = setAuthSession;
 
 export const clearTokens = () => {
-<<<<<<< HEAD
   // HttpOnly cookies are cleared by the backend on logout.
   // Scrub any stale token keys that may exist from old auth flows.
   if (!canUseStorage()) return;
   STALE_TOKEN_KEYS.forEach((key) => window.localStorage.removeItem(key));
-=======
-  // Tokens are HttpOnly cookies — the backend clears them on logout.
+
   // Clear the readable csrf cookie immediately on the frontend as well.
   expireCookie(CSRF_COOKIE_KEY);
->>>>>>> c0916a87ca52ff1671d7099d3573b526b4048040
   emitAuthSessionChanged();
 };
 
@@ -130,10 +127,10 @@ export const clearAuthSession = () => {
   window.localStorage.removeItem(USER_NAME_KEY);
   window.localStorage.removeItem(USER_MAIL_ID_KEY);
 
-<<<<<<< HEAD
   // Scrub any stale token keys from old auth flows
   STALE_TOKEN_KEYS.forEach((key) => window.localStorage.removeItem(key));
-=======
+
+  // Clear app-specific scoped storage
   Object.keys(window.localStorage).forEach((key) => {
     if (key.startsWith("rag-canvas-projects:") || key.startsWith("rag-canvas-workspaces:")) {
       window.localStorage.removeItem(key);
@@ -141,7 +138,6 @@ export const clearAuthSession = () => {
   });
 
   expireCookie(CSRF_COOKIE_KEY);
->>>>>>> c0916a87ca52ff1671d7099d3573b526b4048040
 
   emitAuthSessionChanged();
 };
