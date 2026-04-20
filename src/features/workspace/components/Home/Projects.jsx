@@ -3381,39 +3381,22 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
             ? response.comparison_results
             : [response];
 
-        const responseVariants = await Promise.all(
-          results.map(async (result) => {
-            let savedResponse = null;
-
-            if (result?.experiment_id) {
-              try {
-                const saved = await queryApi.fetchSavedResponse({
-                  projectId: activeProjectId,
-                  fileId: targetFile.fileId,
-                  experimentId: result.experiment_id,
-                });
-                savedResponse = saved?.data?.[0] || null;
-              } catch (savedResponseError) {
-                savedResponse = null;
-              }
-            }
-
-            return {
-              experimentId: result?.experiment_id || null,
-              fileId: targetFile.fileId,
-              db: result?.db || result?.retrieval || "Default",
-              agentEnabled: Boolean(result?.agent?.enabled),
-              response: savedResponse?.response || result?.answer || "",
-              chunks: savedResponse?.chunks || result?.chunks || [],
-              qualityMetrics: buildRagasQualityMetrics(result),
-              usedStrategies: buildVariantStrategiesSummary(
-                activeWorkspace,
-                result,
-                allowedTechniques,
-              ),
-            };
-          }),
-        );
+        const responseVariants = results.map((result) => {
+          return {
+            experimentId: result?.experiment_id || null,
+            fileId: targetFile.fileId,
+            db: result?.db || result?.retrieval || "Default",
+            agentEnabled: Boolean(result?.agent?.enabled),
+            response: result?.answer || result?.response || "",
+            chunks: result?.chunks || [],
+            qualityMetrics: buildRagasQualityMetrics(result),
+            usedStrategies: buildVariantStrategiesSummary(
+              activeWorkspace,
+              result,
+              allowedTechniques,
+            ),
+          };
+        });
 
         const primaryVariant = responseVariants[0] || null;
         const finalAnswer = primaryVariant?.response || "";
