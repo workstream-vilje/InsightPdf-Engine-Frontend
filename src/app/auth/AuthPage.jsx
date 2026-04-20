@@ -356,27 +356,16 @@ export default function AuthPage({ mode }) {
                 {/* Confirm Password */}
                 <div className={styles.field}>
                   <span className={styles.label}>Confirm Password</span>
-                  <div className={styles.inputWrap}>
-                    <input
-                      className={`${styles.input} ${passwordMismatch ? styles.inputError : ""}`}
-                      name="confirm_password"
-                      placeholder="Re-enter your password"
-                      type={showConfirmPw ? "text" : "password"}
-                      value={signupForm.confirm_password}
-                      onChange={handleSignupChange}
-                      onBlur={handleConfirmBlur}
-                      autoComplete="new-password"
-                    />
-                    <button
-                      type="button"
-                      className={styles.eyeBtn}
-                      onClick={() => setShowConfirmPw((v) => !v)}
-                      tabIndex={-1}
-                      aria-label={showConfirmPw ? "Hide password" : "Show password"}
-                    >
-                      <EyeIcon open={showConfirmPw} />
-                    </button>
-                  </div>
+                  <input
+                    className={`${styles.input} ${passwordMismatch ? styles.inputError : ""}`}
+                    name="confirm_password"
+                    placeholder="Re-enter your password"
+                    type="password"
+                    value={signupForm.confirm_password}
+                    onChange={handleSignupChange}
+                    onBlur={handleConfirmBlur}
+                    autoComplete="new-password"
+                  />
                   {passwordMismatch && (
                     <span className={styles.fieldError}>Passwords do not match</span>
                   )}

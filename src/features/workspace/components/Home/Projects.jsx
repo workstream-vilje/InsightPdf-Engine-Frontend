@@ -78,6 +78,11 @@ import UploadProjectFilesList from "../UploadProjectFilesList";
 import renderMarkdown from "../MarkdownRenderer";
 import { UploadPipelineSidebarSkeletonRows, ExecutionPerformanceSkeletonGrid } from "../WorkspaceSkeletons";
 import { IngestionReportMetricsDl, IngestionFileDetailsSection } from "../IngestionReportComponents";
+import ProjectsListView from "../ProjectsListView";
+import UploadSidebar from "../UploadSidebar";
+import QuerySidebar from "../QuerySidebar";
+import QueryRightSidebar from "../QueryRightSidebar";
+import UploadRightSidebar from "../UploadRightSidebar";
 
 // Extracted utilities
 import { formatMs, formatNumber, formatCost, getGreeting, formatProjectCode } from "../../utils/workspaceFormatters";
@@ -2070,230 +2075,45 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
     return null;
   }, [workspaceMode, activeProject, router, executionState.status, executionState.visible]);
 
+
   if (!activeProject || !activeWorkspace) {
     return (
-      <div className={styles.workspaceWithTopNav}>
-        <TopNavbar
-          userProfile={userProfile}
-          actions={[]}
-          breadcrumbItems={topNavbarBreadcrumbItems}
-        />
-        <div className={styles.workspaceShell}>
-          <AppWorkspaceRail
-            onProjects={handleRailProjects}
-            onSettings={handleRailSettings}
-            onLogout={handleRailLogout}
-            projectsButtonLabel={isCreateProjectOpen ? "Back to home" : "Projects"}
-            projectsButtonTitle={
-              isCreateProjectOpen ? "Back to home (close create project)" : "Projects"
-            }
-            ProjectsNavIcon={isCreateProjectOpen ? House : ArrowLeft}
-          />
-          <div className={styles.workspaceProjectsMain}>
-            <ProjectsPageView
-              embedded
-              projects={paginatedVisibleProjects}
-              userProfile={userProfile}
-              searchValue={searchValue}
-              onSearchChange={setSearchValue}
-              projectFilter={projectFilter}
-              onFilterChange={setProjectFilter}
-              sortOption={sortOption}
-              onSortChange={setSortOption}
-              projectViewMode={projectViewMode}
-              onProjectViewModeChange={setProjectViewMode}
-              currentPage={projectPage}
-              totalPages={totalProjectPages}
-              onPageChange={setProjectPage}
-              availableProjectNames={availableProjectNames}
-              deletingProjectId={deletingProjectId}
-              onCreateProject={() => setIsCreateProjectOpen(true)}
-              onOpenProject={handleOpenProject}
-              onDeleteProject={(projectToDelete) => {
-                setProjectPendingDelete(projectToDelete);
-                setDeleteProjectInput("");
-              }}
-              isProjectsLoading={projectsListLoading}
-              projectsSkeletonCount={PROJECTS_PER_PAGE}
-            />
-          </div>
-        </div>
-
-        <div className={styles.projectsShell}>
-          <AnimatePresence>
-            {isCreateProjectOpen && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className={styles.modalOverlay}
-                onClick={() => setIsCreateProjectOpen(false)}
-              >
-                <motion.section
-                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 12, scale: 0.98 }}
-                  className={styles.createModal}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <div className={styles.createModalHeader}>
-                    <div>
-                      <h2 className={styles.createModalTitle}>Create project</h2>
-                      <p className={styles.createModalSubtitle}>
-                        Add a project name and category, then open the workspace from the card.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className={styles.modalCloseButton}
-                      onClick={() => setIsCreateProjectOpen(false)}
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-
-                  <div className={styles.createModalBody}>
-                    <div className={styles.createPanelGrid}>
-                      <label className={styles.formField}>
-                        <span className={styles.modalFieldLabel}>Project name</span>
-                        <Input
-                          value={newProjectName}
-                          onChange={(event) => setNewProjectName(event.target.value)}
-                          placeholder="Enter project name"
-                          className={styles.modalInput}
-                        />
-                      </label>
-
-                      <label className={styles.formField}>
-                        <span className={styles.modalFieldLabel}>Category name</span>
-                        <Input
-                          value={newProjectCategory}
-                          onChange={(event) => setNewProjectCategory(event.target.value)}
-                          placeholder="Enter category name"
-                          className={styles.modalInput}
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className={styles.createModalActions}>
-                    <div className={styles.createModalActionsInner}>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={styles.devModalBtnSecondary}
-                        onClick={() => setIsCreateProjectOpen(false)}
-                        disabled={isCreatingProject}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        className={styles.createProjectCta}
-                        onClick={handleCreateProject}
-                        disabled={
-                          isCreatingProject ||
-                          !newProjectName.trim() ||
-                          !newProjectCategory.trim()
-                        }
-                      >
-                        {isCreatingProject ? "Creating..." : "Create project"}
-                      </Button>
-                    </div>
-                  </div>
-                </motion.section>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence>
-            {projectPendingDelete && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className={styles.modalOverlay}
-                onClick={() => {
-                  if (deletingProjectId) return;
-                  setProjectPendingDelete(null);
-                  setDeleteProjectInput("");
-                }}
-              >
-                <motion.section
-                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 12, scale: 0.98 }}
-                  className={styles.deleteModal}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <div className={styles.createModalHeader}>
-                    <div>
-                      <h2 className={styles.createModalTitle}>Delete project</h2>
-                      <p className={styles.createModalSubtitle}>
-                        This action permanently deletes the project, its files, and related experiment history.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className={styles.modalCloseButton}
-                      onClick={() => {
-                        if (deletingProjectId) return;
-                        setProjectPendingDelete(null);
-                        setDeleteProjectInput("");
-                      }}
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-
-                  <div className={styles.createModalBody}>
-                    <div className={styles.deleteModalContent}>
-                      <p className={styles.deleteWarningText}>
-                        Type <strong>{projectPendingDelete.name}</strong> to confirm deletion.
-                      </p>
-                      <label className={styles.formField}>
-                        <span className={styles.modalFieldLabel}>Project name confirmation</span>
-                        <Input
-                          value={deleteProjectInput}
-                          onChange={(event) => setDeleteProjectInput(event.target.value)}
-                          placeholder={projectPendingDelete.name}
-                          className={styles.modalInput}
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className={styles.createModalActions}>
-                    <div className={styles.deleteModalActions}>
-                      <Button
-                        variant="outline"
-                        className={styles.deleteCancelButton}
-                        onClick={() => {
-                          if (deletingProjectId) return;
-                          setProjectPendingDelete(null);
-                          setDeleteProjectInput("");
-                        }}
-                        disabled={Boolean(deletingProjectId)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        className={styles.deleteProjectCta}
-                        onClick={handleDeleteProject}
-                        disabled={
-                          deletingProjectId === projectPendingDelete.id ||
-                          deleteProjectInput.trim() !== projectPendingDelete.name
-                        }
-                      >
-                        {deletingProjectId === projectPendingDelete.id ? "Deleting..." : "Delete project"}
-                      </Button>
-                    </div>
-                  </div>
-                </motion.section>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
+      <ProjectsListView
+        userProfile={userProfile}
+        topNavbarBreadcrumbItems={topNavbarBreadcrumbItems}
+        handleRailProjects={handleRailProjects}
+        handleRailSettings={handleRailSettings}
+        handleRailLogout={handleRailLogout}
+        isCreateProjectOpen={isCreateProjectOpen}
+        setIsCreateProjectOpen={setIsCreateProjectOpen}
+        paginatedVisibleProjects={paginatedVisibleProjects}
+        searchValue={searchValue}
+        setSearchValue={setSearchValue}
+        projectFilter={projectFilter}
+        setProjectFilter={setProjectFilter}
+        sortOption={sortOption}
+        setSortOption={setSortOption}
+        projectViewMode={projectViewMode}
+        setProjectViewMode={setProjectViewMode}
+        projectPage={projectPage}
+        setProjectPage={setProjectPage}
+        totalProjectPages={totalProjectPages}
+        availableProjectNames={availableProjectNames}
+        deletingProjectId={deletingProjectId}
+        handleOpenProject={handleOpenProject}
+        setProjectPendingDelete={setProjectPendingDelete}
+        setDeleteProjectInput={setDeleteProjectInput}
+        projectsListLoading={projectsListLoading}
+        newProjectName={newProjectName}
+        setNewProjectName={setNewProjectName}
+        newProjectCategory={newProjectCategory}
+        setNewProjectCategory={setNewProjectCategory}
+        isCreatingProject={isCreatingProject}
+        handleCreateProject={handleCreateProject}
+        projectPendingDelete={projectPendingDelete}
+        deleteProjectInput={deleteProjectInput}
+        handleDeleteProject={handleDeleteProject}
+      />
     );
   }
 
@@ -2389,287 +2209,26 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
           onLogout={handleRailLogout}
         />
         {workspaceMode === "upload" && (
-          <aside className={styles.workspaceQuerySidebar}>
-            <div className={styles.workspaceContextSidebarInner}>
-              <section className={styles.sidebarPane}>
-                <div className={styles.sidebarGroupTitle}>Upload techniques</div>
-                <div className={styles.sidebarPaneScroll}>
-                  <SidebarSection
-                    icon={Blocks}
-                    title="Chunk Length"
-                    description="Same control pattern as current UI"
-                    expanded
-                  >
-                    <div className={styles.chunkControl}>
-                      <Input
-                        type="number"
-                        value={activeWorkspace.chunkLength}
-                        onChange={(event) =>
-                          updateActiveWorkspace((current) => ({
-                            ...current,
-                            chunkLength: Number(event.target.value || 0),
-                          }))
-                        }
-                      />
-                      <Slider
-                        value={[activeWorkspace.chunkLength]}
-                        onValueChange={([nextValue]) =>
-                          updateActiveWorkspace((current) => ({
-                            ...current,
-                            chunkLength: nextValue,
-                          }))
-                        }
-                        min={100}
-                        max={4000}
-                        step={100}
-                      />
-                    </div>
-                  </SidebarSection>
-
-                  <SidebarSection
-                    icon={Database}
-                    title="Data Extraction"
-                    description="Select multiple extractors"
-                    expanded
-                  >
-                    <MultiSelectChips
-                      options={DATA_EXTRACTION_OPTIONS}
-                      selectedValues={activeWorkspace.dataExtraction}
-                      onToggle={(value) => toggleWorkspaceValue("dataExtraction", value)}
-                    />
-                  </SidebarSection>
-
-                  <SidebarSection
-                    icon={FileText}
-                    title="Text Processing"
-                    description="Select multiple extractors"
-                    expanded
-                  >
-                    <MultiSelectChips
-                      options={TEXT_PROCESSING_OPTIONS}
-                      selectedValues={activeWorkspace.textProcessing}
-                      onToggle={(value) => toggleWorkspaceValue("textProcessing", value)}
-                    />
-                  </SidebarSection>
-
-                  <SidebarSection
-                    icon={Sparkles}
-                    title="Embedding Model"
-                    description="Select multiple embedding models"
-                    expanded
-                  >
-                    <MultiSelectChips
-                      options={EMBEDDING_OPTIONS}
-                      selectedValues={activeWorkspace.embeddingModels}
-                      onToggle={(value) => toggleWorkspaceValue("embeddingModels", value)}
-                    />
-                  </SidebarSection>
-
-                  <SidebarSection
-                    icon={FolderKanban}
-                    title="Vector Store"
-                    description="Select multiple vector stores"
-                    expanded
-                  >
-                    <MultiSelectChips
-                      options={VECTOR_STORE_OPTIONS}
-                      selectedValues={activeWorkspace.vectorStores}
-                      onToggle={(value) => toggleWorkspaceValue("vectorStores", value)}
-                    />
-                  </SidebarSection>
-                </div>
-              </section>
-            </div>
-          </aside>
+          <UploadSidebar
+            activeWorkspace={activeWorkspace}
+            updateActiveWorkspace={updateActiveWorkspace}
+            toggleWorkspaceValue={toggleWorkspaceValue}
+          />
         )}
 
+
         {workspaceMode === "query" && (
-          <aside className={styles.workspaceQuerySidebar}>
-            <div className={styles.workspaceContextSidebarInner}>
-              <section className={styles.sidebarPane}>
-                <div className={styles.sidebarGroupTitle}>Query techniques</div>
-                <div className={styles.sidebarPaneScroll}>
-                  <SidebarSection
-                    icon={Database}
-                    title="Retrieved Strategy"
-                    description={
-                      queryAgentModeEnabled
-                        ? "Shown for reference while Agent mode is on (use Agent mode in the chat bar)"
-                        : "Select multiple retrieval strategies"
-                    }
-                    expanded
-                  >
-                    <MultiSelectChips
-                      options={RETRIEVAL_STRATEGY_OPTIONS}
-                      selectedValues={activeWorkspace.retrievalStrategies}
-                      onToggle={(value) => toggleWorkspaceValue("retrievalStrategies", value)}
-                      disabled={queryAgentModeEnabled}
-                    />
-                  </SidebarSection>
-
-
-
-                  <SidebarSection
-                    icon={FolderKanban}
-                    title="Vector DB"
-                    description="Only techniques selected during file processing"
-                    expanded
-                  >
-                    <MultiSelectChips
-                      options={allowedVectorStoreOptions}
-                      selectedValues={activeWorkspace.vectorStores}
-                      onToggle={(value) => toggleWorkspaceValue("vectorStores", value)}
-                    />
-                  </SidebarSection>
-
-                  <SidebarSection
-                    icon={Sparkles}
-                    title="Embedding"
-                    description="Only techniques selected during file processing"
-                    expanded
-                  >
-                    <MultiSelectChips
-                      options={allowedEmbeddingOptions}
-                      selectedValues={activeWorkspace.embeddingModels}
-                      onToggle={(value) => toggleWorkspaceValue("embeddingModels", value)}
-                    />
-                  </SidebarSection>
-
-                  <SidebarSection
-                    icon={MessageSquare}
-                    title="LLM Model"
-                    description="Language model used to generate the answer"
-                    expanded
-                  >
-                    <MultiSelectChips
-                      options={LLM_MODEL_OPTIONS}
-                      selectedValues={[activeWorkspace.selectedLlmModel || "gpt-4o-mini"]}
-                      onToggle={(value) => {
-                        updateActiveWorkspace((current) => ({
-                          ...current,
-                          selectedLlmModel: value,
-                        }));
-                        if (value === "llama3.2") {
-                          setOllamaWarningOpen(true);
-                        } else {
-                          setOllamaWarningOpen(false);
-                          setOllamaDocsOpen(false);
-                        }
-                      }}
-                      singleSelect
-                    />
-
-                    {/* Ollama warning card */}
-                    {(activeWorkspace.selectedLlmModel === "llama3.2") && !ollamaDocsOpen && (
-                      <div className={styles.ollamaWarningCard}>
-                        <div className={styles.ollamaWarningIcon} aria-hidden>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10" />
-                            <line x1="12" y1="8" x2="12" y2="12" />
-                            <line x1="12" y1="16" x2="12.01" y2="16" />
-                          </svg>
-                        </div>
-                        <div className={styles.ollamaWarningBody}>
-                          <p className={styles.ollamaWarningTitle}>Requires local Ollama</p>
-                          <p className={styles.ollamaWarningDesc}>
-                            Llama 3.2 runs locally via Ollama. Make sure Ollama is installed and the model is pulled before querying.
-                          </p>
-                          <div className={styles.ollamaWarningActions}>
-                            <button
-                              type="button"
-                              className={styles.ollamaWarningBtnSecondary}
-                              onClick={() => setOllamaDocsOpen(true)}
-                            >
-                              Learn more
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.ollamaWarningBtnPrimary}
-                              onClick={() => setOllamaWarningOpen(false)}
-                            >
-                              Got it
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Ollama docs panel */}
-                    {ollamaDocsOpen && (
-                      <div className={styles.ollamaDocsCard}>
-                        <div className={styles.ollamaDocsHeader}>
-                          <span className={styles.ollamaDocsTitle}>Using Ollama with InsightPDF</span>
-                          <button
-                            type="button"
-                            className={styles.ollamaDocsClose}
-                            onClick={() => setOllamaDocsOpen(false)}
-                            aria-label="Close"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                        <div className={styles.ollamaDocsBody}>
-                          <p className={styles.ollamaDocsSection}>What is Ollama?</p>
-                          <p className={styles.ollamaDocsText}>
-                            Ollama lets you run large language models locally on your machine — no API key, no internet required for inference.
-                          </p>
-
-                          <p className={styles.ollamaDocsSection}>Step 1 — Install Ollama</p>
-                          <p className={styles.ollamaDocsText}>
-                            Download and install from <strong>ollama.com</strong>. Available for macOS, Linux, and Windows.
-                          </p>
-
-                          <p className={styles.ollamaDocsSection}>Step 2 — Pull the model</p>
-                          <code className={styles.ollamaDocsCode}>ollama pull llama3.2</code>
-
-                          <p className={styles.ollamaDocsSection}>Step 3 — Start Ollama</p>
-                          <p className={styles.ollamaDocsText}>
-                            Ollama runs as a background service on <strong>http://localhost:11434</strong>. It starts automatically after install on most systems.
-                          </p>
-                          <code className={styles.ollamaDocsCode}>ollama serve</code>
-
-                          <p className={styles.ollamaDocsSection}>How it works here</p>
-                          <p className={styles.ollamaDocsText}>
-                            When you select Llama 3.2, the backend automatically sets <strong>provider: ollama</strong> and calls your local Ollama server. If Ollama is not running or the model is not installed, you will see a clear error message.
-                          </p>
-
-                          <p className={styles.ollamaDocsSection}>Common errors</p>
-                          <p className={styles.ollamaDocsText}>
-                            <strong>Ollama not reachable</strong> — Start Ollama with <code>ollama serve</code> or relaunch the Ollama app.
-                          </p>
-                          <p className={styles.ollamaDocsText}>
-                            <strong>Model not installed</strong> — Run <code>ollama pull llama3.2</code> in your terminal.
-                          </p>
-
-                          <button
-                            type="button"
-                            className={styles.ollamaWarningBtnPrimary}
-                            style={{ marginTop: 12, width: "100%" }}
-                            onClick={() => setOllamaDocsOpen(false)}
-                          >
-                            Got it, close
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </SidebarSection>
-
-                  <SidebarSection
-                    icon={MessageSquare}
-                    title="Query Configuration"
-                    description="Ragas and LangSmith (Agent mode is in the chat bar)"
-                    expanded
-                  >
-                    <MultiSelectChips
-                      options={QUERY_CONFIGURATION_SIDEBAR_OPTIONS}
-                      selectedValues={activeWorkspace.queryConfigurations || []}
-                      onToggle={(value) => toggleWorkspaceValue("queryConfigurations", value)}
-                    />
-                  </SidebarSection>
-                </div>
-              </section>
-            </div>
-          </aside>
+          <QuerySidebar
+            activeWorkspace={activeWorkspace}
+            updateActiveWorkspace={updateActiveWorkspace}
+            toggleWorkspaceValue={toggleWorkspaceValue}
+            queryAgentModeEnabled={queryAgentModeEnabled}
+            allowedVectorStoreOptions={allowedVectorStoreOptions}
+            allowedEmbeddingOptions={allowedEmbeddingOptions}
+            ollamaDocsOpen={ollamaDocsOpen}
+            setOllamaDocsOpen={setOllamaDocsOpen}
+            setOllamaWarningOpen={setOllamaWarningOpen}
+          />
         )}
 
         <main
@@ -3939,389 +3498,47 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
         </main>
 
         {workspaceMode === "query" && (
-          <aside
-            className={classNames(styles.workspaceRightSidebar, {
-              [styles.workspaceRightSidebarExpanded]: queryRightSidebarWide,
-            })}
-            onMouseEnter={() => setIsQueryRightSidebarExpanded(true)}
-            onMouseLeave={() => {
-              if (!isQueryRightSidebarPinned) {
-                setIsQueryRightSidebarExpanded(false);
-              }
-            }}
-          >
-            <div className={styles.workspaceRightInner}>
-              <div className={styles.rightSidebarNav}>
-                {RIGHT_SIDEBAR_ITEMS.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.value}
-                      type="button"
-                      className={classNames(styles.rightSidebarButton, {
-                        [styles.rightSidebarButtonActive]:
-                          activeWorkspace.activeRightSection === item.value,
-                      })}
-                      onClick={() =>
-                        updateActiveWorkspace((current) => ({
-                          ...current,
-                          activeRightSection: item.value,
-                        }))
-                      }
-                    >
-                      <Icon size={16} />
-                      {queryRightSidebarWide && <span>{item.label}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {queryRightSidebarWide && (
-                <div className={styles.rightSidebarPanels}>
-                  {activeWorkspace.activeRightSection === "response" && (
-                    <div className={styles.insightPanel}>
-                      <h3>Response</h3>
-                      <p>
-                        {activeWorkspace.responseVisible
-                          ? activeWorkspace.response
-                          : "The answer will appear here after query processing completes."}
-                      </p>
-                    </div>
-                  )}
-
-                  {activeWorkspace.activeRightSection === "chunks" && (
-                    <div className={styles.insightPanel}>
-                      <h3>Retrieved Chunks</h3>
-                      <div className={styles.chunkList}>
-                        {activeWorkspace.retrievedChunks.map((chunk, index) => (
-                          <div key={`${chunk.title}-${index}`} className={styles.chunkItem}>
-                            <div className={styles.chunkItemMeta}>
-                              <span>{chunk.title}</span>
-                              <span>{chunk.score.toFixed(2)}</span>
-                            </div>
-                            <p>{chunk.text}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {activeWorkspace.activeRightSection === "performance-legacy-disabled" && (
-                    <div className={styles.insightPanel}>
-                      <h3>Execution Performance</h3>
-                      {perfLoading && <ExecutionPerformanceSkeletonGrid />}
-                      {perfError && <div>{perfError}</div>}
-                      {!perfLoading && !perfError && (
-                        <div className={styles.metricGrid}>
-                          {[
-                            { label: "Total Time", value: formatMs(perf?.totalTime), sub: "Response latency" },
-                            { label: "Embed Time", value: formatMs(perf?.embedTime), sub: "Vector encoding" },
-                            { label: "Retrieval", value: formatMs(perf?.retrievalTime), sub: "Chunk search" },
-                            { label: "LLM Gen", value: formatMs(perf?.llmGenTime), sub: "Token generation" },
-                            { label: "Tokens", value: formatNumber(perf?.totalTokens), sub: "Input + Output" },
-                            // Show cost exactly as returned by backend (no rounding/formatting)
-                            { label: "Cost", value: perf?.cost, sub: "Per query" },
-                          ].map((metric) => (
-                            <div key={metric.label} className={styles.metricCard}>
-                              <span>{metric.label}</span>
-                              <strong>{metric.value}</strong>
-                              <small>{metric.sub}</small>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {activeWorkspace.activeRightSection === "performance" && (
-                    <div className={styles.insightPanel}>
-                      <div className={styles.performanceHeader}>
-                        <div>
-                          <h3>Execution Performance</h3>
-                          <p>Switch between responses to view their stored performance metrics.</p>
-                        </div>
-                        {performanceResponseVariants.length > 0 && (
-                          <div className={styles.performanceSelector}>
-                            {performanceResponseVariants.slice(0, 2).map((variant, index) => (
-                              <button
-                                key={variant?.experimentId || `response-${index}`}
-                                type="button"
-                                className={`${styles.performanceSelectorButton} ${index === selectedPerformanceResponseIndex
-                                  ? styles.performanceSelectorButtonActive
-                                  : ""
-                                  }`}
-                                onClick={() => setSelectedPerformanceResponseIndex(index)}
-                              >
-                                Res-{index + 1}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {perfLoading && <ExecutionPerformanceSkeletonGrid />}
-                      {perfError && <div>{perfError}</div>}
-                      {!perfLoading && !perfError && !perf && (
-                        <div>No stored rows found for this experiment yet.</div>
-                      )}
-                      {!perfLoading && !perfError && perf && (
-                        <div className={styles.performancePanel}>
-                          <div className={styles.metricGrid}>
-                            {latestPerformanceCards.map((metric) => (
-                              <div key={metric.label} className={styles.metricCard}>
-                                <span>{metric.label}</span>
-                                <strong>{metric.value}</strong>
-                                <small>{metric.sub}</small>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {activeWorkspace.activeRightSection === "history" && (
-                    <div className={styles.insightPanel}>
-                      <h3>Experiment History</h3>
-                      {historyLoading && <div>Loading history...</div>}
-                      {historyError && <div>{historyError}</div>}
-                      {!historyLoading && !historyError && historyEntries.length === 0 && (
-                        <div>No history data available for this project.</div>
-                      )}
-                      {!historyLoading && !historyError && historyEntries.length > 0 && (
-                        <div className={styles.metricGrid}>
-                          {historyEntries.map((entry) => (
-                            <div key={entry.id} className={styles.metricCard}>
-                              <span>{entry.id}</span>
-                              <strong>{entry.metrics?.accuracy ?? 0}%</strong>
-                              <small>{entry.date}</small>
-                              <small>Latency: {entry.metrics?.latency || "-"}</small>
-                              <small>Cost: {entry.metrics?.cost || "-"}</small>
-                              <small>Relevance: {entry.metrics?.relevance ?? 0}%</small>
-                              <small>DB: {entry.config?.db || "-"}</small>
-                              <small>Retrieval: {entry.config?.retrieval || "-"}</small>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {activeWorkspace.activeRightSection === "quality" && (
-                    <div className={styles.insightPanel}>
-                      <h3>Quality Metrics</h3>
-                      <div className={styles.qualityList}>
-                        {(activeWorkspace.qualityMetrics || DEFAULT_QUALITY_METRICS).map((metric) => (
-                          <div key={metric.label} className={styles.qualityRow}>
-                            <div className={styles.qualityHeader}>
-                              <span>{metric.label}</span>
-                              <strong>{Number(metric.value || 0).toFixed(1)}%</strong>
-                            </div>
-                            <div className={styles.qualityTrack}>
-                              <div
-                                className={styles.qualityBar}
-                                style={{ width: `${Number(metric.value || 0)}%` }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-              <button
-                type="button"
-                className={styles.rightSidebarCollapseButton}
-                onClick={() => {
-                  const nextPinned = !isQueryRightSidebarPinned;
-                  setIsQueryRightSidebarPinned(nextPinned);
-                  setIsQueryRightSidebarExpanded(nextPinned);
-                }}
-                title={isQueryRightSidebarPinned ? "Collapse sidebar" : "Keep expanded"}
-              >
-                <ChevronRight
-                  size={15}
-                  className={classNames(styles.rightSidebarCollapseIcon, {
-                    [styles.rightSidebarCollapseIconOpen]: queryRightSidebarWide,
-                  })}
-                />
-                {queryRightSidebarWide && (
-                  <span>{isQueryRightSidebarPinned ? "Collapse" : "Pin open"}</span>
-                )}
-              </button>
-            </div>
-          </aside>
+          <QueryRightSidebar
+            activeWorkspace={activeWorkspace}
+            updateActiveWorkspace={updateActiveWorkspace}
+            queryRightSidebarWide={queryRightSidebarWide}
+            isQueryRightSidebarPinned={isQueryRightSidebarPinned}
+            setIsQueryRightSidebarPinned={setIsQueryRightSidebarPinned}
+            setIsQueryRightSidebarExpanded={setIsQueryRightSidebarExpanded}
+            perf={perf}
+            perfLoading={perfLoading}
+            perfError={perfError}
+            latestPerformanceCards={latestPerformanceCards}
+            performanceResponseVariants={performanceResponseVariants}
+            selectedPerformanceResponseIndex={selectedPerformanceResponseIndex}
+            setSelectedPerformanceResponseIndex={setSelectedPerformanceResponseIndex}
+            historyEntries={historyEntries}
+            historyLoading={historyLoading}
+            historyError={historyError}
+          />
         )}
 
+
         {workspaceMode === "upload" && (
-          <aside
-            className={classNames(styles.workspaceRightSidebar, styles.workspaceUploadRightSidebar, {
-              [styles.workspaceRightSidebarExpanded]: uploadRightSidebarWide,
-            })}
-            onMouseEnter={() => {
-              if (uploadRightSidebarMode === "hover") {
-                setIsUploadRightSidebarHovered(true);
-              }
-            }}
-            onMouseLeave={() => {
-              if (uploadRightSidebarMode === "hover") {
-                setIsUploadRightSidebarHovered(false);
-              }
-            }}
-          >
-            <div className={styles.workspaceRightInner}>
-              <div className={styles.rightSidebarNav}>
-                {UPLOAD_RIGHT_SIDEBAR_ITEMS.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.value}
-                      type="button"
-                      className={classNames(styles.rightSidebarButton, {
-                        [styles.rightSidebarButtonActive]: uploadRightActiveSection === item.value,
-                      })}
-                      onClick={() => setUploadRightActiveSection(item.value)}
-                    >
-                      <Icon size={16} />
-                      {uploadRightSidebarWide && <span>{item.label}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {uploadRightSidebarWide && (
-                <div className={styles.rightSidebarPanels}>
-                  {uploadRightActiveSection === "pipeline" && (
-                    <div className={styles.insightPanel}>
-                      <h3>Pipeline</h3>
-                      {hasUploadPipelineOutput ? (
-                        <>
-                          <p className={styles.insightPanelMuted}>
-                            {executionState.message || "Latest run status."}
-                          </p>
-                          <div className={styles.uploadSidebarStatusRow}>
-                            <span
-                              className={classNames(styles.executionStatusBadge, {
-                                [styles.executionStatusBadgeRunning]:
-                                  executionState.status === "running",
-                                [styles.executionStatusBadgeSuccess]:
-                                  executionState.status === "success",
-                                [styles.executionStatusBadgeError]:
-                                  executionState.status === "error",
-                              })}
-                            >
-                              {executionStatusLabel}
-                            </span>
-                          </div>
-                          {executionState.status === "running" ? (
-                            <UploadPipelineSidebarSkeletonRows />
-                          ) : (
-                            executionSummaryItems.slice(0, 6).map((item) => (
-                              <div key={item.label} className={styles.uploadSidebarKv}>
-                                <span>{item.label}</span>
-                                <strong>{item.value}</strong>
-                              </div>
-                            ))
-                          )}
-                        </>
-                      ) : (
-                        <p className={styles.insightPanelMuted}>
-                          Run the pipeline to see status, chunk counts, and embeddings here.
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {uploadRightActiveSection === "techniques" && uploadSidebarTechniquesConfig && (
-                    <div className={styles.insightPanel}>
-                      <h3>Techniques</h3>
-                      <dl className={styles.uploadSidebarTechniquesDl}>
-                        <dt>Chunk</dt>
-                        <dd>
-                          {uploadSidebarTechniquesConfig.text_processing?.chunk_size} / overlap{" "}
-                          {uploadSidebarTechniquesConfig.text_processing?.chunk_overlap}
-                        </dd>
-                        <dt>Splitter</dt>
-                        <dd>
-                          {JSON.stringify(uploadSidebarTechniquesConfig.text_processing?.splitter)}
-                        </dd>
-                        <dt>Extraction</dt>
-                        <dd>
-                          {JSON.stringify(uploadSidebarTechniquesConfig.data_extraction?.method)}
-                        </dd>
-                        <dt>Embeddings</dt>
-                        <dd>
-                          {uploadSidebarTechniquesConfig.embeddings?.provider} /{" "}
-                          {uploadSidebarTechniquesConfig.embeddings?.model}
-                        </dd>
-                        <dt>Vector store</dt>
-                        <dd>
-                          {(uploadSidebarTechniquesConfig.vector_store?.backends || []).join(", ") ||
-                            "—"}
-                        </dd>
-                      </dl>
-                    </div>
-                  )}
-
-                  {uploadRightActiveSection === "files" && (
-                    <div className={styles.insightPanel}>
-                      <h3>Files</h3>
-                      <p className={styles.insightPanelMuted}>
-                        {activeWorkspace.files.length} file
-                        {activeWorkspace.files.length === 1 ? "" : "s"} in this project
-                      </p>
-                      {selectedWorkspaceFile && (
-                        <p className={styles.insightPanelMuted}>
-                          Selected: <strong>{selectedWorkspaceFile.name}</strong>
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              <div className={styles.uploadRightSidebarFooter} ref={uploadSidebarControlRef}>
-                <button
-                  type="button"
-                  className={styles.uploadSidebarFooterButton}
-                  title="Sidebar layout"
-                  aria-expanded={uploadSidebarControlOpen}
-                  aria-haspopup="menu"
-                  onClick={() => setUploadSidebarControlOpen((o) => !o)}
-                >
-                  <PanelRight size={16} strokeWidth={2} aria-hidden />
-                  {uploadRightSidebarWide && <span>Layout</span>}
-                </button>
-                {uploadSidebarControlOpen && (
-                  <div className={styles.uploadSidebarModeMenu} role="menu">
-                    {[
-                      { id: "hover", label: "Expand on hover" },
-                      { id: "expanded", label: "Always expanded" },
-                      { id: "collapsed", label: "Collapsed" },
-                    ].map((opt) => (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        role="menuitem"
-                        className={classNames(styles.uploadSidebarModeOption, {
-                          [styles.uploadSidebarModeOptionActive]:
-                            uploadRightSidebarMode === opt.id,
-                        })}
-                        onClick={() => {
-                          setUploadRightSidebarMode(opt.id);
-                          setUploadSidebarControlOpen(false);
-                          if (opt.id === "collapsed") {
-                            setIsUploadRightSidebarHovered(false);
-                          }
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </aside>
+          <UploadRightSidebar
+            activeWorkspace={activeWorkspace}
+            uploadRightSidebarWide={uploadRightSidebarWide}
+            uploadRightSidebarMode={uploadRightSidebarMode}
+            setUploadRightSidebarMode={setUploadRightSidebarMode}
+            isUploadRightSidebarHovered={isUploadRightSidebarHovered}
+            setIsUploadRightSidebarHovered={setIsUploadRightSidebarHovered}
+            uploadRightActiveSection={uploadRightActiveSection}
+            setUploadRightActiveSection={setUploadRightActiveSection}
+            uploadSidebarControlOpen={uploadSidebarControlOpen}
+            setUploadSidebarControlOpen={setUploadSidebarControlOpen}
+            uploadSidebarControlRef={uploadSidebarControlRef}
+            executionState={executionState}
+            executionStatusLabel={executionStatusLabel}
+            executionSummaryItems={executionSummaryItems}
+            hasUploadPipelineOutput={hasUploadPipelineOutput}
+            uploadSidebarTechniquesConfig={uploadSidebarTechniquesConfig}
+            selectedWorkspaceFile={selectedWorkspaceFile}
+          />
         )}
       </div>
     </div>
