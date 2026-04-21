@@ -10,6 +10,8 @@ export const deleteProject = (projectId) =>
 export const fetchProjectHistory = (projectId) =>
   `/project/${projectId}/history`;
 export const fetchUserHistory = "/history";
+export const fetchProjectExperiments = (projectId) =>
+  `/project/${projectId}/experiments`;
 
 // File ENDPOINTS
 export const fetchProjectFiles = (projectId) =>

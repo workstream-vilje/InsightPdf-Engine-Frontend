@@ -189,7 +189,9 @@ const Dashboard = () => {
               fileId,
               experimentId: queryResponse.experiment_id,
             });
-            savedResponse = saved?.data?.[0] || null;
+            savedResponse = Array.isArray(saved?.data)
+              ? saved.data[0] || null
+              : saved?.data || saved || null;
           } catch (error) {
             savedResponse = null;
           }

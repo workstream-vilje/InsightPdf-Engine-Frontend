@@ -314,6 +314,57 @@ const CenterPanel = ({ onRunQuery, onSelectionChange, isRunning, processingConfi
     };
   }, [mapFileToDocumentOption, mapUploadedFileToCard, selectedProject]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDocumentChatHistory = async () => {
+      if (!selectedProject?.projectId || !selectedDocument?.fileId) {
+        if (isMounted) {
+          setMessages([]);
+        }
+        return;
+      }
+
+      try {
+        const response = await projectApi.fetchProjectExperiments(
+          selectedProject.projectId,
+          selectedDocument.fileId,
+        );
+        if (!isMounted) return;
+
+        const experimentRows = Array.isArray(response?.data) ? response.data : [];
+        const nextMessages = experimentRows
+          .slice()
+          .reverse()
+          .flatMap((entry) => {
+            const queryText = String(entry?.query || "").trim();
+            const answerText = String(entry?.response || "").trim();
+            const items = [];
+
+            if (queryText) {
+              items.push({ role: "user", content: queryText });
+            }
+            if (answerText) {
+              items.push({ role: "assistant", content: answerText });
+            }
+
+            return items;
+          });
+
+        setMessages(nextMessages);
+      } catch (error) {
+        if (!isMounted) return;
+        setMessages([]);
+      }
+    };
+
+    loadDocumentChatHistory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDocument?.fileId, selectedProject?.projectId]);
+
   const handleAddNewModel = () => {
     if (!newModelName.trim()) return;
     const newOption = { value: newModelName.toLowerCase().replace(/\s+/g, '-'), label: newModelName };

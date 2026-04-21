@@ -2,6 +2,7 @@ import httpClient, { withQuery } from "@/services/axios";
 import {
   createProject,
   deleteProject,
+  fetchProjectExperiments,
   fetchProjects,
   fetchProjectHistory,
   fetchUserHistory,
@@ -27,6 +28,12 @@ export const projectApi = {
   fetchAllProjects: (options = {}) => httpClient.get(withUserIdQuery(fetchProjects), options),
   deleteProject: (projectId) => httpClient.delete(deleteProject(projectId)),
   fetchProjectHistory: (projectId) => httpClient.get(fetchProjectHistory(projectId)),
+  fetchProjectExperiments: (projectId, fileId) =>
+    httpClient.get(
+      withQuery(fetchProjectExperiments(projectId), {
+        file_id: fileId || undefined,
+      }),
+    ),
   fetchUserHistory: (projectId) =>
     httpClient.get(
       withQuery(fetchUserHistory, {

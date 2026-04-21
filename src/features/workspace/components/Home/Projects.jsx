@@ -3200,7 +3200,9 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode = "upload" }) =>
                   fileId: targetFile.fileId,
                   experimentId: result.experiment_id,
                 });
-                savedResponse = saved?.data?.[0] || null;
+                savedResponse = Array.isArray(saved?.data)
+                  ? saved.data[0] || null
+                  : saved?.data || saved || null;
               } catch (savedResponseError) {
                 savedResponse = null;
               }

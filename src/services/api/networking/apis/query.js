@@ -86,6 +86,11 @@ export async function runQuery(payload, { onProgress, signal } = {}, _isRetry = 
     throw err;
   }
 
+  const contentType = (response.headers.get("content-type") || "").toLowerCase();
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
   const reader = response.body?.getReader();
   if (!reader) throw new Error("No response body");
 
@@ -118,6 +123,19 @@ export async function runQuery(payload, { onProgress, signal } = {}, _isRetry = 
       if (obj.type === "result") return obj.data;
       if (obj.type === "error") throwFromErrorLine(obj);
     }
+  }
+
+  const trailing = buffer.trim();
+  if (trailing) {
+    let obj;
+    try {
+      obj = JSON.parse(trailing);
+    } catch {
+      obj = null;
+    }
+
+    if (obj?.type === "result") return obj.data;
+    if (obj?.type === "error") throwFromErrorLine(obj);
   }
 
   throw new Error("Query stream ended without a result");
