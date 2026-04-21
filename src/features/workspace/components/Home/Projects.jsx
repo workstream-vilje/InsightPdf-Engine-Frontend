@@ -1651,6 +1651,8 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
             text: chunk?.content || "",
           })),
         }));
+        // Auto-expand the right sidebar so results are immediately visible
+        setIsQueryRightSidebarExpanded(true);
       } catch (error) {
         clearTimers();
         if (requestId !== activeQueryRequestIdRef.current) return;
