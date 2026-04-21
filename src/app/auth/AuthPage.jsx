@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -10,13 +10,13 @@ import styles from "./auth.module.css";
 import { setAuthSession } from "@/services/auth";
 import { ROUTE_PATHS } from "@/utils/routepaths";
 
-/* ── initial form state ── */
+/* â”€â”€ initial form state â”€â”€ */
 const initialSignupForm = { name: "", mail_id: "", password: "", confirm_password: "" };
 const initialLoginForm = { mail_id: "", password: "" };
 
 const emailLooksValid = (v) => /\S+@\S+\.\S+/.test(v);
 
-/* ── API helpers ── */
+/* â”€â”€ API helpers â”€â”€ */
 const authBases = () => {
   const host = process.env.NEXT_PUBLIC_API_HOST || "localhost";
   const port = process.env.NEXT_PUBLIC_API_PORT || "8000";
@@ -33,8 +33,6 @@ const callAuthApi = async (path, payload) => {
     try {
       const res = await fetch(`${base}${path}`, {
         method: "POST",
-        // credentials: "include" ensures the browser stores the HttpOnly cookies
-        // that the backend sets on login/signup
         credentials: "include",
         headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -59,17 +57,15 @@ const callAuthApi = async (path, payload) => {
   throw lastError || new Error("Unable to connect to the auth service.");
 };
 
-/* ── Eye icon SVG (no external dep) ── */
+/* â”€â”€ Eye icon SVG (no external dep) â”€â”€ */
 function EyeIcon({ open }) {
   return open ? (
-    /* eye-open */
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
   ) : (
-    /* eye-off */
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
@@ -79,67 +75,73 @@ function EyeIcon({ open }) {
   );
 }
 
-/* ── Right panel stats ── */
+/* â”€â”€ Right panel stats â”€â”€ */
 const RIGHT_STATS = [
   "Smart PDF ingestion & chunking",
   "RAG queries with self-reflection",
   "Experiment analytics & RAGAS scores",
 ];
 
-/* ════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    MAIN COMPONENT
-════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 export default function AuthPage({ mode }) {
   const router = useRouter();
   const { isAuthenticated, isAuthInitialized } = useAuth();
   const { showToast } = useToast();
   const isSignup = mode === "signup";
 
-  /* ── routing state ── */
+  /* â”€â”€ routing state â”€â”€ */
   const [switchingMode, setSwitchingMode] = useState("");
   const switchTimerRef = useRef(null);
 
-  /* ── form state ── */
+  /* â”€â”€ form state â”€â”€ */
   const [signupForm, setSignupForm] = useState(initialSignupForm);
   const [loginForm, setLoginForm] = useState(initialLoginForm);
   const [loading, setLoading] = useState(false);
 
-  /* ── password visibility ── */
+  /* â”€â”€ OTP step state â”€â”€ */
+  // "form" = filling name/email/password, "otp" = entering OTP code
+  const [signupStep, setSignupStep] = useState("form");
+  const [otpValue, setOtpValue] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const resendTimerRef = useRef(null);
+
+  /* â”€â”€ password visibility â”€â”€ */
   const [showLoginPw, setShowLoginPw] = useState(false);
   const [showSignupPw, setShowSignupPw] = useState(false);
-  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
-  /* ── confirm-password validation ──
-     Only show error after the user has touched the confirm field
-     AND both fields are non-empty AND they don't match.            */
+  /* â”€â”€ confirm-password validation â”€â”€ */
   const [confirmTouched, setConfirmTouched] = useState(false);
   const passwordMismatch =
     confirmTouched &&
     signupForm.confirm_password.length > 0 &&
     signupForm.password !== signupForm.confirm_password;
 
-  /* ── redirect if already authenticated ── */
+  /* â”€â”€ redirect if already authenticated â”€â”€ */
   useEffect(() => {
     if (isAuthInitialized && isAuthenticated) {
       router.replace(ROUTE_PATHS.WORKSPACE_UPLOAD);
     }
   }, [isAuthInitialized, isAuthenticated, router]);
 
-  /* ── cleanup timers ── */
-  useEffect(
-    () => () => { if (switchTimerRef.current) clearTimeout(switchTimerRef.current); },
-    [],
-  );
+  /* â”€â”€ cleanup timers â”€â”€ */
+  useEffect(() => () => {
+    if (switchTimerRef.current) clearTimeout(switchTimerRef.current);
+    if (resendTimerRef.current) clearInterval(resendTimerRef.current);
+  }, []);
 
-  /* ── reset visibility + confirm state when switching modes ── */
+  /* â”€â”€ reset state when switching modes â”€â”€ */
   useEffect(() => {
     setShowLoginPw(false);
     setShowSignupPw(false);
-    setShowConfirmPw(false);
     setConfirmTouched(false);
+    setSignupStep("form");
+    setOtpValue("");
+    setResendCooldown(0);
   }, [mode]);
 
-  /* ── mode switch ── */
+  /* â”€â”€ mode switch â”€â”€ */
   const activeMode = switchingMode || mode;
 
   const handleModeSwitch = useCallback((next) => {
@@ -150,7 +152,7 @@ export default function AuthPage({ mode }) {
     }, 200);
   }, [mode, switchingMode, router]);
 
-  /* ── form change handlers ── */
+  /* â”€â”€ form change handlers â”€â”€ */
   const handleSignupChange = useCallback((e) => {
     const { name, value } = e.target;
     setSignupForm((c) => ({ ...c, [name]: value }));
@@ -161,15 +163,27 @@ export default function AuthPage({ mode }) {
     setLoginForm((c) => ({ ...c, [name]: value }));
   }, []);
 
-  /* ── confirm-password blur: mark as touched ── */
+  /* â”€â”€ confirm-password blur â”€â”€ */
   const handleConfirmBlur = useCallback(() => {
-    if (signupForm.confirm_password.length > 0) {
-      setConfirmTouched(true);
-    }
+    if (signupForm.confirm_password.length > 0) setConfirmTouched(true);
   }, [signupForm.confirm_password]);
 
-  /* ── signup submit ── */
-  const handleSignup = async (e) => {
+  /* â”€â”€ start resend cooldown (60s) â”€â”€ */
+  const startResendCooldown = useCallback(() => {
+    setResendCooldown(60);
+    resendTimerRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(resendTimerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  /* â”€â”€ Step 1: send OTP â”€â”€ */
+  const handleSignupInit = async (e) => {
     e.preventDefault();
 
     if (!signupForm.name.trim()) {
@@ -192,23 +206,71 @@ export default function AuthPage({ mode }) {
 
     setLoading(true);
     try {
-      const res = await callAuthApi("/auth/signup", {
+      await callAuthApi("/signup/init", {
         name: signupForm.name.trim(),
         mail_id: signupForm.mail_id.trim(),
         password: signupForm.password,
       });
-      showToast({ title: "Sign up", variant: "success", message: res?.message || "Account created. Please log in." });
-      setSignupForm(initialSignupForm);
-      setConfirmTouched(false);
-      switchTimerRef.current = setTimeout(() => router.push(ROUTE_PATHS.AUTH_LOGIN), 500);
+      showToast({ title: "Sign up", variant: "success", message: "OTP sent to your email." });
+      setOtpValue("");
+      setSignupStep("otp");
+      startResendCooldown();
     } catch (err) {
-      showToast({ title: "Authentication", variant: "error", message: err?.message || "Unable to sign up." });
+      showToast({ title: "Sign up", variant: "error", message: err?.message || "Unable to send OTP." });
     } finally {
       setLoading(false);
     }
   };
 
-  /* ── login submit ── */
+  /* â”€â”€ Step 2: verify OTP â”€â”€ */
+  const handleSignupVerify = async (e) => {
+    e.preventDefault();
+
+    if (otpValue.trim().length !== 6) {
+      showToast({ title: "Sign up", variant: "warning", message: "Enter the 6-digit OTP." });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await callAuthApi("/signup/verify", {
+        mail_id: signupForm.mail_id.trim(),
+        otp: otpValue.trim(),
+      });
+      showToast({ title: "Sign up", variant: "success", message: "Account verified! Please log in." });
+      setSignupForm(initialSignupForm);
+      setConfirmTouched(false);
+      setSignupStep("form");
+      setOtpValue("");
+      switchTimerRef.current = setTimeout(() => router.push(ROUTE_PATHS.AUTH_LOGIN), 500);
+    } catch (err) {
+      showToast({ title: "Sign up", variant: "error", message: err?.message || "OTP verification failed." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* â”€â”€ Resend OTP â”€â”€ */
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0) return;
+    setLoading(true);
+    try {
+      await callAuthApi("/signup/init", {
+        name: signupForm.name.trim(),
+        mail_id: signupForm.mail_id.trim(),
+        password: signupForm.password,
+      });
+      showToast({ title: "Sign up", variant: "success", message: "New OTP sent to your email." });
+      setOtpValue("");
+      startResendCooldown();
+    } catch (err) {
+      showToast({ title: "Sign up", variant: "error", message: err?.message || "Unable to resend OTP." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* â”€â”€ login submit â”€â”€ */
   const handleLogin = async (e) => {
     e.preventDefault();
 
@@ -228,8 +290,6 @@ export default function AuthPage({ mode }) {
         password: loginForm.password,
       });
       setAuthSession({
-        // Tokens are now HttpOnly cookies set by the backend — do NOT store them in JS.
-        // Only store the non-sensitive user profile fields.
         userId: res?.user_id,
         name: res?.name,
         mailId: res?.mail_id,
@@ -243,13 +303,13 @@ export default function AuthPage({ mode }) {
     }
   };
 
-  /* ════════════════════════════════════════════
+  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      RENDER
-  ════════════════════════════════════════════ */
+  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
   return (
     <main className={styles.page}>
 
-      {/* ── LEFT PANE ── */}
+      {/* â”€â”€ LEFT PANE â”€â”€ */}
       <section className={styles.leftPane}>
         <div className={styles.leftInner}>
 
@@ -260,7 +320,7 @@ export default function AuthPage({ mode }) {
               InsightPDF
             </Link>
             <Link className={styles.homeLink} href={ROUTE_PATHS.HOME}>
-              ← Home
+              â† Home
             </Link>
           </div>
 
@@ -288,20 +348,23 @@ export default function AuthPage({ mode }) {
             {/* heading */}
             <div className={styles.header}>
               <h1 className={styles.title}>
-                {isSignup ? "Create your account" : "Sign in to your account"}
+                {isSignup
+                  ? signupStep === "otp" ? "Verify your email" : "Create your account"
+                  : "Sign in to your account"}
               </h1>
               <p className={styles.description}>
                 {isSignup
-                  ? "Create your account to start using the InsightPDF workspace."
+                  ? signupStep === "otp"
+                    ? `We sent a 6-digit code to ${signupForm.mail_id}. Enter it below.`
+                    : "Create your account to start using the InsightPDF workspace."
                   : "Enter your email and password to continue."}
               </p>
             </div>
 
-            {/* ── SIGNUP FORM ── */}
-            {isSignup ? (
-              <form className={styles.form} onSubmit={handleSignup} key="signup">
+            {/* â”€â”€ SIGNUP: STEP 1 â€” details form â”€â”€ */}
+            {isSignup && signupStep === "form" && (
+              <form className={styles.form} onSubmit={handleSignupInit} key="signup-form">
 
-                {/* Username */}
                 <label className={styles.field}>
                   <span className={styles.label}>Username</span>
                   <input
@@ -314,7 +377,6 @@ export default function AuthPage({ mode }) {
                   />
                 </label>
 
-                {/* Email */}
                 <label className={styles.field}>
                   <span className={styles.label}>Email</span>
                   <input
@@ -328,7 +390,6 @@ export default function AuthPage({ mode }) {
                   />
                 </label>
 
-                {/* Password */}
                 <div className={styles.field}>
                   <span className={styles.label}>Password</span>
                   <div className={styles.inputWrap}>
@@ -353,7 +414,6 @@ export default function AuthPage({ mode }) {
                   </div>
                 </div>
 
-                {/* Confirm Password */}
                 <div className={styles.field}>
                   <span className={styles.label}>Confirm Password</span>
                   <input
@@ -376,16 +436,63 @@ export default function AuthPage({ mode }) {
                   disabled={loading || passwordMismatch}
                   type="submit"
                 >
-                  {loading ? "Creating account…" : "Create account"}
+                  {loading ? "Sending OTPâ€¦" : "Send OTP"}
                 </button>
               </form>
+            )}
 
-            ) : (
+            {/* â”€â”€ SIGNUP: STEP 2 â€” OTP verification â”€â”€ */}
+            {isSignup && signupStep === "otp" && (
+              <form className={styles.form} onSubmit={handleSignupVerify} key="signup-otp">
 
-              /* ── LOGIN FORM ── */
+                <label className={styles.field}>
+                  <span className={styles.label}>OTP Code</span>
+                  <input
+                    className={styles.input}
+                    name="otp"
+                    placeholder="Enter 6-digit OTP"
+                    value={otpValue}
+                    onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    maxLength={6}
+                    autoFocus
+                  />
+                </label>
+
+                <button
+                  className={styles.submitButton}
+                  disabled={loading || otpValue.length !== 6}
+                  type="submit"
+                >
+                  {loading ? "Verifyingâ€¦" : "Verify & Create Account"}
+                </button>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                  <button
+                    type="button"
+                    className={styles.hintToggle}
+                    onClick={handleResendOtp}
+                    disabled={loading || resendCooldown > 0}
+                  >
+                    {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : "Resend OTP"}
+                  </button>
+                  <span style={{ color: "var(--muted-foreground, #888)", fontSize: 13 }}>Â·</span>
+                  <button
+                    type="button"
+                    className={styles.hintToggle}
+                    onClick={() => { setSignupStep("form"); setOtpValue(""); }}
+                  >
+                    Change email
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* â”€â”€ LOGIN FORM â”€â”€ */}
+            {!isSignup && (
               <form className={styles.form} onSubmit={handleLogin} key="login">
 
-                {/* Email */}
                 <label className={styles.field}>
                   <span className={styles.label}>Email</span>
                   <input
@@ -399,7 +506,6 @@ export default function AuthPage({ mode }) {
                   />
                 </label>
 
-                {/* Password */}
                 <div className={styles.field}>
                   <span className={styles.label}>Password</span>
                   <div className={styles.inputWrap}>
@@ -425,7 +531,7 @@ export default function AuthPage({ mode }) {
                 </div>
 
                 <button className={styles.submitButton} disabled={loading} type="submit">
-                  {loading ? "Signing in…" : "Sign In"}
+                  {loading ? "Signing in" : "Sign In"}
                 </button>
               </form>
             )}
@@ -451,7 +557,7 @@ export default function AuthPage({ mode }) {
         </div>
       </section>
 
-      {/* ── RIGHT PANE ── */}
+      {/* â”€â”€ RIGHT PANE â”€â”€ */}
       <aside className={styles.rightPane}>
         <div className={styles.gradientOverlay} />
         <div className={styles.orb + " " + styles.orb1} />
@@ -466,7 +572,7 @@ export default function AuthPage({ mode }) {
             Search, organize,<br />and explore documents<br />in one clean workspace.
           </h2>
           <p className={styles.heroText}>
-            Upload PDFs, run intelligent queries, and track every experiment — all from one professional platform.
+            Upload PDFs, run intelligent queries, and track every experiment â€” all from one professional platform.
           </p>
           <div className={styles.heroStats}>
             {RIGHT_STATS.map((s) => (
@@ -482,3 +588,4 @@ export default function AuthPage({ mode }) {
     </main>
   );
 }
+
