@@ -343,7 +343,7 @@ export const buildSharedPipelineConfig = (workspace) => {
       method: normalizedExtractionMethods.length > 1 ? normalizedExtractionMethods : normalizedExtractionMethods[0] || "pymupdf",
     },
     embeddings: { provider: embeddingProvider, model: embeddingModel },
-    vector_store: { backends: normalizedVectorStores.length ? normalizedVectorStores : ["faiss"], collection_name: "documents" },
+    vector_store: { backends: normalizedVectorStores.length ? normalizedVectorStores : ["faiss"], collection_name: "insightpdf_chunks" },
   };
 
   const queryConfig = {
