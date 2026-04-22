@@ -16,6 +16,12 @@ const initialLoginForm = { mail_id: "", password: "" };
 
 const emailLooksValid = (v) => /\S+@\S+\.\S+/.test(v);
 
+/** SHA-256 hash a string — used to avoid sending plain-text passwords over the wire. */
+async function sha256Hex(str) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /* â”€â”€ API helpers â”€â”€ */
 const authBases = () => {
   const host = process.env.NEXT_PUBLIC_API_HOST || "localhost";
@@ -206,12 +212,12 @@ export default function AuthPage({ mode }) {
 
     setLoading(true);
     try {
+      const hashedPw = await sha256Hex(signupForm.password);
       await callAuthApi("/signup/init", {
         name: signupForm.name.trim(),
         mail_id: signupForm.mail_id.trim(),
-        password: signupForm.password,
+        password: hashedPw,
       });
-      showToast({ title: "Sign up", variant: "success", message: "OTP sent to your email." });
       setOtpValue("");
       setSignupStep("otp");
       startResendCooldown();
@@ -255,10 +261,11 @@ export default function AuthPage({ mode }) {
     if (resendCooldown > 0) return;
     setLoading(true);
     try {
+      const hashedPw = await sha256Hex(signupForm.password);
       await callAuthApi("/signup/init", {
         name: signupForm.name.trim(),
         mail_id: signupForm.mail_id.trim(),
-        password: signupForm.password,
+        password: hashedPw,
       });
       showToast({ title: "Sign up", variant: "success", message: "New OTP sent to your email." });
       setOtpValue("");
@@ -285,9 +292,10 @@ export default function AuthPage({ mode }) {
 
     setLoading(true);
     try {
+      const hashedPw = await sha256Hex(loginForm.password);
       const res = await callAuthApi("/auth/login", {
         mail_id: loginForm.mail_id.trim(),
-        password: loginForm.password,
+        password: hashedPw,
       });
       setAuthSession({
         userId: res?.user_id,
@@ -320,7 +328,7 @@ export default function AuthPage({ mode }) {
               InsightPDF
             </Link>
             <Link className={styles.homeLink} href={ROUTE_PATHS.HOME}>
-              â† Home
+              Home
             </Link>
           </div>
 

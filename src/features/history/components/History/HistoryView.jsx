@@ -334,7 +334,7 @@ const HistoryView = () => {
                     <div className={styles.colActions}>
                       <Button variant="ghost" size="sm" className={styles.reportBtn} type="button">
                         <FileText size={14} aria-hidden />
-                        <span>View report</span>
+                        {/* <span>View report</span> */}
                         <ExternalLink size={11} className={styles.externalIcon} aria-hidden />
                       </Button>
                     </div>
