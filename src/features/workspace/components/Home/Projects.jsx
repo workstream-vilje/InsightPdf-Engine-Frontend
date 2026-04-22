@@ -733,7 +733,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
         embeddingModels: nextEmbeddingModels,
       };
     });
-  }, [activeWorkspace?.files, activeWorkspace?.selectedFileId, updateActiveWorkspace]);
+  }, [activeWorkspace?.files, activeWorkspace?.selectedFileId, activeWorkspace?.allowedTechniques, updateActiveWorkspace]);
 
   // Chat history loading state
   const [chatHistoryLoading, setChatHistoryLoading] = useState(false);
