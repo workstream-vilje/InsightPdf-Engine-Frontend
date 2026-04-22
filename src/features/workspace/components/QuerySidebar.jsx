@@ -24,7 +24,28 @@ export default function QuerySidebar({
   ollamaDocsOpen,
   setOllamaDocsOpen,
   setOllamaWarningOpen,
+  isImageFile = false,
 }) {
+  if (isImageFile) {
+    return (
+      <aside className={styles.workspaceQuerySidebar}>
+        <div className={styles.workspaceContextSidebarInner}>
+          <section className={styles.sidebarPane}>
+            <div className={styles.sidebarGroupTitle}>Query techniques</div>
+            <div className={styles.sidebarPaneScroll} style={{ padding: "16px", color: "var(--muted-foreground, #888)", fontSize: 13, lineHeight: 1.6 }}>
+              <p style={{ margin: 0 }}>
+                Image queries use built-in defaults automatically.
+              </p>
+              <p style={{ margin: "8px 0 0", opacity: 0.7 }}>
+                FAISS · text-embedding-3-large · gpt-4o-mini
+              </p>
+            </div>
+          </section>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside className={styles.workspaceQuerySidebar}>
       <div className={styles.workspaceContextSidebarInner}>

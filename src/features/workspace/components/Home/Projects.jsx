@@ -1760,6 +1760,11 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
   const hasSelectedProcessedFile = Boolean(
     selectedWorkspaceFile?.processed || selectedWorkspaceFile?.allowedTechniques,
   );
+  // True when the selected file is an image — sidebars are disabled for images
+  const isImageFile = Boolean(
+    selectedWorkspaceFile?.name &&
+    /\.(png|jpg|jpeg)$/i.test(selectedWorkspaceFile.name)
+  );
   const queryAgentModeEnabled = Boolean(
     (activeWorkspace?.queryConfigurations || []).includes("agent"),
   );
@@ -2215,6 +2220,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
             activeWorkspace={activeWorkspace}
             updateActiveWorkspace={updateActiveWorkspace}
             toggleWorkspaceValue={toggleWorkspaceValue}
+            isImageFile={isImageFile}
           />
         )}
 
@@ -2230,6 +2236,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
             ollamaDocsOpen={ollamaDocsOpen}
             setOllamaDocsOpen={setOllamaDocsOpen}
             setOllamaWarningOpen={setOllamaWarningOpen}
+            isImageFile={isImageFile}
           />
         )}
 
@@ -2273,7 +2280,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf"
+                accept=".pdf,.png,.jpg,.jpeg"
                 multiple
                 hidden
                 onChange={handleFileUpload}
@@ -2320,12 +2327,12 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
                             </div>
                             <div className={styles.uploadDropzoneProText}>
                               <p className={styles.uploadDropzoneProTitle}>
-                                {isUploadingFiles ? "Uploading" : "Browse PDFs or drop here"}
+                                {isUploadingFiles ? "Uploading…" : "Browse PDFs or images, or drop here"}
                               </p>
                               <p className={styles.uploadDropzoneProSub}>
                                 {isUploadingFiles
                                   ? "Do not close this tab."
-                                  : "Multiple files supported."}
+                                  : "PDF, PNG, JPG, JPEG supported."}
                               </p>
                             </div>
                           </button>
