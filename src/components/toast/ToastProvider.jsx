@@ -4,9 +4,9 @@ import React, {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
@@ -28,11 +28,11 @@ function makeToastId() {
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const isClient = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 
   const dismissToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -75,7 +75,7 @@ export function ToastProvider({ children }) {
   );
 
   const portal =
-    mounted && typeof document !== "undefined"
+    isClient
       ? createPortal(
           <div className={styles.viewport} aria-live="polite">
             {toasts.map((t) => {

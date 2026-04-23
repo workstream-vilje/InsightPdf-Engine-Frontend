@@ -151,8 +151,8 @@ export const redirectToLogin = () => {
   if (!canUseStorage()) return;
 
   const currentPath = window.location.pathname;
-  const authPrefix = `/${String(ROUTE_PATHS.AUTH_LOGIN).split("/").filter(Boolean)[0] || "auth"}/`;
+  const authPrefix = `/${String(ROUTE_PATHS.AUTH_SIGNUP).split("/").filter(Boolean)[0] || "auth"}/`;
   if (currentPath.startsWith(authPrefix)) return;
 
-  window.location.replace(ROUTE_PATHS.AUTH_LOGIN);
+  window.location.replace(ROUTE_PATHS.AUTH_SIGNUP);
 };

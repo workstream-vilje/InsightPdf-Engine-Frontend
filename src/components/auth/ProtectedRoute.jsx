@@ -8,7 +8,7 @@ import { ROUTE_PATHS } from "@/utils/routepaths";
 
 export default function ProtectedRoute({
   children,
-  redirectTo = ROUTE_PATHS.AUTH_LOGIN,
+  redirectTo = ROUTE_PATHS.AUTH_SIGNUP,
   loadingFallback = null,
 }) {
   const router = useRouter();

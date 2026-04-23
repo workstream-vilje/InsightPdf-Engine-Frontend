@@ -1,13 +1,17 @@
 import { clearAuthSession, getCsrfToken, redirectToLogin } from "@/services/auth";
 
 const normalizeApiBase = (url) => {
-  const trimmed = url.trim().replace(/\/+$/, "");
+  const trimmed = String(url || "").trim().replace(/\/+$/, "");
   if (!trimmed) return trimmed;
   if (/\/api\/v\d+(\/|$)/i.test(trimmed)) return trimmed;
   return `${trimmed}/api/v1`;
 };
 
 const getBaseUrl = () => {
+  const directBase = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (directBase && String(directBase).trim()) {
+    return normalizeApiBase(directBase).replace(/\/+$/, "");
+  }
   const host = process.env.NEXT_PUBLIC_API_HOST || "localhost";
   const port = process.env.NEXT_PUBLIC_API_PORT || "8000";
   return normalizeApiBase(`http://${host}:${port}`).replace(/\/+$/, "");
@@ -157,5 +161,5 @@ const httpClient = {
   delete: (path, options = {})       => request(path, { ...options, method: "DELETE" }),
 };
 
-export { buildUrl, getBaseUrl, getStoredUserId, request, withQuery };
+export { getBaseUrl, getStoredUserId, request };
 export default httpClient;
