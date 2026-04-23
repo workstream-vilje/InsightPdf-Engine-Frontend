@@ -1322,6 +1322,30 @@ const mapBackendProjectToCanvasProject = (project) => ({
 });
 
 const buildSharedPipelineConfig = (workspace) => {
+  const resolveCollectionName = () => {
+    const fromAllowedTechniques = workspace?.allowedTechniques?.vector_store?.collection_name;
+    if (fromAllowedTechniques) return fromAllowedTechniques;
+
+    const stores = workspace?.execution?.details?.vector_store?.stores || [];
+    const fromExecution = stores.find((store) => store?.collection_name)?.collection_name;
+    if (fromExecution) return fromExecution;
+
+    return "documents";
+  };
+  const mapRetrievalStrategyToBackendValue = (value) => {
+    switch (value) {
+      case "semantic-similarity":
+        return "semantic";
+      case "hybrid-search":
+        return "hybrid";
+      case "mmr":
+        return "mmr";
+      case "keyword-search":
+        return "similarity";
+      default:
+        return "semantic";
+    }
+  };
   const normalizedVectorStores = (workspace.vectorStores || []).filter((value) =>
     ["chromadb", "pgvector", "faiss", "pinecone"].includes(value),
   );
@@ -1336,6 +1360,11 @@ const buildSharedPipelineConfig = (workspace) => {
   const normalizedExtractionMethods = (workspace.dataExtraction || []).filter((value) =>
     ["pymupdf", "unstructured", "pdfplumber"].includes(value),
   );
+  const collectionName = resolveCollectionName();
+  const selectedRetrievalStrategy = Array.isArray(workspace?.retrievalStrategies)
+    ? workspace.retrievalStrategies[0]
+    : workspace?.retrievalStrategies;
+  const backendSearchType = mapRetrievalStrategyToBackendValue(selectedRetrievalStrategy);
 
   const processingConfig = {
     text_processing: {
@@ -1358,14 +1387,14 @@ const buildSharedPipelineConfig = (workspace) => {
     },
     vector_store: {
       backends: normalizedVectorStores.length ? normalizedVectorStores : ["faiss"],
-      collection_name: "documents",
+      collection_name: collectionName,
     },
   };
 
   const queryConfig = {
     retrieval_strategy: {
       top_k: Math.max(1, Number(workspace.topK) || 3),
-      search_type: "similarity",
+      search_type: backendSearchType,
       vector_db:
         processingConfig.vector_store.backends.length > 1
           ? processingConfig.vector_store.backends
@@ -1399,7 +1428,6 @@ const buildQueryPayload = ({ projectId, fileId, fileName, workspace, query }) =>
     ...queryConfig,
     retrieval_strategy: {
       ...queryConfig.retrieval_strategy,
-      source_name: fileName || null,
     },
   };
 

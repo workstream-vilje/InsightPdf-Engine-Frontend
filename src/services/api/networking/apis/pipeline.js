@@ -19,6 +19,24 @@ const normalizeSelectValues = (items) =>
     .map(normalizeSelectValue)
     .filter(Boolean);
 
+const mapRetrievalStrategyToBackendValue = (searchType) => {
+  switch (searchType) {
+    case "semantic":
+    case "similarity":
+    case "semantic-similarity":
+      return "semantic";
+    case "hybrid":
+    case "hybrid-search":
+      return "hybrid";
+    case "mmr":
+      return "mmr";
+    case "keyword-search":
+      return "similarity";
+    default:
+      return "semantic";
+  }
+};
+
 export const buildUploadPipelineConfig = ({
   chunkSize = 500,
   chunkOverlap = 50,
@@ -82,7 +100,7 @@ export const buildQueryPipelinePayload = ({
   fileId,
   query,
   topK = 5,
-  searchType = "similarity",
+  searchType = "semantic",
   vectorStores,
   collectionName = "documents",
   embedding,
@@ -90,8 +108,8 @@ export const buildQueryPipelinePayload = ({
   selfReflection,
 } = {}) => {
   const normalizedVectorStores = normalizeSelectValues(vectorStores).map((item) => {
-    if (item === "postgresql" || item === "pgvector") {
-      return "faiss";
+    if (item === "postgresql") {
+      return "pgvector";
     }
     if (item === "chroma") {
       return "chromadb";
@@ -106,7 +124,7 @@ export const buildQueryPipelinePayload = ({
     config: {
       retrieval_strategy: {
         top_k: Number(topK) || 5,
-        search_type: searchType === "similarity" ? "similarity" : "similarity",
+        search_type: mapRetrievalStrategyToBackendValue(searchType),
         vector_db:
           normalizedVectorStores.length > 1
             ? normalizedVectorStores

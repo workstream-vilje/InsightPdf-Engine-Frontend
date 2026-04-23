@@ -235,7 +235,10 @@ export default function AuthPage({ mode }) {
         mailId: res?.mail_id,
       });
       showToast({ title: "Login", variant: "success", message: res?.message || "Login successful." });
-      switchTimerRef.current = setTimeout(() => router.push("/workspace"), 500);
+      switchTimerRef.current = setTimeout(
+        () => router.push(ROUTE_PATHS.WORKSPACE_UPLOAD),
+        500,
+      );
     } catch (err) {
       showToast({ title: "Authentication", variant: "error", message: err?.message || "Unable to login." });
     } finally {
