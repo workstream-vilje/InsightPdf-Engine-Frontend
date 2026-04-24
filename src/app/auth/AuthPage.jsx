@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useToast } from "@/components/toast/ToastProvider";
+import { getCart } from "@/Plans/cartStore";
 import styles from "./auth.module.css";
 import { setAuthSession } from "@/services/auth";
 import { ROUTE_PATHS } from "@/utils/routepaths";
@@ -97,6 +98,15 @@ export default function AuthPage({ mode }) {
   const { showToast } = useToast();
   const isSignup = mode === "signup";
 
+  const [selectedPlan, setSelectedPlan] = useState(null);
+
+  // Read plan from cart on mount
+  useEffect(() => {
+    const plan = getCart();
+    console.log("📦 Cart check on AuthPage:", plan);
+    setSelectedPlan(plan);
+  }, []);
+
   /* â”€â”€ routing state â”€â”€ */
   const [switchingMode, setSwitchingMode] = useState("");
   const switchTimerRef = useRef(null);
@@ -130,6 +140,15 @@ export default function AuthPage({ mode }) {
       router.replace(ROUTE_PATHS.WORKSPACE_UPLOAD);
     }
   }, [isAuthInitialized, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (isAuthInitialized && !selectedPlan) {
+      console.log("⚠️ No plan selected, redirecting to home");
+      router.replace(ROUTE_PATHS.HOME);
+    } else if (selectedPlan) {
+      console.log("✅ Plan found:", selectedPlan.name);
+    }
+  }, [isAuthInitialized, selectedPlan, router]);
 
   /* â”€â”€ cleanup timers â”€â”€ */
   useEffect(() => () => {
@@ -308,8 +327,13 @@ export default function AuthPage({ mode }) {
           ? sessionStorage.getItem("post-login-redirect")
           : null;
       if (postLoginRedirect) sessionStorage.removeItem("post-login-redirect");
+      
+      // Re-read plan from cart at login time (in case it changed)
+      const currentPlan = getCart();
+      const defaultRedirect = currentPlan ? "/checkout" : "/workspace";
+      console.log("🔀 Login redirect:", { currentPlan: currentPlan?.name, postLoginRedirect, defaultRedirect });
       switchTimerRef.current = setTimeout(
-        () => router.push(postLoginRedirect || "/workspace"),
+        () => router.push(postLoginRedirect || defaultRedirect),
         500,
       );
     } catch (err) {

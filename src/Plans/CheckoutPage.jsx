@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getCart, clearCart, subscribeCart } from "./cartStore";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { ROUTE_PATHS } from "@/utils/routepaths";
 import styles from "./checkout.module.css";
 
 function LockIcon() {
@@ -69,10 +70,10 @@ export default function CheckoutPage() {
     }
   }, [isAuthenticated, isAuthInitialized, router]);
 
-  // redirect to plans if cart is empty
+  // redirect to home if cart is empty
   useEffect(() => {
     if (isAuthInitialized && isAuthenticated && !getCart()) {
-      router.replace("/plans");
+      router.replace(ROUTE_PATHS.HOME);
     }
   }, [isAuthInitialized, isAuthenticated, router]);
 

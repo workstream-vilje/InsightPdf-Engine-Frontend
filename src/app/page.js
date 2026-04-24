@@ -1,8 +1,28 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import { ROUTE_PATHS } from "@/utils/routepaths";
+import { PLANS, setCart } from "@/Plans/cartStore";
 import styles from "./page.module.css";
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function StatBar({ value, color }) {
+  return (
+    <div className={styles.statBarTrack}>
+      <div className={styles.statBarFill} style={{ width: `${value}%`, background: color }} />
+    </div>
+  );
+}
 
 const FEATURES = [
   {
@@ -78,6 +98,30 @@ const STEPS = [
 ];
 
 export default function HomePage() {
+  const router = useRouter();
+  const [selected, setSelected] = useState(null);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "auto";
+    document.body.style.height = "auto";
+    return () => {
+      document.body.style.overflow = prev;
+      document.body.style.height = "";
+    };
+  }, []);
+
+  const handleSelectPlan = (plan) => {
+    console.log("🎯 Plan selected:", plan);
+    setCart(plan);
+    setSelected(plan.id);
+    console.log("💾 Cart saved to localStorage");
+    setTimeout(() => {
+      console.log("🚀 Redirecting to signup...");
+      router.push("/auth/signup");
+    }, 300);
+  };
+
   return (
     <main className={styles.page}>
 
@@ -88,9 +132,7 @@ export default function HomePage() {
           InsightPDF Engine
         </span>
         <div className={styles.navActions}>
-          <Link className={styles.navLogin} href={ROUTE_PATHS.PLANS}>Plans</Link>
           <Link className={styles.navLogin} href={ROUTE_PATHS.AUTH_LOGIN}>Log in</Link>
-          <Link className={styles.navSignup} href={ROUTE_PATHS.AUTH_SIGNUP}>Get started</Link>
         </div>
       </nav>
 
@@ -110,18 +152,6 @@ export default function HomePage() {
           Upload PDFs, organise projects, run intelligent queries, and track every experiment — all from one professional platform.
         </p>
 
-        <div className={styles.heroActions}>
-          <Link className={styles.btnPrimary} href={ROUTE_PATHS.AUTH_SIGNUP}>
-            Start for free
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
-            </svg>
-          </Link>
-          <Link className={styles.btnGhost} href={ROUTE_PATHS.AUTH_LOGIN}>
-            Sign in to your account
-          </Link>
-        </div>
-
         <div className={styles.heroStats}>
           {[
             { val: "4", label: "Vector backends" },
@@ -132,6 +162,83 @@ export default function HomePage() {
             <div key={s.label} className={styles.heroStat}>
               <span className={styles.heroStatVal}>{s.val}</span>
               <span className={styles.heroStatLabel}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── PLANS SECTION ── */}
+      <section className={styles.plansSection}>
+        <div className={styles.plansSectionHeader}>
+          <h2 className={styles.plansSectionTitle}>Choose your RAG plan</h2>
+          <p className={styles.plansSectionSub}>Select the tier that fits your document size and accuracy needs.</p>
+        </div>
+
+        <div className={styles.plansGrid}>
+          {PLANS.map((plan) => (
+            <div
+              key={plan.id}
+              className={`${styles.planCard} ${selected === plan.id ? styles.planCardSelected : ""}`}
+              style={{ "--plan-color": plan.color, "--plan-soft": plan.colorSoft, "--plan-border": plan.colorBorder }}
+            >
+              {plan.badge && (
+                <span className={styles.planBadge} style={{ background: plan.color }}>
+                  {plan.badge}
+                </span>
+              )}
+
+              <div className={styles.planCardTop}>
+                <div className={styles.planDot} style={{ background: plan.color }} />
+                <div>
+                  <h3 className={styles.planName}>{plan.name}</h3>
+                  <p className={styles.planTagline}>{plan.tagline}</p>
+                </div>
+              </div>
+
+              <div className={styles.planPrice}>
+                <span className={styles.planCurrency}>$</span>
+                <span className={styles.planAmount}>{plan.price}</span>
+                <span className={styles.planPeriod}>/mo</span>
+              </div>
+
+              <div className={styles.planStats}>
+                <div className={styles.planStatRow}>
+                  <span className={styles.planStatLabel}>Accuracy</span>
+                  <StatBar value={plan.accuracy} color={plan.color} />
+                  <span className={styles.planStatValue}>{plan.accuracy}%</span>
+                </div>
+                <div className={styles.planStatRow}>
+                  <span className={styles.planStatLabel}>Speed</span>
+                  <StatBar value={plan.speed} color={plan.color} />
+                  <span className={styles.planStatValue}>{plan.speed}%</span>
+                </div>
+                <div className={styles.planStatRow}>
+                  <span className={styles.planStatLabel}>Cost eff.</span>
+                  <StatBar value={plan.cost} color={plan.color} />
+                  <span className={styles.planStatValue}>{plan.cost}%</span>
+                </div>
+              </div>
+
+              <div className={styles.planDivider} />
+
+              <ul className={styles.planFeatures}>
+                {plan.features.slice(0, 5).map((f) => (
+                  <li key={f} className={styles.planFeatureItem}>
+                    <span className={styles.planFeatureIcon} style={{ color: plan.color }}>
+                      <CheckIcon />
+                    </span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+
+              <button
+                className={styles.planCta}
+                style={{ background: plan.color }}
+                onClick={() => handleSelectPlan(plan)}
+              >
+                {selected === plan.id ? "Selected ✓" : "Select Plan"}
+              </button>
             </div>
           ))}
         </div>
@@ -169,16 +276,6 @@ export default function HomePage() {
               {i < STEPS.length - 1 && <span className={styles.stepArrow}>→</span>}
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* ── CTA ── */}
-      <section className={styles.cta}>
-        <h2 className={styles.ctaTitle}>Ready to query your documents?</h2>
-        <p className={styles.ctaSub}>Create an account and process your first PDF in minutes.</p>
-        <div className={styles.ctaActions}>
-          <Link className={styles.btnPrimary} href={ROUTE_PATHS.AUTH_SIGNUP}>Create free account</Link>
-          <Link className={styles.btnOutline} href={ROUTE_PATHS.AUTH_LOGIN}>Sign in</Link>
         </div>
       </section>
 
