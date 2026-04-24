@@ -88,6 +88,7 @@ export default function HomePage() {
           InsightPDF Engine
         </span>
         <div className={styles.navActions}>
+          <Link className={styles.navLogin} href={ROUTE_PATHS.PLANS}>Plans</Link>
           <Link className={styles.navLogin} href={ROUTE_PATHS.AUTH_LOGIN}>Log in</Link>
           <Link className={styles.navSignup} href={ROUTE_PATHS.AUTH_SIGNUP}>Get started</Link>
         </div>

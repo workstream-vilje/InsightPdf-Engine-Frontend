@@ -1,0 +1,326 @@
+/* ── page shell ── */
+.page {
+  min-height: 100vh;
+  overflow-y: auto;
+  background: rgb(var(--background));
+  padding: 56px 24px 80px;
+  display: flex;
+  justify-content: center;
+}
+
+.inner {
+  width: 100%;
+  max-width: 960px;
+}
+
+/* ── breadcrumb ── */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 32px;
+  font-size: 0.82rem;
+  font-family: var(--font-body);
+}
+
+.breadcrumbLink {
+  color: rgb(var(--primary));
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.breadcrumbLink:hover { text-decoration: underline; }
+
+.breadcrumbSep {
+  color: rgba(var(--foreground), 0.30);
+}
+
+.breadcrumbCurrent {
+  color: rgb(var(--foreground));
+  font-weight: 600;
+}
+
+.breadcrumbFuture {
+  color: rgba(var(--foreground), 0.35);
+}
+
+/* ── heading ── */
+.title {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: rgb(var(--foreground));
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  font-size: 0.9rem;
+  color: rgba(var(--foreground), 0.50);
+  font-family: var(--font-body);
+  margin-bottom: 36px;
+}
+
+/* ── two-column layout ── */
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: start;
+}
+
+/* ── summary card ── */
+.summaryCard {
+  background: rgb(var(--surface-1));
+  border: 1.5px solid var(--plan-border, rgb(var(--border)));
+  border-radius: var(--radius-xl);
+  padding: 28px;
+}
+
+.summaryTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.summaryLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.planDot {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.planName {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: rgb(var(--foreground));
+  margin: 0;
+}
+
+.planTagline {
+  font-size: 0.8rem;
+  color: rgba(var(--foreground), 0.50);
+  margin: 3px 0 0;
+  font-family: var(--font-body);
+}
+
+.removeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid rgba(var(--destructive), 0.25);
+  border-radius: var(--radius-sm);
+  background: rgba(var(--destructive), 0.05);
+  color: rgb(var(--destructive));
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+  flex-shrink: 0;
+}
+
+.removeBtn:hover {
+  background: rgba(var(--destructive), 0.12);
+  border-color: rgba(var(--destructive), 0.45);
+}
+
+/* features */
+.features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-bottom: 22px;
+}
+
+.featureItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.84rem;
+  font-family: var(--font-body);
+  color: rgba(var(--foreground), 0.75);
+  line-height: 1.4;
+}
+
+/* endpoints */
+.endpoints {
+  background: rgba(var(--foreground), 0.03);
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.endpointLabel {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(var(--foreground), 0.35);
+  font-family: var(--font-body);
+  margin-bottom: 2px;
+}
+
+.endpointCode {
+  font-family: var(--font-code);
+  font-size: 0.74rem;
+  color: var(--plan-color);
+}
+
+/* ── order box ── */
+.orderBox {
+  background: rgb(var(--surface-1));
+  border: 1.5px solid rgb(var(--border));
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: sticky;
+  top: 24px;
+}
+
+.orderTitle {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: rgb(var(--foreground));
+  margin-bottom: 18px;
+}
+
+.orderRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.88rem;
+  font-family: var(--font-body);
+  color: rgba(var(--foreground), 0.65);
+  padding: 6px 0;
+}
+
+.orderDivider {
+  height: 1px;
+  background: rgb(var(--border));
+  margin: 10px 0;
+}
+
+.orderTotal {
+  font-weight: 700;
+  font-size: 1rem;
+  color: rgb(var(--foreground));
+}
+
+.loginNotice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(var(--warning), 0.08);
+  border: 1px solid rgba(var(--warning), 0.25);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  font-family: var(--font-body);
+  color: rgba(var(--foreground), 0.70);
+  margin: 14px 0 4px;
+  line-height: 1.4;
+}
+
+.proceedBtn {
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 0.94rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 16px;
+  letter-spacing: 0.01em;
+  transition: opacity 160ms ease, transform 160ms ease;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}
+
+.proceedBtn:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.changePlanLink {
+  display: block;
+  text-align: center;
+  margin-top: 14px;
+  font-size: 0.82rem;
+  font-family: var(--font-body);
+  color: rgba(var(--foreground), 0.45);
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+
+.changePlanLink:hover {
+  color: rgb(var(--primary));
+}
+
+/* ── empty state ── */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  gap: 12px;
+}
+
+.emptyIcon {
+  font-size: 3rem;
+  margin-bottom: 8px;
+}
+
+.emptyTitle {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: rgb(var(--foreground));
+}
+
+.emptyText {
+  font-size: 0.9rem;
+  color: rgba(var(--foreground), 0.50);
+  font-family: var(--font-body);
+}
+
+.backBtn {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  height: 42px;
+  padding: 0 24px;
+  border-radius: var(--radius-md);
+  background: rgb(var(--primary));
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 150ms ease;
+}
+
+.backBtn:hover { background: rgb(var(--secondary)); }
+
+/* ── responsive ── */
+@media (max-width: 720px) {
+  .layout { grid-template-columns: 1fr; }
+  .orderBox { position: static; }
+}

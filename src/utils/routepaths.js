@@ -14,6 +14,9 @@ export const ROUTE_PATHS = {
   DOCUMENTATION: '/docs',
   METRICS: '/analytics',
   ANALYTICS: '/analytics',
+  PLANS: '/plans',
+  CART: '/cart',
+  CHECKOUT: '/checkout',
   /** Project workspace: documents + ingestion (default after opening a project) */
   WORKSPACE_UPLOAD: '/workspace/upload',
   /** Project workspace: RAG query + chat */

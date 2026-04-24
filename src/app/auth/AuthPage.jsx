@@ -303,7 +303,15 @@ export default function AuthPage({ mode }) {
         mailId: res?.mail_id,
       });
       showToast({ title: "Login", variant: "success", message: res?.message || "Login successful." });
-      switchTimerRef.current = setTimeout(() => router.push("/workspace"), 500);
+      const postLoginRedirect =
+        typeof window !== "undefined"
+          ? sessionStorage.getItem("post-login-redirect")
+          : null;
+      if (postLoginRedirect) sessionStorage.removeItem("post-login-redirect");
+      switchTimerRef.current = setTimeout(
+        () => router.push(postLoginRedirect || "/workspace"),
+        500,
+      );
     } catch (err) {
       showToast({ title: "Authentication", variant: "error", message: err?.message || "Unable to login." });
     } finally {
