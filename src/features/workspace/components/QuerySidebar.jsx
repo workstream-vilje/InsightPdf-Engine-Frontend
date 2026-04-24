@@ -6,6 +6,7 @@ import {
   QUERY_CONFIGURATION_OPTIONS,
   RETRIEVAL_STRATEGY_OPTIONS,
 } from "@/lib/projects/data";
+import { usePlan } from "@/contexts/PlanContext";
 import MultiSelectChips from "./MultiSelectChips";
 import SidebarSection from "./SidebarSection";
 import styles from "./Home/Projects.module.css";
@@ -26,6 +27,17 @@ export default function QuerySidebar({
   setOllamaWarningOpen,
   isImageFile = false,
 }) {
+  const { features } = usePlan();
+  
+  // Filter query configuration options based on plan features
+  const QUERY_CONFIGURATION_SIDEBAR_OPTIONS_FILTERED = QUERY_CONFIGURATION_SIDEBAR_OPTIONS.filter(
+    (option) => {
+      if (option.value === "reranking" && !features.reranking) return false;
+      if (option.value === "validation" && !features.validation) return false;
+      return true;
+    }
+  );
+  
   if (isImageFile) {
     return (
       <aside className={styles.workspaceQuerySidebar}>
@@ -132,8 +144,18 @@ export default function QuerySidebar({
             </SidebarSection>
 
             <SidebarSection icon={MessageSquare} title="Query Configuration" description="Ragas and LangSmith (Agent mode is in the chat bar)" expanded>
+              {!features.reranking && (
+                <div style={{ padding: '8px 12px', marginBottom: '8px', backgroundColor: '#fef3c7', border: '1px solid #fde68a', borderRadius: '6px', fontSize: '12px', color: '#b45309' }}>
+                  ⚠️ Reranking requires Medium or Advanced plan
+                </div>
+              )}
+              {!features.validation && (
+                <div style={{ padding: '8px 12px', marginBottom: '8px', backgroundColor: '#fef3c7', border: '1px solid #fde68a', borderRadius: '6px', fontSize: '12px', color: '#b45309' }}>
+                  ⚠️ Validation requires Advanced plan
+                </div>
+              )}
               <MultiSelectChips
-                options={QUERY_CONFIGURATION_SIDEBAR_OPTIONS}
+                options={QUERY_CONFIGURATION_SIDEBAR_OPTIONS_FILTERED}
                 selectedValues={activeWorkspace.queryConfigurations || []}
                 onToggle={(v) => toggleWorkspaceValue("queryConfigurations", v)}
               />

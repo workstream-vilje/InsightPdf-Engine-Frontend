@@ -44,6 +44,8 @@ import { Slider } from "@/components/ui/slider";
 import fileApi from "@/services/api/networking/apis/file";
 import projectApi from "@/services/api/networking/apis/project";
 import queryApi from "@/services/api/networking/apis/query";
+import { usePlan } from "@/contexts/PlanContext";
+import { uploadPDF, queryRAG, validateFileForPlan } from "@/services/ragApi";
 import {
   clearAuthSession,
   getCurrentUserId,
@@ -141,6 +143,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { plan, features, limits } = usePlan();
 
   // Derive workspaceMode from the URL so navigating between /upload and /query
   // does NOT remount this component — it just updates the mode reactively.
@@ -1067,6 +1070,20 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
       return;
     }
 
+    // Validate files against plan limits
+    for (const file of selectedFiles) {
+      const validation = validateFileForPlan(file);
+      if (!validation.valid) {
+        showToast({
+          title: "Upload Limit",
+          variant: "warning",
+          message: validation.error,
+        });
+        event.target.value = "";
+        return;
+      }
+    }
+
     const formData = new FormData();
     selectedFiles.forEach((file) => formData.append("files", file));
     setIsUploadingFiles(true);
@@ -1099,6 +1116,7 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
         }
       }
 
+      // Use plan-based upload routing
       const response = await fileApi.uploadProjectFiles(activeProject.id, formData);
       const uploadedFiles = dedupeWorkspaceFilesByFileId(
         (response?.data || []).map((file) =>
@@ -2048,39 +2066,67 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
 
   const topNavbarEndSlot = useMemo(() => {
     if (!activeProject) return null;
+    
+    // Plan badge component
+    const planId = plan?.id || 'basic';
+    const planBadge = planId && (
+      <div style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '4px 10px',
+        borderRadius: '6px',
+        fontSize: '12px',
+        fontWeight: 500,
+        backgroundColor: planId === 'basic' ? '#f0f9ff' : planId === 'medium' ? '#fef3c7' : '#f0fdf4',
+        color: planId === 'basic' ? '#0369a1' : planId === 'medium' ? '#b45309' : '#15803d',
+        border: `1px solid ${planId === 'basic' ? '#bae6fd' : planId === 'medium' ? '#fde68a' : '#bbf7d0'}`,
+        marginRight: '8px'
+      }}>
+        <span style={{ fontSize: '10px' }}>●</span>
+        {planId.charAt(0).toUpperCase() + planId.slice(1)} Plan
+      </div>
+    );
+    
     if (workspaceMode === "upload") {
       return (
-        <Button
-          type="button"
-          variant="default"
-          size="sm"
-          className={classNames(styles.topNavOpenChat, {
-            [styles.topNavOpenChatHighlight]:
-              executionState.status === "success" && executionState.visible,
-          })}
-          onClick={() => router.push(workspaceQueryUrl(activeProject.id))}
-        >
-          <MessageSquare size={15} strokeWidth={2} />
-          Open chat
-        </Button>
+        <>
+          {planBadge}
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            className={classNames(styles.topNavOpenChat, {
+              [styles.topNavOpenChatHighlight]:
+                executionState.status === "success" && executionState.visible,
+            })}
+            onClick={() => router.push(workspaceQueryUrl(activeProject.id))}
+          >
+            <MessageSquare size={15} strokeWidth={2} />
+            Open chat
+          </Button>
+        </>
       );
     }
     if (workspaceMode === "query") {
       return (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className={styles.topNavWorkspaceUpload}
-          onClick={() => router.push(workspaceUploadUrl(activeProject.id))}
-        >
-          <Upload size={15} strokeWidth={2} />
-          Upload
-        </Button>
+        <>
+          {planBadge}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={styles.topNavWorkspaceUpload}
+            onClick={() => router.push(workspaceUploadUrl(activeProject.id))}
+          >
+            <Upload size={15} strokeWidth={2} />
+            Upload
+          </Button>
+        </>
       );
     }
     return null;
-  }, [workspaceMode, activeProject, router, executionState.status, executionState.visible]);
+  }, [workspaceMode, activeProject, router, executionState.status, executionState.visible, plan]);
 
 
   if (!activeProject || !activeWorkspace) {
@@ -3377,9 +3423,29 @@ const ProjectCanvas = ({ initialProjectId = null, workspaceMode: workspaceModePr
                       <button
                         type="button"
                         className={styles.agentToggleWrap}
-                        onClick={() => toggleWorkspaceValue("queryConfigurations", "agent")}
+                        onClick={() => {
+                          if (!features.agentPipeline) {
+                            showToast({
+                              title: "Agent Mode",
+                              variant: "warning",
+                              message: "Agent mode requires Advanced plan. Upgrade to unlock this feature.",
+                            });
+                            return;
+                          }
+                          toggleWorkspaceValue("queryConfigurations", "agent");
+                        }}
                         aria-pressed={queryAgentModeEnabled}
-                        title={queryAgentModeEnabled ? "Turn off Agent mode" : "Turn on Agent mode"}
+                        title={
+                          !features.agentPipeline
+                            ? "Agent mode requires Advanced plan"
+                            : queryAgentModeEnabled
+                              ? "Turn off Agent mode"
+                              : "Turn on Agent mode"
+                        }
+                        style={{
+                          opacity: !features.agentPipeline ? 0.5 : 1,
+                          cursor: !features.agentPipeline ? 'not-allowed' : 'pointer'
+                        }}
                       >
                         <span className={styles.agentToggleLabel}>Agent</span>
                         <span className={classNames(styles.agentToggleTrack, {

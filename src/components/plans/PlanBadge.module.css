@@ -1,0 +1,77 @@
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(var(--plan-color), 0.08);
+  border: 1px solid rgba(var(--plan-color), 0.20);
+}
+
+.planInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.planDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.planName {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgb(var(--foreground));
+  font-family: var(--font-body);
+}
+
+.planLimit {
+  font-size: 0.72rem;
+  color: rgba(var(--foreground), 0.50);
+  margin-left: 6px;
+}
+
+.features {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.feature {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(var(--foreground), 0.06);
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: rgba(var(--foreground), 0.65);
+}
+
+.noPlan {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(var(--warning), 0.08);
+  border: 1px solid rgba(var(--warning), 0.25);
+  font-size: 0.82rem;
+  color: rgba(var(--foreground), 0.70);
+}
+
+.icon {
+  font-size: 1rem;
+}
+
+.link {
+  margin-left: 4px;
+  color: rgb(var(--primary));
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}

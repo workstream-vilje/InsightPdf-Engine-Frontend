@@ -100,23 +100,39 @@ export function getPlanById(id) {
 }
 
 export function getCart() {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined") {
+    console.log("🚫 getCart: window is undefined (SSR)");
+    return null;
+  }
   try {
     const raw = localStorage.getItem(CART_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
+    console.log("📦 getCart: raw value from localStorage:", raw);
+    const parsed = raw ? JSON.parse(raw) : null;
+    console.log("📦 getCart: parsed value:", parsed);
+    return parsed;
+  } catch (err) {
+    console.error("❌ getCart: error reading cart:", err);
     return null;
   }
 }
 
 export function setCart(plan) {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") {
+    console.log("🚫 setCart: window is undefined (SSR)");
+    return;
+  }
+  console.log("💾 setCart: saving plan to localStorage:", plan);
   if (plan) {
-    localStorage.setItem(CART_KEY, JSON.stringify(plan));
+    const stringified = JSON.stringify(plan);
+    console.log("💾 setCart: stringified:", stringified);
+    localStorage.setItem(CART_KEY, stringified);
+    console.log("✅ setCart: saved successfully");
   } else {
     localStorage.removeItem(CART_KEY);
+    console.log("🗑️ setCart: removed cart");
   }
   window.dispatchEvent(new Event(CART_EVENT));
+  console.log("📢 setCart: dispatched cart change event");
 }
 
 export function clearCart() {

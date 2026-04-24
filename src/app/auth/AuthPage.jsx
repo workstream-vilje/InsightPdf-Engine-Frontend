@@ -144,7 +144,7 @@ export default function AuthPage({ mode }) {
   useEffect(() => {
     if (isAuthInitialized && !selectedPlan) {
       console.log("⚠️ No plan selected, redirecting to home");
-      router.replace(ROUTE_PATHS.HOME);
+      // router.replace(ROUTE_PATHS.HOME); // DISABLED: Allow signup without plan
     } else if (selectedPlan) {
       console.log("✅ Plan found:", selectedPlan.name);
     }

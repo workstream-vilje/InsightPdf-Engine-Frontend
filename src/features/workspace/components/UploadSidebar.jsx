@@ -9,11 +9,14 @@ import {
   TEXT_PROCESSING_OPTIONS,
   VECTOR_STORE_OPTIONS,
 } from "@/lib/projects/data";
+import { usePlan } from "@/contexts/PlanContext";
 import MultiSelectChips from "./MultiSelectChips";
 import SidebarSection from "./SidebarSection";
 import styles from "./Home/Projects.module.css";
 
 export default function UploadSidebar({ activeWorkspace, updateActiveWorkspace, toggleWorkspaceValue, isImageFile = false }) {
+  const { features } = usePlan();
+  
   if (isImageFile) {
     return (
       <aside className={styles.workspaceQuerySidebar}>
@@ -60,7 +63,12 @@ export default function UploadSidebar({ activeWorkspace, updateActiveWorkspace, 
             </SidebarSection>
 
             <SidebarSection icon={FileText} title="Text Processing" description="Select multiple extractors" expanded>
-              <MultiSelectChips options={TEXT_PROCESSING_OPTIONS} selectedValues={activeWorkspace.textProcessing} onToggle={(v) => toggleWorkspaceValue("textProcessing", v)} />
+              {!features.semanticChunking && (
+                <div style={{ padding: '8px 12px', marginBottom: '8px', backgroundColor: '#fef3c7', border: '1px solid #fde68a', borderRadius: '6px', fontSize: '12px', color: '#b45309' }}>
+                  ⚠️ Semantic chunking requires Medium or Advanced plan
+                </div>
+              )}
+              <MultiSelectChips options={TEXT_PROCESSING_OPTIONS} selectedValues={activeWorkspace.textProcessing} onToggle={(v) => toggleWorkspaceValue("textProcessing", v)} disabled={!features.semanticChunking} />
             </SidebarSection>
 
             <SidebarSection icon={Sparkles} title="Embedding Model" description="Select multiple embedding models" expanded>

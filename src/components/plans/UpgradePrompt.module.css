@@ -1,0 +1,50 @@
+.prompt {
+  display: flex;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(var(--primary), 0.08), rgba(var(--secondary), 0.08));
+  border: 1.5px solid rgba(var(--primary), 0.20);
+}
+
+.icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.content {
+  flex: 1;
+}
+
+.title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: rgb(var(--foreground));
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+}
+
+.message {
+  font-size: 0.82rem;
+  color: rgba(var(--foreground), 0.65);
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.upgradeBtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  background: rgb(var(--primary));
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 150ms ease, transform 150ms ease;
+}
+
+.upgradeBtn:hover {
+  background: rgb(var(--secondary));
+  transform: translateY(-1px);
+}
