@@ -3,17 +3,20 @@
 import { Blocks, Database, FileText, FolderKanban, Sparkles } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import {
-  DATA_EXTRACTION_OPTIONS,
-  EMBEDDING_OPTIONS,
-  TEXT_PROCESSING_OPTIONS,
-  VECTOR_STORE_OPTIONS,
-} from "@/lib/projects/data";
+import { EMBEDDING_OPTIONS } from "@/lib/projects/data";
 import MultiSelectChips from "./MultiSelectChips";
 import SidebarSection from "./SidebarSection";
 import styles from "./Home/Projects.module.css";
 
-export default function UploadSidebar({ activeWorkspace, updateActiveWorkspace, toggleWorkspaceValue, isImageFile = false }) {
+export default function UploadSidebar({
+  activeWorkspace,
+  updateActiveWorkspace,
+  toggleWorkspaceValue,
+  uploadDataExtractionOptions,
+  uploadTextProcessingOptions,
+  uploadVectorStoreOptions,
+  isImageFile = false,
+}) {
   if (isImageFile) {
     return (
       <aside className={styles.workspaceQuerySidebar}>
@@ -56,11 +59,11 @@ export default function UploadSidebar({ activeWorkspace, updateActiveWorkspace, 
             </SidebarSection>
 
             <SidebarSection icon={Database} title="Data Extraction" description="Select multiple extractors" expanded>
-              <MultiSelectChips options={DATA_EXTRACTION_OPTIONS} selectedValues={activeWorkspace.dataExtraction} onToggle={(v) => toggleWorkspaceValue("dataExtraction", v)} />
+              <MultiSelectChips options={uploadDataExtractionOptions} selectedValues={activeWorkspace.dataExtraction} onToggle={(v) => toggleWorkspaceValue("dataExtraction", v)} />
             </SidebarSection>
 
             <SidebarSection icon={FileText} title="Text Processing" description="Select multiple extractors" expanded>
-              <MultiSelectChips options={TEXT_PROCESSING_OPTIONS} selectedValues={activeWorkspace.textProcessing} onToggle={(v) => toggleWorkspaceValue("textProcessing", v)} />
+              <MultiSelectChips options={uploadTextProcessingOptions} selectedValues={activeWorkspace.textProcessing} onToggle={(v) => toggleWorkspaceValue("textProcessing", v)} />
             </SidebarSection>
 
             <SidebarSection icon={Sparkles} title="Embedding Model" description="Select multiple embedding models" expanded>
@@ -68,7 +71,7 @@ export default function UploadSidebar({ activeWorkspace, updateActiveWorkspace, 
             </SidebarSection>
 
             <SidebarSection icon={FolderKanban} title="Vector Store" description="Select multiple vector stores" expanded>
-              <MultiSelectChips options={VECTOR_STORE_OPTIONS} selectedValues={activeWorkspace.vectorStores} onToggle={(v) => toggleWorkspaceValue("vectorStores", v)} />
+              <MultiSelectChips options={uploadVectorStoreOptions} selectedValues={activeWorkspace.vectorStores} onToggle={(v) => toggleWorkspaceValue("vectorStores", v)} />
             </SidebarSection>
           </div>
         </section>

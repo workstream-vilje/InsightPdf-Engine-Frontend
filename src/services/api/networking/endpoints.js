@@ -37,3 +37,8 @@ export const chatHistory = "/chat/history";
 // File index status ENDPOINT
 export const getFileIndexStatus = (projectId, fileId) =>
   `/project/${projectId}/file/${fileId}/index-status`;
+
+// Subscription ENDPOINTS
+export const fetchSubscriptionPlans = "/subscription/plans";
+export const fetchCurrentSubscription = "/subscription/current";
+export const updateCurrentSubscription = "/subscription/current";

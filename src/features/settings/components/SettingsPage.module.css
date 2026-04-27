@@ -1,7 +1,10 @@
 .pageShell {
+  height: 100vh;
   min-height: 100vh;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   background:
     radial-gradient(circle at top left, rgba(var(--primary), 0.12), transparent 28%),
     linear-gradient(180deg, rgba(var(--surface-2), 0.82), rgba(var(--background), 0.98));
@@ -25,6 +28,26 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.pageActions {
+  display: flex;
+  align-items: center;
+}
+
+.backButton {
+  min-height: 42px;
+  padding-inline: 16px;
+  border-radius: 999px;
+  border-color: rgba(var(--border), 0.9);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  font-weight: 800;
+}
+
+.backButton:hover:not(:disabled) {
+  border-color: rgba(var(--primary), 0.34);
+  background: rgba(var(--surface-2), 0.98);
 }
 
 .pageIntro {
@@ -63,6 +86,289 @@
   box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(16px);
   overflow: hidden;
+}
+
+.subscriptionSection {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 28px;
+  border-bottom: 1px solid rgba(var(--border), 0.72);
+  background:
+    radial-gradient(circle at top right, rgba(var(--sky), 0.16), transparent 24%),
+    linear-gradient(180deg, rgba(var(--surface-2), 0.38), rgba(255, 255, 255, 0.9));
+}
+
+.subscriptionHero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.95fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.subscriptionHeroCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subscriptionEyebrow {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgb(var(--primary));
+}
+
+.subscriptionTitle {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: rgb(var(--foreground));
+}
+
+.subscriptionText {
+  margin: 0;
+  line-height: 1.7;
+  color: rgb(var(--muted-foreground));
+}
+
+.subscriptionSummaryCard {
+  border-radius: 22px;
+  border: 1px solid rgba(var(--border), 0.78);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.07);
+  padding: 18px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.summaryIcon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, rgba(var(--primary), 0.9), rgba(var(--sky), 0.86));
+  color: rgb(var(--primary-foreground));
+  flex-shrink: 0;
+}
+
+.summaryMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.summaryLabel {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgb(var(--muted-foreground));
+}
+
+.summaryMeta strong {
+  font-size: 1.08rem;
+  font-weight: 800;
+  color: rgb(var(--foreground));
+}
+
+.summaryMeta p {
+  margin: 0;
+  line-height: 1.55;
+  color: rgb(var(--muted-foreground));
+}
+
+.usageGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.usageCard,
+.loadingCard,
+.addOnCard {
+  border-radius: 22px;
+  border: 1px solid rgba(var(--border), 0.78);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.usageCard {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.usageCardHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.usageCardHeader h3 {
+  margin: 0 0 4px;
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: rgb(var(--foreground));
+}
+
+.usageCardHeader p {
+  margin: 0;
+  line-height: 1.5;
+  color: rgb(var(--muted-foreground));
+  font-size: 0.9rem;
+}
+
+.usageValue {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: rgb(var(--foreground));
+  white-space: nowrap;
+}
+
+.usageTrack {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(var(--surface-2), 0.92);
+}
+
+.usageFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(var(--primary), 0.92), rgba(var(--sky), 0.9));
+}
+
+.loadingCard {
+  grid-column: 1 / -1;
+  padding: 20px;
+  color: rgb(var(--muted-foreground));
+}
+
+.hintsPanel {
+  border-radius: 22px;
+  padding: 18px;
+  border: 1px solid rgba(var(--border), 0.78);
+  background: rgba(245, 248, 255, 0.9);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hintsHeader {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: rgb(var(--foreground));
+}
+
+.hintsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hintsList p {
+  margin: 0;
+  line-height: 1.6;
+  color: rgb(var(--muted-foreground));
+}
+
+.planGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.planCard,
+.addOnCard {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.planCardActive {
+  border-color: rgba(var(--primary), 0.36);
+  box-shadow: 0 16px 34px rgba(var(--primary), 0.12);
+}
+
+.planCardTop,
+.addOnHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.planAudience {
+  margin: 0 0 6px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgb(var(--primary));
+}
+
+.planCard h3,
+.addOnCard h3 {
+  margin: 0;
+  font-size: 1.12rem;
+  font-weight: 800;
+  color: rgb(var(--foreground));
+}
+
+.planCode {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(var(--surface-2), 0.92);
+  color: rgb(var(--muted-foreground));
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.planDescription {
+  margin: 0;
+  line-height: 1.6;
+  color: rgb(var(--muted-foreground));
+}
+
+.planFeatureList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.planFeatureList p {
+  margin: 0;
+  line-height: 1.55;
+  color: rgb(var(--foreground));
+}
+
+.planButton {
+  min-height: 42px;
+  font-weight: 700;
+}
+
+.addOnIcon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(var(--primary), 0.12);
+  color: rgb(var(--primary));
+  flex-shrink: 0;
 }
 
 .accountHeader {
@@ -297,6 +603,24 @@
 @media (max-width: 720px) {
   .pageContent {
     padding: 36px 16px 56px;
+  }
+
+  .pageActions {
+    width: 100%;
+  }
+
+  .backButton {
+    width: 100%;
+  }
+
+  .subscriptionSection {
+    padding: 20px 18px;
+  }
+
+  .subscriptionHero,
+  .usageGrid,
+  .planGrid {
+    grid-template-columns: 1fr;
   }
 
   .accountHeader {

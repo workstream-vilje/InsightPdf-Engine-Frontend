@@ -25,16 +25,16 @@ async function tryRefresh() {
 }
 
 /**
- * Build the fetch options for the streaming query request.
+ * Build the fetch options for the query request.
  */
-function buildQueryFetchOptions(payload, signal) {
+function buildQueryFetchOptions(payload, signal, streaming = true) {
   const csrfToken = typeof window !== "undefined" ? getCsrfToken() : null;
   return {
     method: "POST",
     cache: "no-store",
     credentials: "include",
     headers: {
-      Accept: "application/x-ndjson",
+      Accept: streaming ? "application/x-ndjson" : "application/json",
       "Content-Type": "application/json",
       "Cache-Control": "no-cache, no-store, max-age=0",
       Pragma: "no-cache",
@@ -46,20 +46,33 @@ function buildQueryFetchOptions(payload, signal) {
 }
 
 /**
- * POST /query with Accept: application/x-ndjson.
- * Streams progress lines `{type:"progress",id,message}` then `{type:"result",data}`.
+ * POST /query. Uses NDJSON streaming when available and automatically
+ * falls back to a standard JSON response for plans that do not include streaming.
  *
  * On 401: attempts one token refresh then retries the stream once.
  * If refresh fails: clears session and redirects to login.
  */
-export async function runQuery(payload, { onProgress, signal } = {}, _isRetry = false) {
-  const response = await fetch(buildUrl(runQueryPath), buildQueryFetchOptions(payload, signal));
+export async function runQuery(
+  payload,
+  { onProgress, signal, streaming = true } = {},
+  _isRetry = false,
+  _hasRetriedWithoutStreaming = false,
+) {
+  const response = await fetch(
+    buildUrl(runQueryPath),
+    buildQueryFetchOptions(payload, signal, streaming),
+  );
 
   // ── 401: try refresh once ──
   if (response.status === 401 && !_isRetry && typeof window !== "undefined") {
     const refreshed = await tryRefresh();
     if (refreshed) {
-      return runQuery(payload, { onProgress, signal }, true);
+      return runQuery(
+        payload,
+        { onProgress, signal, streaming },
+        true,
+        _hasRetriedWithoutStreaming,
+      );
     }
     clearAuthSession();
     redirectToLogin();
@@ -80,6 +93,24 @@ export async function runQuery(payload, { onProgress, signal } = {}, _isRetry = 
       (parsed && typeof parsed === "object" && (parsed.message || parsed.error)) ||
       response.statusText ||
       "Request failed";
+
+    const normalizedMessage = String(message || "").toLowerCase();
+    const isStreamingUpgradeError =
+      response.status === 403 &&
+      streaming &&
+      !_hasRetriedWithoutStreaming &&
+      normalizedMessage.includes("stream") &&
+      normalizedMessage.includes("upgrade to medium");
+
+    if (isStreamingUpgradeError) {
+      return runQuery(
+        payload,
+        { signal, streaming: false },
+        _isRetry,
+        true,
+      );
+    }
+
     const err = new Error(typeof message === "string" ? message : "Request failed");
     err.status = response.status;
     err.payload = parsed;

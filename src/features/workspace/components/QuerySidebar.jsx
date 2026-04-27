@@ -3,22 +3,18 @@
 import { Database, FolderKanban, MessageSquare, Sparkles, X } from "lucide-react";
 import {
   LLM_MODEL_OPTIONS,
-  QUERY_CONFIGURATION_OPTIONS,
-  RETRIEVAL_STRATEGY_OPTIONS,
 } from "@/lib/projects/data";
 import MultiSelectChips from "./MultiSelectChips";
 import SidebarSection from "./SidebarSection";
 import styles from "./Home/Projects.module.css";
-
-const QUERY_CONFIGURATION_SIDEBAR_OPTIONS = QUERY_CONFIGURATION_OPTIONS.filter(
-  (option) => option.value !== "agent",
-);
 
 export default function QuerySidebar({
   activeWorkspace,
   updateActiveWorkspace,
   toggleWorkspaceValue,
   queryAgentModeEnabled,
+  queryRetrievalStrategyOptions,
+  queryConfigurationOptions,
   allowedVectorStoreOptions,
   allowedEmbeddingOptions,
   ollamaDocsOpen,
@@ -59,7 +55,7 @@ export default function QuerySidebar({
               expanded
             >
               <MultiSelectChips
-                options={RETRIEVAL_STRATEGY_OPTIONS}
+                options={queryRetrievalStrategyOptions}
                 selectedValues={activeWorkspace.retrievalStrategies}
                 onToggle={(v) => toggleWorkspaceValue("retrievalStrategies", v)}
                 disabled={queryAgentModeEnabled}
@@ -131,13 +127,15 @@ export default function QuerySidebar({
               )}
             </SidebarSection>
 
-            <SidebarSection icon={MessageSquare} title="Query Configuration" description="Ragas and LangSmith (Agent mode is in the chat bar)" expanded>
-              <MultiSelectChips
-                options={QUERY_CONFIGURATION_SIDEBAR_OPTIONS}
-                selectedValues={activeWorkspace.queryConfigurations || []}
-                onToggle={(v) => toggleWorkspaceValue("queryConfigurations", v)}
-              />
-            </SidebarSection>
+            {queryConfigurationOptions.length > 0 ? (
+              <SidebarSection icon={MessageSquare} title="Query Configuration" description="Only features included in your plan are shown here" expanded>
+                <MultiSelectChips
+                  options={queryConfigurationOptions}
+                  selectedValues={activeWorkspace.queryConfigurations || []}
+                  onToggle={(v) => toggleWorkspaceValue("queryConfigurations", v)}
+                />
+              </SidebarSection>
+            ) : null}
           </div>
         </section>
       </div>

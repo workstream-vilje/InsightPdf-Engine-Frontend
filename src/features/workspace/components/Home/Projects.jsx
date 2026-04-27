@@ -49,6 +49,7 @@ import { SkeletonBlock, SkeletonLine } from "@/components/skeletons/SkeletonPrim
 import fileApi from "@/services/api/networking/apis/file";
 import projectApi from "@/services/api/networking/apis/project";
 import queryApi from "@/services/api/networking/apis/query";
+import subscriptionApi from "@/services/api/networking/apis/subscription";
 import {
   clearAuthSession,
   getCurrentUserId,
@@ -57,17 +58,13 @@ import {
 } from "@/services/auth";
 import { getExperimentAgentReportById, getExperimentPerformanceById } from "@/lib/api";
 import {
-  DATA_EXTRACTION_OPTIONS,
   DEFAULT_QUALITY_METRICS,
   EMBEDDING_OPTIONS,
   INITIAL_PROJECTS,
-  LLM_MODEL_OPTIONS,
-  QUERY_CONFIGURATION_OPTIONS,
-  RETRIEVAL_STRATEGY_OPTIONS,
-  TEXT_PROCESSING_OPTIONS,
   VECTOR_STORE_OPTIONS,
   createWorkspaceState,
 } from "@/lib/projects/data";
+import { getSubscriptionPlanUi } from "@/lib/subscriptionPlanUi";
 import {
   ROUTE_PATHS,
   workspaceQueryUrl,
@@ -82,11 +79,6 @@ import QueryRightSidebar from "../QueryRightSidebar";
 import UploadRightSidebar from "../UploadRightSidebar";
 
 import styles from "./Projects.module.css";
-
-/** Agent is toggled from the query bar, not the sidebar chips. */
-const QUERY_CONFIGURATION_SIDEBAR_OPTIONS = QUERY_CONFIGURATION_OPTIONS.filter(
-  (option) => option.value !== "agent",
-);
 
 /** Typed in the "delete all files" modal to confirm permanent removal. */
 const DELETE_ALL_FILES_CONFIRM_PHRASE = "DELETE ALL";
@@ -1587,6 +1579,52 @@ const getAllowedEmbeddingOptions = (allowedTechniques) => {
   return EMBEDDING_OPTIONS.filter((option) => allowedValues.has(option.value));
 };
 
+const filterSelectionToOptions = (selectedValues, allowedOptions, fallbackValue) => {
+  const allowedValues = new Set((allowedOptions || []).map((option) => option.value));
+  const nextValues = Array.isArray(selectedValues)
+    ? selectedValues.filter((value) => allowedValues.has(value))
+    : [];
+
+  if (nextValues.length > 0) {
+    return nextValues;
+  }
+
+  return fallbackValue && allowedValues.has(fallbackValue) ? [fallbackValue] : [];
+};
+
+const sanitizeWorkspaceForPlan = (workspace, planUi) => {
+  if (!workspace) return workspace;
+
+  return {
+    ...workspace,
+    dataExtraction: filterSelectionToOptions(
+      workspace.dataExtraction,
+      planUi.uploadDataExtractionOptions,
+      "pymupdf",
+    ),
+    textProcessing: filterSelectionToOptions(
+      workspace.textProcessing,
+      planUi.uploadTextProcessingOptions,
+      "recursive",
+    ),
+    vectorStores: filterSelectionToOptions(
+      workspace.vectorStores,
+      planUi.uploadVectorStoreOptions,
+      "faiss",
+    ),
+    retrievalStrategies: filterSelectionToOptions(
+      workspace.retrievalStrategies,
+      planUi.queryRetrievalStrategyOptions,
+      "semantic-similarity",
+    ),
+    queryConfigurations: (workspace.queryConfigurations || []).filter((value) =>
+      value === "agent"
+        ? planUi.canUseAgent
+        : planUi.queryConfigurationOptions.some((option) => option.value === value),
+    ),
+  };
+};
+
 const TypedLine = ({ text }) => {
   const [visibleText, setVisibleText] = useState("");
 
@@ -1959,6 +1997,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const [chatPanelOffset, setChatPanelOffset] = useState(420);
   const [chatGreeting, setChatGreeting] = useState("Hello");
   const [userProfile, setUserProfile] = useState({ name: "", email: "" });
+  const [subscription, setSubscription] = useState(null);
   const [techniqueOverlay, setTechniqueOverlay] = useState(null);
   const [historyEntries, setHistoryEntries] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -1997,6 +2036,44 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     [activeProjectId, projects],
   );
   const activeWorkspace = activeProjectId ? projectWorkspaces[activeProjectId] : null;
+  const subscriptionPlanUi = useMemo(
+    () => getSubscriptionPlanUi(subscription),
+    [subscription],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSubscription = async () => {
+      try {
+        const response = await subscriptionApi.fetchCurrentSubscription();
+        if (!cancelled) {
+          setSubscription(response?.data || null);
+        }
+      } catch {
+        if (!cancelled) {
+          setSubscription(null);
+        }
+      }
+    };
+
+    loadSubscription();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setProjectWorkspaces((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([projectId, workspace]) => [
+          projectId,
+          sanitizeWorkspaceForPlan(workspace, subscriptionPlanUi),
+        ]),
+      ),
+    );
+  }, [subscriptionPlanUi]);
 
   // Execution Performance (dynamic from backend by experiment_id)
   const [perf, setPerf] = useState(null);
@@ -2617,11 +2694,23 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     [projects],
   );
 
+  const uploadDataExtractionOptions = subscriptionPlanUi.uploadDataExtractionOptions;
+  const uploadTextProcessingOptions = subscriptionPlanUi.uploadTextProcessingOptions;
+  const uploadVectorStoreOptions = subscriptionPlanUi.uploadVectorStoreOptions;
+  const queryRetrievalStrategyOptions = subscriptionPlanUi.queryRetrievalStrategyOptions;
+  const queryConfigurationOptions = subscriptionPlanUi.queryConfigurationOptions;
+  const canUseAgent = subscriptionPlanUi.canUseAgent;
+  const canUseHistory = subscriptionPlanUi.canUseHistory;
+  const canUseAnalytics = subscriptionPlanUi.canUseAnalytics;
+  const canUseImageUploads = subscriptionPlanUi.canUseImageUploads;
+
   const allowedVectorStoreOptions = useMemo(() => {
-    if (!activeWorkspace?.allowedTechniques) return VECTOR_STORE_OPTIONS;
+    if (!activeWorkspace?.allowedTechniques) return uploadVectorStoreOptions;
     const options = getAllowedVectorStoreOptions(activeWorkspace.allowedTechniques);
-    return options.length > 0 ? options : VECTOR_STORE_OPTIONS;
-  }, [activeWorkspace?.allowedTechniques]);
+    return options.filter((option) =>
+      uploadVectorStoreOptions.some((planOption) => planOption.value === option.value),
+    );
+  }, [activeWorkspace?.allowedTechniques, uploadVectorStoreOptions]);
 
   const allowedEmbeddingOptions = useMemo(() => {
     if (!activeWorkspace?.allowedTechniques) return EMBEDDING_OPTIONS;
@@ -2813,6 +2902,17 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     if (selectedFiles.length === 0) return;
 
     if (!activeProject?.id) {
+      event.target.value = "";
+      return;
+    }
+
+    const includesImageFile = selectedFiles.some((file) => /\.(png|jpg|jpeg)$/i.test(file.name));
+    if (includesImageFile && !canUseImageUploads) {
+      showToast({
+        title: "Files",
+        variant: "warning",
+        message: "Your current plan supports PDF uploads only. Enable the Image Intelligence add-on to upload images.",
+      });
       event.target.value = "";
       return;
     }
@@ -3535,8 +3635,15 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
     /\.(png|jpg|jpeg)$/i.test(selectedWorkspaceFile.name)
   );
   const queryAgentModeEnabled = Boolean(
-    (activeWorkspace?.queryConfigurations || []).includes("agent"),
+    canUseAgent && (activeWorkspace?.queryConfigurations || []).includes("agent"),
   );
+  const uploadFileAccept = canUseImageUploads ? ".pdf,.png,.jpg,.jpeg" : ".pdf";
+  const uploadBrowseLabel = canUseImageUploads
+    ? "Browse PDFs or images, or drop here"
+    : "Browse PDFs, or drop here";
+  const uploadSupportedLabel = canUseImageUploads
+    ? "PDF, PNG, JPG, JPEG supported."
+    : "PDF supported on your current plan.";
   const executionState = activeWorkspace?.execution || {};
   const executionStatusLabel =
     executionState.status === "running"
@@ -3750,44 +3857,60 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   ]);
 
   const topNavbarActions = useMemo(
-    () => [
-      {
-        id: "notifications",
-        label: "Notifications",
-        icon: "notifications",
-        pulse: hasUnreadPipelineSuccess,
-        onClick: () => {
-          if (hasUnreadPipelineSuccess) {
-            setHasUnreadPipelineSuccess(false);
-            setPipelineSuccessModalOpen(true);
-          }
-          // no-op when there's nothing new — don't show any toast
+    () => {
+      const actions = [
+        {
+          id: "notifications",
+          label: "Notifications",
+          icon: "notifications",
+          pulse: hasUnreadPipelineSuccess,
+          onClick: () => {
+            if (hasUnreadPipelineSuccess) {
+              setHasUnreadPipelineSuccess(false);
+              setPipelineSuccessModalOpen(true);
+            }
+          },
         },
-      },
-      {
-        id: "history",
-        label: "History",
-        icon: "history",
-        onClick: () =>
-          activeProject
-            ? router.push(
-              `${ROUTE_PATHS.HISTORY}?project=${activeProject.id}&name=${encodeURIComponent(activeProject.name)}&category=${encodeURIComponent(activeProject.category)}`,
-            )
-            : router.push(ROUTE_PATHS.HISTORY),
-      },
-      {
-        id: "metrics",
-        label: "Analytics",
-        icon: "metrics",
-        onClick: () =>
-          activeProject
-            ? router.push(
-              `${ROUTE_PATHS.METRICS}?project=${activeProject.id}&name=${encodeURIComponent(activeProject.name)}&category=${encodeURIComponent(activeProject.category)}`,
-            )
-            : router.push(ROUTE_PATHS.METRICS),
-      },
+      ];
+
+      if (canUseHistory) {
+        actions.push({
+          id: "history",
+          label: "History",
+          icon: "history",
+          onClick: () =>
+            activeProject
+              ? router.push(
+                `${ROUTE_PATHS.HISTORY}?project=${activeProject.id}&name=${encodeURIComponent(activeProject.name)}&category=${encodeURIComponent(activeProject.category)}`,
+              )
+              : router.push(ROUTE_PATHS.HISTORY),
+        });
+      }
+
+      if (canUseAnalytics) {
+        actions.push({
+          id: "metrics",
+          label: "Analytics",
+          icon: "metrics",
+          onClick: () =>
+            activeProject
+              ? router.push(
+                `${ROUTE_PATHS.METRICS}?project=${activeProject.id}&name=${encodeURIComponent(activeProject.name)}&category=${encodeURIComponent(activeProject.category)}`,
+              )
+              : router.push(ROUTE_PATHS.METRICS),
+        });
+      }
+
+      return actions;
+    },
+    [
+      activeProject,
+      canUseAnalytics,
+      canUseHistory,
+      hasUnreadPipelineSuccess,
+      router,
+      setPipelineSuccessModalOpen,
     ],
-    [activeProject, hasUnreadPipelineSuccess, router, setPipelineSuccessModalOpen],
   );
 
   const topNavbarBreadcrumbItems = useMemo(() => {
@@ -3989,6 +4112,9 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
             activeWorkspace={activeWorkspace}
             updateActiveWorkspace={updateActiveWorkspace}
             toggleWorkspaceValue={toggleWorkspaceValue}
+            uploadDataExtractionOptions={uploadDataExtractionOptions}
+            uploadTextProcessingOptions={uploadTextProcessingOptions}
+            uploadVectorStoreOptions={uploadVectorStoreOptions}
             isImageFile={isImageFile}
           />
         )}
@@ -4000,6 +4126,8 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
             updateActiveWorkspace={updateActiveWorkspace}
             toggleWorkspaceValue={toggleWorkspaceValue}
             queryAgentModeEnabled={queryAgentModeEnabled}
+            queryRetrievalStrategyOptions={queryRetrievalStrategyOptions}
+            queryConfigurationOptions={queryConfigurationOptions}
             allowedVectorStoreOptions={allowedVectorStoreOptions}
             allowedEmbeddingOptions={allowedEmbeddingOptions}
             ollamaDocsOpen={ollamaDocsOpen}
@@ -4049,7 +4177,7 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.png,.jpg,.jpeg"
+                accept={uploadFileAccept}
                 multiple
                 hidden
                 onChange={handleFileUpload}
@@ -4096,12 +4224,12 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                             </div>
                             <div className={styles.uploadDropzoneProText}>
                               <p className={styles.uploadDropzoneProTitle}>
-                                {isUploadingFiles ? "Uploading…" : "Browse PDFs or images, or drop here"}
+                                {isUploadingFiles ? "Uploading…" : uploadBrowseLabel}
                               </p>
                               <p className={styles.uploadDropzoneProSub}>
                                 {isUploadingFiles
                                   ? "Do not close this tab."
-                                  : "PDF, PNG, JPG, JPEG supported."}
+                                  : uploadSupportedLabel}
                               </p>
                             </div>
                           </button>
@@ -5143,25 +5271,29 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
                       <span className={styles.chatInputDivider} aria-hidden />
 
                       {/* Agent toggle */}
-                      <button
-                        type="button"
-                        className={styles.agentToggleWrap}
-                        onClick={() => toggleWorkspaceValue("queryConfigurations", "agent")}
-                        aria-pressed={queryAgentModeEnabled}
-                        title={queryAgentModeEnabled ? "Turn off Agent mode" : "Turn on Agent mode"}
-                      >
-                        <span className={styles.agentToggleLabel}>Agent</span>
-                        <span className={classNames(styles.agentToggleTrack, {
-                          [styles.agentToggleTrackOn]: queryAgentModeEnabled,
-                        })}>
-                          <span className={classNames(styles.agentToggleThumb, {
-                            [styles.agentToggleThumbOn]: queryAgentModeEnabled,
-                          })} />
-                        </span>
-                      </button>
+                      {canUseAgent ? (
+                        <>
+                          <button
+                            type="button"
+                            className={styles.agentToggleWrap}
+                            onClick={() => toggleWorkspaceValue("queryConfigurations", "agent")}
+                            aria-pressed={queryAgentModeEnabled}
+                            title={queryAgentModeEnabled ? "Turn off Agent mode" : "Turn on Agent mode"}
+                          >
+                            <span className={styles.agentToggleLabel}>Agent</span>
+                            <span className={classNames(styles.agentToggleTrack, {
+                              [styles.agentToggleTrackOn]: queryAgentModeEnabled,
+                            })}>
+                              <span className={classNames(styles.agentToggleThumb, {
+                                [styles.agentToggleThumbOn]: queryAgentModeEnabled,
+                              })} />
+                            </span>
+                          </button>
 
-                      {/* Divider */}
-                      <span className={styles.chatInputDivider} aria-hidden />
+                          {/* Divider */}
+                          <span className={styles.chatInputDivider} aria-hidden />
+                        </>
+                      ) : null}
 
                       {/* Send button */}
                       <Button
