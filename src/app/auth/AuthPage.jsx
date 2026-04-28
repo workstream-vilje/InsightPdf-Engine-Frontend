@@ -449,7 +449,7 @@ export default function AuthPage({ mode }) {
                   disabled={loading || passwordMismatch}
                   type="submit"
                 >
-                  {loading ? "Sending OTPâ€¦" : "Send OTP"}
+                  {loading ? "Sending OTP" : "Send OTP"}
                 </button>
               </form>
             )}
@@ -585,7 +585,7 @@ export default function AuthPage({ mode }) {
             Search, organize,<br />and explore documents<br />in one clean workspace.
           </h2>
           <p className={styles.heroText}>
-            Upload PDFs, run intelligent queries, and track every experiment â€” all from one professional platform.
+            Upload PDFs, run intelligent queries, and track every experiment - all from one professional platform.
           </p>
           <div className={styles.heroStats}>
             {RIGHT_STATS.map((s) => (
