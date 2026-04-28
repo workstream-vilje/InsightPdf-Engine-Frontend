@@ -44,10 +44,10 @@ export const LLM_MODEL_OPTIONS = [
 ];
 
 export const DEFAULT_QUALITY_METRICS = [
-  { label: "Answer relevance", score: 0.91 },
-  { label: "Groundedness", score: 0.89 },
-  { label: "Context precision", score: 0.87 },
-  { label: "Latency quality tradeoff", score: 0.84 },
+  { label: "Faithfulness", score: 0.91 },
+  { label: "Context Precision", score: 0.89 },
+  { label: "Context Recall", score: 0.87 },
+  { label: "Answer Relevance", score: 0.84 },
 ];
 
 export const METRICS_NAV_ITEMS = [
