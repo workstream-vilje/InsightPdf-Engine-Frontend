@@ -478,7 +478,7 @@ export default function AuthPage({ mode }) {
                   disabled={loading || otpValue.length !== 6}
                   type="submit"
                 >
-                  {loading ? "Verifyingâ€¦" : "Verify & Create Account"}
+                  {loading ? "Verifying" : "Verify & Create Account"}
                 </button>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>

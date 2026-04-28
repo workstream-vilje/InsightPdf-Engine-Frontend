@@ -3629,11 +3629,6 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
   const hasSelectedProcessedFile = Boolean(
     selectedWorkspaceFile?.processed || selectedWorkspaceFile?.allowedTechniques,
   );
-  // True when the selected file is an image — sidebars are disabled for images
-  const isImageFile = Boolean(
-    selectedWorkspaceFile?.name &&
-    /\.(png|jpg|jpeg)$/i.test(selectedWorkspaceFile.name)
-  );
   const queryAgentModeEnabled = Boolean(
     canUseAgent && (activeWorkspace?.queryConfigurations || []).includes("agent"),
   );
@@ -4115,7 +4110,6 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
             uploadDataExtractionOptions={uploadDataExtractionOptions}
             uploadTextProcessingOptions={uploadTextProcessingOptions}
             uploadVectorStoreOptions={uploadVectorStoreOptions}
-            isImageFile={isImageFile}
           />
         )}
 
@@ -4133,7 +4127,6 @@ const ProjectCanvas = ({ initialProjectId = null }) => {
             ollamaDocsOpen={ollamaDocsOpen}
             setOllamaDocsOpen={setOllamaDocsOpen}
             setOllamaWarningOpen={setOllamaWarningOpen}
-            isImageFile={isImageFile}
           />
         )}
 

@@ -374,40 +374,62 @@ function SettingsContent() {
             <div className={styles.planGrid}>
               {plans
                 .filter((plan) => plan.code !== "image_add_on")
-                .map((plan) => {
+                .map((plan, index) => {
                   const isCurrent = subscription?.plan_code === plan.code;
+                  const prices = [
+                    { original: "$11.99", current: "$2.99", discount: "75% off" },
+                    { original: "$18.99", current: "$3.99", discount: "79% off" },
+                    { original: "$27.99", current: "$7.99", discount: "71% off" },
+                  ];
+                  const pricing = prices[index] || prices[0];
                   return (
-                    <article
-                      key={plan.code}
-                      className={`${styles.planCard} ${isCurrent ? styles.planCardActive : ""}`}
-                    >
-                      <div className={styles.planCardTop}>
-                        <div>
-                          <p className={styles.planAudience}>{plan.audience}</p>
-                          <h3>{plan.label}</h3>
-                        </div>
-                        <span className={styles.planCode}>{plan.code.toUpperCase()}</span>
-                      </div>
-                      <p className={styles.planDescription}>{plan.description}</p>
-                      <div className={styles.planFeatureList}>
-                        {plan.features?.map((feature) => (
-                          <p key={feature}>{feature}</p>
-                        ))}
-                      </div>
-                      <Button
-                        type="button"
-                        variant={isCurrent ? "outline" : "default"}
-                        className={styles.planButton}
-                        disabled={isCurrent || pendingPlanCode === plan.code}
-                        onClick={() => handlePlanChange(plan.code)}
+                    <div key={plan.code} className={styles.planCardWrapper}>
+                      <article
+                        className={`${styles.planCard} ${isCurrent ? styles.planCardActive : ""}`}
                       >
-                        {isCurrent
-                          ? "Current plan"
-                          : pendingPlanCode === plan.code
-                            ? "Switching..."
-                            : `Switch to ${plan.label}`}
-                      </Button>
-                    </article>
+                        <div className={styles.planCardTopRow}>
+                          <span className={styles.planDiscountBadge}>{pricing.discount}</span>
+                        </div>
+
+                        <div className={styles.planCardHeader}>
+                          <h3 className={styles.planCardTitle}>{plan.label}</h3>
+                          <p className={styles.planCardSubtitle}>{plan.description}</p>
+                        </div>
+
+                        <div className={styles.planPricing}>
+                          <span className={styles.planOriginalPrice}>{pricing.original}</span>
+                          <div className={styles.planCurrentPriceRow}>
+                            <span className={styles.planCurrentPrice}>{pricing.current}</span>
+                            <span className={styles.planPerMonth}>/mo</span>
+                          </div>
+                          <span className={styles.planFreeMonths}>+3 mo. free</span>
+                        </div>
+
+                        <Button
+                          type="button"
+                          className={`${styles.planButton} ${isCurrent ? styles.planButtonActive : styles.planButtonDefault}`}
+                          disabled={isCurrent || pendingPlanCode === plan.code}
+                          onClick={() => handlePlanChange(plan.code)}
+                        >
+                          {isCurrent
+                            ? "Current plan"
+                            : pendingPlanCode === plan.code
+                              ? "Switching..."
+                              : "Choose plan"}
+                        </Button>
+
+                        <hr className={styles.planDivider} />
+
+                        <div className={styles.planFeatureList}>
+                          {plan.features?.map((feature) => (
+                            <div key={feature} className={styles.planFeatureItem}>
+                              <span className={styles.planFeatureDot} />
+                              <span>{feature}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </article>
+                    </div>
                   );
                 })}
             </div>
