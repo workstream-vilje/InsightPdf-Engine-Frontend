@@ -15,28 +15,7 @@ export default function UploadSidebar({
   uploadDataExtractionOptions,
   uploadTextProcessingOptions,
   uploadVectorStoreOptions,
-  isImageFile = false,
 }) {
-  if (isImageFile) {
-    return (
-      <aside className={styles.workspaceQuerySidebar}>
-        <div className={styles.workspaceContextSidebarInner}>
-          <section className={styles.sidebarPane}>
-            <div className={styles.sidebarGroupTitle}>Upload techniques</div>
-            <div className={styles.sidebarPaneScroll} style={{ padding: "16px", color: "var(--muted-foreground, #888)", fontSize: 13, lineHeight: 1.6 }}>
-              <p style={{ margin: 0 }}>
-                Image files are processed automatically using built-in defaults.
-              </p>
-              <p style={{ margin: "8px 0 0", opacity: 0.7 }}>
-                No configuration required.
-              </p>
-            </div>
-          </section>
-        </div>
-      </aside>
-    );
-  }
-
   return (
     <aside className={styles.workspaceQuerySidebar}>
       <div className={styles.workspaceContextSidebarInner}>

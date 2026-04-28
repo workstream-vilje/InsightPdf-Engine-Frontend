@@ -198,6 +198,13 @@
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
 }
 
+.addOnCard {
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .usageCard {
   padding: 16px;
   display: flex;
@@ -287,29 +294,146 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+  align-items: start;
 }
 
-.planCard,
-.addOnCard {
-  padding: 18px;
+/* Wrapper handles card layout */
+.planCardWrapper {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  position: relative;
+}
+
+.planCard {
+  padding: 22px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid rgba(var(--border), 0.85);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .planCardActive {
-  border-color: rgba(var(--primary), 0.36);
-  box-shadow: 0 16px 34px rgba(var(--primary), 0.12);
+  border-color: rgba(var(--primary), 0.6);
+  box-shadow: 0 0 0 3px rgba(var(--primary), 0.15), 0 16px 34px rgba(var(--primary), 0.12);
 }
 
-.planCardTop,
-.addOnHeader {
+/* Top row: discount badge aligned right */
+.planCardTopRow {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
+  justify-content: flex-end;
+  margin-bottom: 14px;
 }
 
+.planDiscountBadge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(var(--primary), 0.1);
+  color: rgb(var(--primary));
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+/* Plan name + description */
+.planCardHeader {
+  margin-bottom: 18px;
+}
+
+.planCardTitle {
+  margin: 0 0 5px;
+  font-size: 1.18rem;
+  font-weight: 800;
+  color: rgb(var(--foreground));
+}
+
+.planCardSubtitle {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: rgb(var(--muted-foreground));
+}
+
+/* Pricing block */
+.planPricing {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 18px;
+}
+
+.planOriginalPrice {
+  font-size: 0.88rem;
+  color: rgb(var(--muted-foreground));
+  text-decoration: line-through;
+}
+
+.planCurrentPriceRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  line-height: 1;
+}
+
+.planCurrentPrice {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: rgb(var(--foreground));
+  letter-spacing: -0.02em;
+}
+
+.planPerMonth {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgb(var(--muted-foreground));
+  padding-bottom: 6px;
+}
+
+.planFreeMonths {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: rgb(var(--muted-foreground));
+}
+
+/* CTA button */
+.planButton {
+  min-height: 44px;
+  font-weight: 700;
+  border-radius: 999px;
+  width: 100%;
+  margin-bottom: 18px;
+}
+
+.planButtonDefault {
+  background: transparent;
+  border: 1.5px solid rgba(var(--primary), 0.6);
+  color: rgb(var(--primary));
+}
+
+.planButtonDefault:hover:not(:disabled) {
+  background: rgba(var(--primary), 0.06);
+}
+
+.planButtonActive {
+  background: rgb(var(--primary));
+  color: rgb(var(--primary-foreground));
+  border: none;
+}
+
+.planButtonActive:hover:not(:disabled) {
+  background: rgba(var(--primary), 0.88);
+}
+
+/* Divider */
+.planDivider {
+  border: none;
+  border-top: 1px solid rgba(var(--border), 0.7);
+  margin: 0 0 16px;
+}
+
+/* Retained for add-on card */
 .planAudience {
   margin: 0 0 6px;
   font-size: 0.74rem;
@@ -319,45 +443,35 @@
   color: rgb(var(--primary));
 }
 
-.planCard h3,
-.addOnCard h3 {
-  margin: 0;
-  font-size: 1.12rem;
-  font-weight: 800;
-  color: rgb(var(--foreground));
-}
-
-.planCode {
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(var(--surface-2), 0.92);
-  color: rgb(var(--muted-foreground));
-  font-size: 0.74rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
 .planDescription {
   margin: 0;
   line-height: 1.6;
   color: rgb(var(--muted-foreground));
 }
 
+/* Feature list */
 .planFeatureList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
-.planFeatureList p {
-  margin: 0;
-  line-height: 1.55;
+.planFeatureItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.88rem;
+  line-height: 1.5;
   color: rgb(var(--foreground));
 }
 
-.planButton {
-  min-height: 42px;
-  font-weight: 700;
+.planFeatureDot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(var(--muted-foreground), 0.5);
+  margin-top: 6px;
 }
 
 .addOnIcon {
@@ -369,6 +483,12 @@
   background: rgba(var(--primary), 0.12);
   color: rgb(var(--primary));
   flex-shrink: 0;
+}
+
+.addOnHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
 }
 
 .accountHeader {
@@ -416,13 +536,14 @@
 .settingsList {
   display: flex;
   flex-direction: column;
+  border-top: 1px solid rgba(var(--border), 0.72);
 }
 
 .settingRow {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 24px 28px;
+  gap: 20px;
+  padding: 28px 28px;
   border-bottom: 1px solid rgba(var(--border), 0.72);
 }
 
@@ -443,12 +564,13 @@
 .settingIcon {
   width: 46px;
   height: 46px;
-  border-radius: 16px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
   background: rgba(var(--primary), 0.1);
   color: rgb(var(--primary));
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .deleteIcon {
@@ -481,21 +603,24 @@
 }
 
 .nameInput {
-  width: min(420px, 100%);
-  min-height: 44px;
-  font-size: 0.95rem;
+  width: min(360px, 100%);
+  min-height: 42px;
+  font-size: 0.93rem;
   padding-inline: 14px;
   background: rgba(var(--surface-1), 0.92);
+  border-radius: 10px;
 }
 
 .saveNameButton {
-  min-width: 150px;
+  min-width: 120px;
   height: 42px;
   font-size: 0.88rem;
   font-weight: 700;
+  border-radius: 10px;
   border: 1px solid rgba(var(--border), 0.88);
   background: rgb(var(--surface-1));
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  white-space: nowrap;
 }
 
 .saveNameButton:hover:not(:disabled) {
