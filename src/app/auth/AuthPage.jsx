@@ -178,7 +178,7 @@ export default function AuthPage({ mode }) {
 
   /* â”€â”€ start resend cooldown (60s) â”€â”€ */
   const startResendCooldown = useCallback(() => {
-    setResendCooldown(60);
+    setResendCooldown(300);
     resendTimerRef.current = setInterval(() => {
       setResendCooldown((prev) => {
         if (prev <= 1) {
@@ -258,7 +258,7 @@ export default function AuthPage({ mode }) {
     }
   };
 
-  /* â”€â”€ Resend OTP â”€â”€ */
+  /*Resend OTP*/
   const handleResendOtp = async () => {
     if (resendCooldown > 0) return;
     setLoading(true);
@@ -279,7 +279,7 @@ export default function AuthPage({ mode }) {
     }
   };
 
-  /* â”€â”€ login submit â”€â”€ */
+  /*login submit*/
   const handleLogin = async (e) => {
     e.preventDefault();
 
@@ -316,9 +316,7 @@ export default function AuthPage({ mode }) {
     }
   };
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-     RENDER
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  /* RENDER */
   return (
     <main className={styles.page}>
 
@@ -449,7 +447,7 @@ export default function AuthPage({ mode }) {
                   disabled={loading || passwordMismatch}
                   type="submit"
                 >
-                  {loading ? "Sending OTPâ€¦" : "Send OTP"}
+                  {loading ? "Sending OTP" : "Send OTP"}
                 </button>
               </form>
             )}
@@ -478,7 +476,7 @@ export default function AuthPage({ mode }) {
                   disabled={loading || otpValue.length !== 6}
                   type="submit"
                 >
-                  {loading ? "Verifyingâ€¦" : "Verify & Create Account"}
+                  {loading ? "Verifying" : "Verify & Create Account"}
                 </button>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
@@ -490,7 +488,7 @@ export default function AuthPage({ mode }) {
                   >
                     {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : "Resend OTP"}
                   </button>
-                  <span style={{ color: "var(--muted-foreground, #888)", fontSize: 13 }}>Â·</span>
+                  <span style={{ color: "var(--muted-foreground, #888)", fontSize: 13 }}></span>
                   <button
                     type="button"
                     className={styles.hintToggle}
@@ -585,7 +583,7 @@ export default function AuthPage({ mode }) {
             Search, organize,<br />and explore documents<br />in one clean workspace.
           </h2>
           <p className={styles.heroText}>
-            Upload PDFs, run intelligent queries, and track every experiment â€” all from one professional platform.
+            Upload PDFs, run intelligent queries, and track every experiment all from one professional platform.
           </p>
           <div className={styles.heroStats}>
             {RIGHT_STATS.map((s) => (

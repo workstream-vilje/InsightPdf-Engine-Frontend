@@ -106,7 +106,7 @@ export default function HomePage() {
         </h1>
 
         <p className={styles.heroSub}>
-          Upload PDFs, organise projects, run intelligent queries, and track every experiment — all from one professional platform.
+          Upload PDFs, organise projects, run intelligent queries, and track every experiment all from one professional platform.
         </p>
 
         <div className={styles.heroActions}>
