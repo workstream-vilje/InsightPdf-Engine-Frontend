@@ -16,6 +16,7 @@ import {
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import PricingCards from "@/components/common/PricingCards/PricingCards";
 import authApi from "@/services/api/networking/apis/auth";
 import subscriptionApi from "@/services/api/networking/apis/subscription";
 import { clearAuthSession, getStoredUserProfile, setAuthSession } from "@/services/auth";
@@ -371,68 +372,13 @@ function SettingsContent() {
               </div>
             ) : null}
 
-            <div className={styles.planGrid}>
-              {plans
-                .filter((plan) => plan.code !== "image_add_on")
-                .map((plan, index) => {
-                  const isCurrent = subscription?.plan_code === plan.code;
-                  const prices = [
-                    { original: "$11.99", current: "$2.99", discount: "75% off" },
-                    { original: "$18.99", current: "$3.99", discount: "79% off" },
-                    { original: "$27.99", current: "$7.99", discount: "71% off" },
-                  ];
-                  const pricing = prices[index] || prices[0];
-                  return (
-                    <div key={plan.code} className={styles.planCardWrapper}>
-                      <article
-                        className={`${styles.planCard} ${isCurrent ? styles.planCardActive : ""}`}
-                      >
-                        <div className={styles.planCardTopRow}>
-                          <span className={styles.planDiscountBadge}>{pricing.discount}</span>
-                        </div>
-
-                        <div className={styles.planCardHeader}>
-                          <h3 className={styles.planCardTitle}>{plan.label}</h3>
-                          <p className={styles.planCardSubtitle}>{plan.description}</p>
-                        </div>
-
-                        <div className={styles.planPricing}>
-                          <span className={styles.planOriginalPrice}>{pricing.original}</span>
-                          <div className={styles.planCurrentPriceRow}>
-                            <span className={styles.planCurrentPrice}>{pricing.current}</span>
-                            <span className={styles.planPerMonth}>/mo</span>
-                          </div>
-                          <span className={styles.planFreeMonths}>+3 mo. free</span>
-                        </div>
-
-                        <Button
-                          type="button"
-                          className={`${styles.planButton} ${isCurrent ? styles.planButtonActive : styles.planButtonDefault}`}
-                          disabled={isCurrent || pendingPlanCode === plan.code}
-                          onClick={() => handlePlanChange(plan.code)}
-                        >
-                          {isCurrent
-                            ? "Current plan"
-                            : pendingPlanCode === plan.code
-                              ? "Switching..."
-                              : "Choose plan"}
-                        </Button>
-
-                        <hr className={styles.planDivider} />
-
-                        <div className={styles.planFeatureList}>
-                          {plan.features?.map((feature) => (
-                            <div key={feature} className={styles.planFeatureItem}>
-                              <span className={styles.planFeatureDot} />
-                              <span>{feature}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </article>
-                    </div>
-                  );
-                })}
-            </div>
+            <PricingCards
+              plans={plans}
+              isInteractive={true}
+              currentPlanCode={subscription?.plan_code}
+              pendingPlanCode={pendingPlanCode}
+              onPlanChange={handlePlanChange}
+            />
 
             <article className={styles.addOnCard}>
               <div className={styles.addOnHeader}>

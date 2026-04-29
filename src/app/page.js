@@ -1,8 +1,46 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { ROUTE_PATHS } from "@/utils/routepaths";
+import PricingCards from "@/components/common/PricingCards/PricingCards";
 import styles from "./page.module.css";
+
+const STATIC_PLANS = [
+  {
+    code: "basic",
+    label: "Basic",
+    description: "PDF-only starter access with tight cost control and a simple retrieval stack.",
+    features: [
+      "PDF upload and processing",
+      "Single vector backend with FAISS",
+      "Recursive chunking with PyMuPDF extraction",
+      "Core question answering",
+    ],
+  },
+  {
+    code: "medium",
+    label: "Medium",
+    description: "Advanced PDF workflows with more retrieval control, streaming, and run history.",
+    features: [
+      "Everything in Basic",
+      "Semantic chunking and pgvector support",
+      "Streaming responses and stored experiment history",
+      "RAGAS-enabled evaluation",
+    ],
+  },
+  {
+    code: "high",
+    label: "High",
+    description: "Full research-assistant tier with agent mode, premium retrieval, and analytics.",
+    features: [
+      "Everything in Medium",
+      "Agent mode and LangSmith tracing",
+      "Pinecone and ChromaDB backend support",
+      "Comparison analytics and broader ingestion controls",
+    ],
+  },
+];
 
 const FEATURES = [
   {
@@ -78,6 +116,19 @@ const STEPS = [
 ];
 
 export default function HomePage() {
+  // The app shell sets body { overflow: hidden } for the workspace layout.
+  // The landing page needs normal scroll, so we override it while mounted.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    const prevHeight = document.body.style.height;
+    document.body.style.overflow = "auto";
+    document.body.style.height = "auto";
+    return () => {
+      document.body.style.overflow = prev;
+      document.body.style.height = prevHeight;
+    };
+  }, []);
+
   return (
     <main className={styles.page}>
 
@@ -121,19 +172,6 @@ export default function HomePage() {
           </Link>
         </div>
 
-        <div className={styles.heroStats}>
-          {[
-            { val: "4", label: "Vector backends" },
-            { val: "3", label: "Extraction methods" },
-            { val: "4", label: "Splitting strategies" },
-            { val: "∞", label: "Projects & files" },
-          ].map((s) => (
-            <div key={s.label} className={styles.heroStat}>
-              <span className={styles.heroStatVal}>{s.val}</span>
-              <span className={styles.heroStatLabel}>{s.label}</span>
-            </div>
-          ))}
-        </div>
       </section>
 
       {/* ── FEATURES ── */}
@@ -161,13 +199,32 @@ export default function HomePage() {
         </div>
         <div className={styles.stepsRow}>
           {STEPS.map((s, i) => (
-            <div key={s.num} className={styles.stepCard}>
-              <span className={styles.stepNum}>{s.num}</span>
-              <h3 className={styles.stepLabel}>{s.label}</h3>
-              <p className={styles.stepDetail}>{s.detail}</p>
-              {i < STEPS.length - 1 && <span className={styles.stepArrow}>→</span>}
-            </div>
+            <>
+              <div key={s.num} className={styles.stepCard}>
+                <span className={styles.stepNum}>{s.num}</span>
+                <h3 className={styles.stepLabel}>{s.label}</h3>
+                <p className={styles.stepDetail}>{s.detail}</p>
+              </div>
+              {i < STEPS.length - 1 && (
+                <div key={`arrow-${i}`} className={styles.stepArrowCell}>→</div>
+              )}
+            </>
           ))}
+        </div>
+      </section>
+
+      {/* ── PRICING ── */}
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <p className={styles.sectionKicker}>Pricing</p>
+          <h2 className={styles.sectionTitle}>Simple, transparent plans</h2>
+          <p className={styles.sectionSub}>Start free, upgrade when you need more power.</p>
+        </div>
+        <PricingCards plans={STATIC_PLANS} isInteractive={false} />
+        <div className={styles.pricingCta}>
+          <Link className={styles.btnOutline} href={ROUTE_PATHS.SETTINGS}>
+            View Plans &amp; Subscribe
+          </Link>
         </div>
       </section>
 
