@@ -6,9 +6,9 @@
   overflow-y: auto;
   overflow-x: hidden;
   background:
-    radial-gradient(ellipse 70% 40% at 50% -10%, rgba(var(--primary), 0.10) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 30% at 90% 20%, rgba(var(--sky), 0.30) 0%, transparent 60%),
-    rgb(var(--background));
+    radial-gradient(ellipse 70% 40% at 50% -10%, rgba(var(--primary), 0.08) 0%, transparent 65%),
+    radial-gradient(ellipse 50% 30% at 90% 20%, rgba(var(--sky), 0.18) 0%, transparent 55%),
+    #FBF6EE;
   color: rgb(var(--foreground));
   font-family: var(--font-body);
 }
@@ -25,10 +25,10 @@
   justify-content: space-between;
   padding: 0 clamp(20px, 5vw, 80px);
   height: 60px;
-  background: rgba(var(--background), 0.82);
+  background: rgba(251, 246, 238, 0.88);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border-bottom: 1px solid rgba(var(--border), 0.6);
+  border-bottom: 1px solid rgba(var(--border), 0.5);
 }
 
 .navBrand {
@@ -36,10 +36,18 @@
   align-items: center;
   gap: 8px;
   font-family: var(--font-display);
-  font-size: 0.95rem;
+  font-size: 1.1rem;
   font-weight: var(--weight-bold);
   letter-spacing: -0.01em;
   color: rgb(var(--foreground));
+}
+
+.navLogo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 .navDot {
@@ -87,14 +95,110 @@
 }
 
 /* ─────────────────────────────────────────────
-   HERO
+   HERO — split layout
+───────────────────────────────────────────── */
+
+/* Outer wrapper that holds the right-side accent block */
+.heroAccentWrap {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Right-side vertical accent — sits behind the image */
+.heroAccentWrap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 32%;
+  height: 100%;
+  background: rgba(140, 90, 15, 0.82);
+  border-radius: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.heroSplit {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: clamp(32px, 5vw, 72px);
+  padding: clamp(48px, 8vw, 96px) clamp(20px, 5vw, 80px) clamp(32px, 5vw, 56px);
+  max-width: 1200px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.heroText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.heroText .heroBadge {
+  margin-bottom: 24px;
+}
+
+.heroText .heroActions {
+  margin-bottom: 0;
+}
+
+.heroImageWrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+/* Soft glow behind hero image */
+.heroImageWrap::before {
+  content: "";
+  position: absolute;
+  inset: -24px;
+  border-radius: 28px;
+  background: radial-gradient(ellipse 80% 70% at 50% 50%, rgba(var(--primary), 0.18) 0%, transparent 70%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.heroImage {
+  width: 100%;
+  max-width: 560px;
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18);
+  object-fit: cover;
+  position: relative;
+  z-index: 1;
+}
+
+/* ─────────────────────────────────────────────
+   VISUAL BANNER (img_2)
+───────────────────────────────────────────── */
+.bannerWrap {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 0 clamp(20px, 5vw, 80px) clamp(28px, 4vw, 48px);
+}
+
+.bannerImage {
+  width: 100%;
+  border-radius: 16px;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.10);
+  object-fit: cover;
+  display: block;
+}
+
+/* ─────────────────────────────────────────────
+   HERO (legacy — kept for badge/title/sub styles)
 ───────────────────────────────────────────── */
 .hero {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: clamp(64px, 10vw, 120px) clamp(20px, 5vw, 80px) clamp(48px, 8vw, 96px);
+  padding: clamp(48px, 8vw, 96px) clamp(20px, 5vw, 80px) clamp(32px, 5vw, 56px);
   max-width: 900px;
   margin: 0 auto;
 }
@@ -274,7 +378,7 @@
    SECTIONS
 ───────────────────────────────────────────── */
 .section {
-  padding: clamp(48px, 8vw, 96px) clamp(20px, 5vw, 80px);
+  padding: clamp(28px, 4vw, 56px) clamp(20px, 5vw, 80px);
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -316,7 +420,225 @@
 }
 
 /* ─────────────────────────────────────────────
-   FEATURE GRID
+   MINIMAL PRICING CARDS (landing page only)
+───────────────────────────────────────────── */
+.minimalPricingGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.minimalPricingCard {
+  padding: 24px 22px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    145deg,
+    #c8922a 0%,
+    #A8752C 45%,
+    #8a5e1e 100%
+  );
+  border: 1px solid rgba(168, 117, 44, 0.3);
+  box-shadow:
+    0 2px 12px rgba(168, 117, 44, 0.18),
+    0 1px 3px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.minimalPricingTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.minimalPlanName {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: var(--weight-bold);
+  color: rgba(255, 255, 255, 0.95);
+  letter-spacing: -0.01em;
+}
+
+.minimalPlanPrice {
+  font-size: 0.9rem;
+  font-weight: var(--weight-semibold);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.minimalPlanBullets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.minimalPlanBullets li {
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.5;
+  padding-left: 14px;
+  position: relative;
+}
+
+.minimalPlanBullets li::before {
+  content: "·";
+  position: absolute;
+  left: 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: var(--weight-bold);
+}
+
+@media (max-width: 768px) {
+  .minimalPricingGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─────────────────────────────────────────────
+   FEATURES — alternating image + text rows
+───────────────────────────────────────────── */
+.featuresAlt {
+  padding: clamp(28px, 4vw, 56px) 0;
+  max-width: 1200px;
+  margin: 0 auto;
+  /* allow accent blocks to bleed outside the max-width box */
+  overflow: visible;
+}
+
+.featuresAlt .sectionHeader {
+  padding: 0 clamp(20px, 5vw, 80px);
+}
+
+.altRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 0;
+  padding: clamp(12px, 2vw, 24px) clamp(20px, 5vw, 80px);
+  position: relative;
+}
+
+/* Reverse: text left, image right */
+.altRowReverse {
+  direction: rtl;
+}
+
+.altRowReverse > * {
+  direction: ltr;
+}
+
+/* ── Image side ──────────────────────────────
+   Fixed height container; accent + image are
+   both absolutely positioned inside it.
+─────────────────────────────────────────── */
+.altImageSide {
+  position: relative;
+  /* height drives everything — accent & image scale to this */
+  height: clamp(300px, 36vw, 460px);
+  /* let accent bleed outside the column */
+  overflow: visible;
+}
+
+/* ── Accent block ────────────────────────────
+   Premium gold gradient block.
+   Width = 75% of column, height = 88%.
+   Shifted slightly upward (-4%) for visual tension.
+   Soft multi-layer shadow for depth.
+─────────────────────────────────────────── */
+.altAccent {
+  position: absolute;
+  top: calc(50% - 4%);
+  transform: translateY(-50%);
+  width: 75%;
+  height: 88%;
+  border-radius: 16px;
+  background: linear-gradient(
+    145deg,
+    #c8922a 0%,
+    #a8701e 30%,
+    #8c5a0f 65%,
+    #6b4008 100%
+  );
+  box-shadow:
+    0 8px 32px rgba(140, 90, 15, 0.38),
+    0 2px 8px rgba(100, 60, 10, 0.22),
+    inset 0 1px 0 rgba(255, 220, 120, 0.18);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.altAccentLeft {
+  left: -12%;
+}
+
+.altAccentRight {
+  right: -12%;
+}
+
+/* ── Image ───────────────────────────────────
+   ~57% overlap:
+   Accent starts at -12%, width = 75%.
+   Inner edge = -12% + 75% = 63%.
+   Image width = 74%. 57% of image = 42%.
+   Image left edge = 63% - 42% = 21%.
+─────────────────────────────────────────── */
+.altImage {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 82%;
+  max-width: 500px;
+  border-radius: 14px;
+  box-shadow:
+    0 24px 64px rgba(15, 23, 42, 0.22),
+    0 4px 16px rgba(15, 23, 42, 0.10);
+  object-fit: cover;
+  z-index: 2;
+}
+
+/* Left image: left edge at 21% → ~57% overlap */
+.altRow:not(.altRowReverse) .altImage {
+  left: 21%;
+}
+
+/* Right image (reversed row): mirror */
+.altRowReverse .altImage {
+  right: 21%;
+  left: auto;
+}
+
+/* Text side */
+.altTextSide {
+  padding: clamp(24px, 4vw, 56px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.altFeatureTitle {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: var(--weight-bold);
+  color: rgb(var(--foreground));
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.altFeatureDesc {
+  font-size: clamp(1rem, 1.8vw, 1.15rem);
+  line-height: 1.75;
+  color: rgba(var(--foreground), 0.65);
+  margin: 0;
+  max-width: 440px;
+}
+
+/* ─────────────────────────────────────────────
+   FEATURE GRID (kept for reference, unused)
 ───────────────────────────────────────────── */
 .featureGrid {
   display: grid;
@@ -327,9 +649,41 @@
 .featureCard {
   padding: 28px;
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.80);
-  border: 1px solid rgba(var(--border), 0.7);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(var(--border), 0.55);
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
   transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.featureCardWithImg {
+  padding: 0;
+  overflow: hidden;
+}
+
+.featureCardWithImg .featureIcon,
+.featureCardWithImg .featureTitle,
+.featureCardWithImg .featureDesc {
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.featureCardWithImg .featureIcon {
+  padding-top: 24px;
+}
+
+.featureCardWithImg .featureDesc {
+  padding-bottom: 24px;
+}
+
+.featureCardImg {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 0;
+  display: block;
+  margin-bottom: 16px;
 }
 
 .featureCard:hover {
@@ -368,43 +722,91 @@
 /* ─────────────────────────────────────────────
    STEPS
 ───────────────────────────────────────────── */
+
+/* Outer wrapper — positions the line behind the row */
+.stepsWrapper {
+  position: relative;
+}
+
+/* Full-width horizontal line running through the card midpoints */
+.stepsLine {
+  display: none; /* handled per-connector instead */
+}
+
 .stepsRow {
   display: grid;
-  /* 4 cards with 3 arrow cells between them */
-  grid-template-columns: 1fr 40px 1fr 40px 1fr 40px 1fr;
+  /* 4 cards with 3 connector cells between them */
+  grid-template-columns: 1fr 48px 1fr 48px 1fr 48px 1fr;
   gap: 0;
   align-items: center;
 }
 
+/* ── Connector: line · node · line ── */
+.stepConnector {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  gap: 0;
+}
+
+.stepConnectorLine {
+  flex: 1;
+  height: 1.5px;
+  background: linear-gradient(90deg, rgba(168, 117, 44, 0.35), rgba(168, 117, 44, 0.6));
+}
+
+.stepConnectorNode {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #A8752C;
+  box-shadow: 0 0 0 3px rgba(168, 117, 44, 0.18);
+  flex-shrink: 0;
+}
+
 .stepCard {
-  padding: 32px 28px;
+  padding: 28px 24px;
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(var(--border), 0.6);
-  transition: box-shadow 200ms ease;
+  background: linear-gradient(
+    145deg,
+    #c8922a 0%,
+    #A8752C 45%,
+    #8a5e1e 100%
+  );
+  border: 1px solid rgba(168, 117, 44, 0.3);
+  box-shadow:
+    0 2px 12px rgba(168, 117, 44, 0.18),
+    0 1px 3px rgba(15, 23, 42, 0.08);
+  transition: box-shadow 200ms ease, transform 200ms ease;
   height: 100%;
 }
 
 .stepCard:hover {
-  box-shadow: 0 8px 28px rgba(var(--primary), 0.08);
+  box-shadow:
+    0 8px 28px rgba(168, 117, 44, 0.28),
+    0 2px 8px rgba(15, 23, 42, 0.10);
+  transform: translateY(-2px);
 }
 
 .stepNum {
   display: block;
   font-family: var(--font-display);
-  font-size: 2.4rem;
+  font-size: 2.2rem;
   font-weight: var(--weight-bold);
-  color: rgba(var(--primary), 0.18);
+  color: rgba(255, 255, 255, 0.25);
   line-height: 1;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   letter-spacing: -0.04em;
 }
 
 .stepLabel {
   font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: var(--weight-bold);
-  color: rgb(var(--foreground));
+  color: rgba(255, 255, 255, 0.95);
   margin-bottom: 8px;
   letter-spacing: -0.01em;
 }
@@ -412,34 +814,29 @@
 .stepDetail {
   font-size: var(--text-sm);
   line-height: 1.7;
-  color: rgba(var(--foreground), 0.60);
+  color: rgba(255, 255, 255, 0.70);
 }
 
 .stepArrow {
-  display: none; /* replaced by .stepArrowCell grid items */
+  display: none;
 }
 
 .stepArrowCell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  color: rgba(var(--primary), 0.5);
-  user-select: none;
+  display: none;
 }
 
 /* ─────────────────────────────────────────────
    CTA SECTION
 ───────────────────────────────────────────── */
 .cta {
-  margin: 0 clamp(20px, 5vw, 80px) clamp(48px, 8vw, 80px);
-  padding: clamp(48px, 6vw, 72px) clamp(32px, 5vw, 80px);
+  margin: 0 clamp(20px, 5vw, 80px) clamp(32px, 5vw, 56px);
+  padding: clamp(36px, 5vw, 56px) clamp(32px, 5vw, 80px);
   border-radius: var(--radius-xl);
   background:
-    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(var(--primary), 0.12) 0%, transparent 70%),
-    rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(var(--border), 0.8);
-  box-shadow: 0 16px 48px rgba(var(--primary), 0.08);
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(var(--primary), 0.10) 0%, transparent 70%),
+    rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(var(--border), 0.55);
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
   text-align: center;
 }
 
@@ -480,14 +877,10 @@
   gap: 8px;
 }
 
-.footerBrand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-display);
-  font-size: 0.85rem;
-  font-weight: var(--weight-bold);
-  color: rgb(var(--foreground));
+.footerCopy {
+  font-size: 0.75rem;
+  color: rgba(var(--foreground), 0.45);
+  font-weight: var(--weight-medium);
 }
 
 .footerNote {
@@ -506,8 +899,63 @@
     justify-content: center;
   }
 
+  .heroAccentWrap::after {
+    display: none;
+  }
+
+  .heroSplit {
+    grid-template-columns: 1fr;
+  }
+
+  .heroText {
+    align-items: center;
+    text-align: center;
+  }
+
+  .heroImage {
+    max-width: 100%;
+  }
+
+  .altRow,
+  .altRowReverse {
+    grid-template-columns: 1fr;
+    direction: ltr;
+    padding: clamp(28px, 5vw, 48px) clamp(20px, 5vw, 40px);
+  }
+
+  .altAccent {
+    display: none;
+  }
+
+  .altImageSide {
+    height: auto;
+    min-height: 220px;
+  }
+
+  .altImage {
+    position: relative;
+    top: auto;
+    left: auto !important;
+    right: auto !important;
+    transform: none !important;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .altRowReverse .altImage {
+    transform: none !important;
+  }
+
+  .altTextSide {
+    padding: 24px 0 0;
+  }
+
   .stepsRow {
     grid-template-columns: 1fr;
+  }
+
+  .stepConnector {
+    display: none;
   }
 
   .stepArrowCell {
@@ -544,4 +992,9 @@
     flex-direction: column;
     align-items: flex-start;
   }
+
+  .minimalPricingGrid {
+    grid-template-columns: 1fr;
+  }
 }
+

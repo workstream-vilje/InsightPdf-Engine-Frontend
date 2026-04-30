@@ -1,43 +1,48 @@
 "use client";
 
 import { useEffect } from "react";
+import React from "react";
 import Link from "next/link";
 import { ROUTE_PATHS } from "@/utils/routepaths";
-import PricingCards from "@/components/common/PricingCards/PricingCards";
 import styles from "./page.module.css";
+import viljeLogoSrc from "@/assets/images/vilje-logo.png";
+import img1 from "@/assets/images/img_1.png";
+import img4 from "@/assets/images/img_4.png";
+import heroImg from "@/assets/images/hero_img.png";
+import jwtTokenImg from "@/assets/images/jwt_token.png";
+import vectorsImg from "@/assets/images/vectors.png";
+import experimentsImg from "@/assets/images/experiments_img.png";
+import agentsImg from "@/assets/images/agents_img.png";
 
 const STATIC_PLANS = [
   {
     code: "basic",
     label: "Basic",
-    description: "PDF-only starter access with tight cost control and a simple retrieval stack.",
-    features: [
-      "PDF upload and processing",
-      "Single vector backend with FAISS",
-      "Recursive chunking with PyMuPDF extraction",
-      "Core question answering",
+    tagline: "$2.99/mo",
+    bullets: [
+      "Upload & chat with PDFs",
+      "Quick answers from your documents",
+      "Simple & cost-effective",
     ],
   },
   {
     code: "medium",
     label: "Medium",
-    description: "Advanced PDF workflows with more retrieval control, streaming, and run history.",
-    features: [
-      "Everything in Basic",
-      "Semantic chunking and pgvector support",
-      "Streaming responses and stored experiment history",
-      "RAGAS-enabled evaluation",
+    tagline: "$3.99/mo",
+    bullets: [
+      "More accurate & reliable answers",
+      "Real-time response streaming",
+      "Save and revisit your work",
     ],
   },
   {
     code: "high",
-    label: "High",
-    description: "Full research-assistant tier with agent mode, premium retrieval, and analytics.",
-    features: [
-      "Everything in Medium",
-      "Agent mode and LangSmith tracing",
-      "Pinecone and ChromaDB backend support",
-      "Comparison analytics and broader ingestion controls",
+    label: "Advanced",
+    tagline: "$7.99/mo",
+    bullets: [
+      "Advanced AI agent capabilities",
+      "Deep insights & comparisons",
+      "Built for complex use cases",
     ],
   },
 ];
@@ -55,6 +60,7 @@ const FEATURES = [
     ),
     title: "Smart PDF Ingestion",
     desc: "Upload PDFs and extract structured knowledge using PyMuPDF, pdfplumber, or Unstructured — automatically.",
+    img: img1,
   },
   {
     icon: (
@@ -65,6 +71,7 @@ const FEATURES = [
     ),
     title: "RAG Query Engine",
     desc: "Ask questions across your documents. Semantic, hybrid, and MMR retrieval with self-reflection and retry loops.",
+    img: img4,
   },
   {
     icon: (
@@ -74,6 +81,7 @@ const FEATURES = [
     ),
     title: "Experiment Analytics",
     desc: "Track every query run. Compare retrieval techniques, view RAGAS scores, and analyse performance over time.",
+    img: experimentsImg,
   },
   {
     icon: (
@@ -86,6 +94,7 @@ const FEATURES = [
     ),
     title: "Multi-Vector Backends",
     desc: "Store embeddings in FAISS, ChromaDB, PGVector, or Pinecone. Switch backends without changing your workflow.",
+    img: vectorsImg,
   },
   {
     icon: (
@@ -95,6 +104,7 @@ const FEATURES = [
     ),
     title: "Secure by Default",
     desc: "JWT bearer authentication, project-scoped access control, and per-file metadata isolation on every request.",
+    img: jwtTokenImg,
   },
   {
     icon: (
@@ -105,6 +115,7 @@ const FEATURES = [
     ),
     title: "Agent Orchestration",
     desc: "Meta-agent supervises sub-agents per vector store. Intelligent query rewriting, complexity scoring, and routing.",
+    img: agentsImg,
   },
 ];
 
@@ -135,7 +146,7 @@ export default function HomePage() {
       {/* ── NAV ── */}
       <nav className={styles.nav}>
         <span className={styles.navBrand}>
-          <span className={styles.navDot} />
+          <img src={viljeLogoSrc.src} alt="Vilje logo" className={styles.navLogo} />
           InsightPDF Engine
         </span>
         <div className={styles.navActions}>
@@ -145,50 +156,72 @@ export default function HomePage() {
       </nav>
 
       {/* ── HERO ── */}
-      <section className={styles.hero}>
-        <div className={styles.heroBadge}>
-          <span className={styles.heroBadgeDot} />
-          RAG · Multi-Agent · Analytics
+      <div className={styles.heroAccentWrap}>
+        <section className={styles.heroSplit}>
+        <div className={styles.heroText}>
+          <div className={styles.heroBadge}>
+            <span className={styles.heroBadgeDot} />
+            RAG · Multi-Agent · Analytics
+          </div>
+
+          <h1 className={styles.heroTitle}>
+            Turn your documents into a<br />
+            <span className={styles.heroAccent}>searchable AI workspace</span>
+          </h1>
+
+          <p className={styles.heroSub}>
+            Upload PDFs, organise projects, run intelligent queries, and track every experiment — all from one professional platform.
+          </p>
+
+          <div className={styles.heroActions}>
+            <Link className={styles.btnPrimary} href={ROUTE_PATHS.AUTH_SIGNUP}>
+              Get started
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+              </svg>
+            </Link>
+          </div>
         </div>
 
-        <h1 className={styles.heroTitle}>
-          Turn documents into a<br />
-          <span className={styles.heroAccent}>searchable AI workspace</span>
-        </h1>
-
-        <p className={styles.heroSub}>
-          Upload PDFs, organise projects, run intelligent queries, and track every experiment — all from one professional platform.
-        </p>
-
-        <div className={styles.heroActions}>
-          <Link className={styles.btnPrimary} href={ROUTE_PATHS.AUTH_SIGNUP}>
-            Start for free
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
-            </svg>
-          </Link>
-          <Link className={styles.btnGhost} href={ROUTE_PATHS.AUTH_LOGIN}>
-            Sign in to your account
-          </Link>
+        <div className={styles.heroImageWrap}>
+          <img src={heroImg.src} alt="InsightPDF workspace preview" className={styles.heroImage} />
         </div>
-
       </section>
+      </div>
 
       {/* ── FEATURES ── */}
-      <section className={styles.section}>
+      <section className={styles.featuresAlt}>
         <div className={styles.sectionHeader}>
           <p className={styles.sectionKicker}>Capabilities</p>
           <h2 className={styles.sectionTitle}>Everything you need for document intelligence</h2>
         </div>
-        <div className={styles.featureGrid}>
-          {FEATURES.map((f) => (
-            <div key={f.title} className={styles.featureCard}>
-              <div className={styles.featureIcon}>{f.icon}</div>
-              <h3 className={styles.featureTitle}>{f.title}</h3>
-              <p className={styles.featureDesc}>{f.desc}</p>
+
+        {FEATURES.map((f, i) => {
+        const imageOrder = i % 2 === 0 ? "left" : "right";
+          const imgSrc = f.img;
+          return (
+            <div
+              key={f.title}
+              className={`${styles.altRow} ${imageOrder === "right" ? styles.altRowReverse : ""}`}
+            >
+              {/* Accent block + image side */}
+              <div className={styles.altImageSide}>
+                <div className={`${styles.altAccent} ${imageOrder === "right" ? styles.altAccentRight : styles.altAccentLeft}`} />
+                <img
+                  src={imgSrc.src}
+                  alt={f.title}
+                  className={styles.altImage}
+                />
+              </div>
+
+              {/* Text side */}
+              <div className={styles.altTextSide}>
+                <h3 className={styles.altFeatureTitle}>{f.title}</h3>
+                <p className={styles.altFeatureDesc}>{f.desc}</p>
+              </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </section>
 
       {/* ── HOW IT WORKS ── */}
@@ -197,19 +230,27 @@ export default function HomePage() {
           <p className={styles.sectionKicker}>Workflow</p>
           <h2 className={styles.sectionTitle}>From upload to insight in four steps</h2>
         </div>
-        <div className={styles.stepsRow}>
-          {STEPS.map((s, i) => (
-            <>
-              <div key={s.num} className={styles.stepCard}>
-                <span className={styles.stepNum}>{s.num}</span>
-                <h3 className={styles.stepLabel}>{s.label}</h3>
-                <p className={styles.stepDetail}>{s.detail}</p>
-              </div>
-              {i < STEPS.length - 1 && (
-                <div key={`arrow-${i}`} className={styles.stepArrowCell}>→</div>
-              )}
-            </>
-          ))}
+        <div className={styles.stepsWrapper}>
+          {/* connecting line behind everything */}
+          <div className={styles.stepsLine} />
+          <div className={styles.stepsRow}>
+            {STEPS.map((s, i) => (
+              <React.Fragment key={s.num}>
+                <div className={styles.stepCard}>
+                  <span className={styles.stepNum}>{s.num}</span>
+                  <h3 className={styles.stepLabel}>{s.label}</h3>
+                  <p className={styles.stepDetail}>{s.detail}</p>
+                </div>
+                {i < STEPS.length - 1 && (
+                  <div className={styles.stepConnector}>
+                    <div className={styles.stepConnectorLine} />
+                    <div className={styles.stepConnectorNode} />
+                    <div className={styles.stepConnectorLine} />
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -220,7 +261,21 @@ export default function HomePage() {
           <h2 className={styles.sectionTitle}>Simple, transparent plans</h2>
           <p className={styles.sectionSub}>Start free, upgrade when you need more power.</p>
         </div>
-        <PricingCards plans={STATIC_PLANS} isInteractive={false} />
+        <div className={styles.minimalPricingGrid}>
+          {STATIC_PLANS.map((plan) => (
+            <div key={plan.code} className={styles.minimalPricingCard}>
+              <div className={styles.minimalPricingTop}>
+                <span className={styles.minimalPlanName}>{plan.label}</span>
+                <span className={styles.minimalPlanPrice}>{plan.tagline}</span>
+              </div>
+              <ul className={styles.minimalPlanBullets}>
+                {plan.bullets.map((b) => (
+                  <li key={b}>{b}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
         <div className={styles.pricingCta}>
           <Link className={styles.btnOutline} href={ROUTE_PATHS.SETTINGS}>
             View Plans &amp; Subscribe
@@ -233,17 +288,13 @@ export default function HomePage() {
         <h2 className={styles.ctaTitle}>Ready to query your documents?</h2>
         <p className={styles.ctaSub}>Create an account and process your first PDF in minutes.</p>
         <div className={styles.ctaActions}>
-          <Link className={styles.btnPrimary} href={ROUTE_PATHS.AUTH_SIGNUP}>Create free account</Link>
-          <Link className={styles.btnOutline} href={ROUTE_PATHS.AUTH_LOGIN}>Sign in</Link>
+          <Link className={styles.btnPrimary} href={ROUTE_PATHS.AUTH_SIGNUP}>Get started</Link>
         </div>
       </section>
 
       {/* ── FOOTER ── */}
       <footer className={styles.footer}>
-        <span className={styles.footerBrand}>
-          <span className={styles.navDot} />
-          InsightPDF Engine
-        </span>
+        <span className={styles.footerCopy}>© 2026 InsightPDF Engine. All rights reserved.</span>
         <span className={styles.footerNote}>Professional RAG &amp; Analytics Platform</span>
       </footer>
 
